@@ -29,6 +29,12 @@ export type SyncState = 'pending' | 'syncing' | 'synced' | 'failed';
 export interface Campo {
   id: string;
   nombre: string;
+  /**
+   * Stock inicial de vacas preñadas al comienzo de temporada. Sirve como
+   * denominador de los % de eficiencia (% destete, % abortos, etc).
+   * Si está null, los KPIs porcentuales muestran "—".
+   */
+  stockInicialVacas?: number;
 }
 
 export interface Paricion {

@@ -1,14 +1,14 @@
-// "Pariciones por grupo (cabeza / cuerpo / cola)".
+// "Pariciones por grupo (Cabeza / Cuerpo / Cola)".
 //
-// Pedido del cliente final: la info por grupo de vaca (vacasGrupo) es clave
-// para entender el rodeo — "cabeza" parió primero (vacas adultas, ciclo
-// adelantado), "cuerpo" el centro de la curva, "cola" las que llegan tarde
-// (suelen ser primíparas o problema reproductivo). Mirar las muertes y
-// abortos por grupo permite detectar qué cohorte tiene más problemas.
+// Pedido del cliente final: la info por grupo es clave para entender
+// cómo se distribuye la temporada — "cabeza" pare primero (adultas con
+// ciclo adelantado), "cuerpo" el centro de la curva, "cola" las que
+// llegan tarde (suelen ser primíparas o problema reproductivo).
 //
-// Visual: barras agrupadas por grupo, con stack por tipo de evento
-// (nacimientos / retactos / muertes / abortos). Cada grupo es una columna
-// vertical alta para que se lea de una pasada.
+// IMPORTANTE: la segmentación se calcula a partir de la FECHA del evento
+// + nombre del campo (replica la lógica DAX del Power BI del cliente).
+// El field `vacasGrupo` que el peón carga en el form se ignora — queda
+// como referencia histórica pero el dashboard no lo usa.
 
 import React, { useMemo } from 'react';
 import {
@@ -21,22 +21,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { Paricion, VacasGrupo } from '@/data/types';
+import type { Campo, Paricion } from '@/data/types';
+import { segmentoPorFecha, SEGMENTO_ORDEN, type Segmento } from '@/lib/segmento';
 
-interface Props { data: Paricion[]; }
-
-// Orden semántico cabeza → cuerpo → cola (ciclo reproductivo).
-// Mantenemos el casing exacto del catálogo: "Vaca cuerpo" tiene singular
-// distinto a "Vacas cabeza" / "Vaca cola" — fragilidad del legado, no la
-// tocamos acá.
-const GRUPO_ORDEN: VacasGrupo[] = ['Vacas cabeza', 'Vaca cuerpo', 'Vaca cola'];
-
-// Etiquetas cortas para el eje X (cabe en cualquier ancho de pantalla).
-const GRUPO_LABEL: Record<VacasGrupo, string> = {
-  'Vacas cabeza': 'Cabeza',
-  'Vaca cuerpo':  'Cuerpo',
-  'Vaca cola':    'Cola',
-};
+interface Props {
+  data: Paricion[];
+  campos: Campo[];
+}
 
 const COLORS = {
   Nacimiento: '#1B4332',
@@ -45,24 +36,32 @@ const COLORS = {
   Aborto:     '#C9423F',
 };
 
-export function ParicionesPorGrupo({ data }: Props) {
+export function ParicionesPorGrupo({ data, campos }: Props) {
+  // Map campoId → nombre, para pasarle el nombre al helper de segmentación.
+  const campoNombreById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of campos) m.set(c.id, c.nombre);
+    return m;
+  }, [campos]);
+
   const serie = useMemo(() => {
-    // Inicializamos cada grupo con 0 para que aparezcan los 3 aunque no
-    // tengan eventos en el rango filtrado — refuerza que "cola está vacía"
-    // es información, no falta de data.
-    const init = (g: VacasGrupo) => ({
-      grupo: GRUPO_LABEL[g],
+    // Inicializamos cada segmento con 0 para que aparezcan los 3 aunque
+    // no tengan eventos en el rango filtrado.
+    const init = (s: Segmento) => ({
+      grupo: s as string,
       Nacimiento: 0,
       Retacto: 0,
       Muerte: 0,
       Aborto: 0,
       total: 0,
     });
-    const byGrupo = new Map<VacasGrupo, ReturnType<typeof init>>(
-      GRUPO_ORDEN.map(g => [g, init(g)]),
+    const bySeg = new Map<Segmento, ReturnType<typeof init>>(
+      SEGMENTO_ORDEN.map(s => [s, init(s)]),
     );
     for (const p of data) {
-      const row = byGrupo.get(p.vacasGrupo);
+      const campoNombre = campoNombreById.get(p.campoId) ?? '';
+      const seg = segmentoPorFecha(p.fecha, campoNombre);
+      const row = bySeg.get(seg);
       if (!row) continue;
       if (p.evento === 'Nacimiento') row.Nacimiento++;
       else if (p.evento === 'Retacto') row.Retacto++;
@@ -70,8 +69,8 @@ export function ParicionesPorGrupo({ data }: Props) {
       else if (p.evento === 'Aborto') row.Aborto++;
       row.total++;
     }
-    return GRUPO_ORDEN.map(g => byGrupo.get(g)!);
-  }, [data]);
+    return SEGMENTO_ORDEN.map(s => bySeg.get(s)!);
+  }, [data, campoNombreById]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -89,8 +88,6 @@ export function ParicionesPorGrupo({ data }: Props) {
         </BarChart>
       </ResponsiveContainer>
 
-      {/* Mini-tabla con totales por grupo — referencia rápida sin tener que
-          leer el chart. Útil para reuniones donde proyectan la pantalla. */}
       <div className="grid grid-cols-3 gap-2">
         {serie.map(s => (
           <div key={s.grupo} className="bg-asfion-bg rounded-lg px-3 py-2 text-center">

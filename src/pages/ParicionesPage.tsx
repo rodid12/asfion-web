@@ -1,23 +1,55 @@
-// Página del módulo Pariciones — contenido que antes vivía en Dashboard.tsx
-// (KPIs, filtros, charts, tabla). Ahora es solo una "vista" que Dashboard
-// renderea cuando la tab activa es 'pariciones'.
+// Página del módulo Pariciones — versión "Power BI" pedida por el cliente.
+//
+// Estructura (de arriba abajo):
+//   1. Header con título y export CSV.
+//   2. FilterBar (rango, campo, evento).
+//   3. 7 KPIs en grid: Stock Base · Eventos · Nacimientos · Muertes · Vacas sin Parir · Ternero en Pie · Asistencia(Si).
+//   4. Fila de 5 % de eficiencia (MiniKpi compactos).
+//   5. Charts row A: donut Eventos · donut Nacimientos segmentados (cabeza/cuerpo/cola).
+//   6. Causa de Muerte (bar chart vertical) y Evolución mensual.
+//   7. Por campo (stacked) + Por grupo (segmentación por fecha).
+//   8. Tabla detalle con Export CSV.
+//
+// Fórmulas (replican el DAX del Power BI del cliente):
+//   Stock Base       = sum(campos.stock_inicial_vacas) sobre los campos visibles
+//   Nacimientos      = count eventos tipo Nacimiento
+//   Muertes          = count eventos tipo Muerte
+//   Abortos          = count eventos tipo Aborto
+//   Retactos         = count eventos tipo Retacto
+//   Eventos          = filtrados.length
+//   Muerte Señalado  = count pariciones con causaTipo = "Muerte Señalado"
+//   Nacido Muerto    = count pariciones con causaTipo = "Nacido Muerto"
+//   Ternero en Pie   = Nacimientos - Muerte Señalado
+//   Vacas sin Parir  = Stock Base - Nacimientos - Retactos
+//   Orejanos         = count pariciones con sexo = "Orejano"
+//   Asistencia(Si)   = count Nacimientos con asistencia = "Si"
+//
+//   % Destete        = Ternero en Pie / Stock Base
+//   % Abortos        = Abortos / Stock Base
+//   % Muerte Señalado = Muerte Señalado / Nacimientos
+//   % Nacido Muerto  = Nacido Muerto / Nacimientos
 
 import React, { useMemo, useState } from 'react';
 import {
   BabyIcon,
   HeartCrackIcon,
+  ShieldOffIcon,
   SkullIcon,
   TrendingUpIcon,
+  UsersIcon,
+  WarehouseIcon,
 } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Kpi } from '@/components/Kpi';
+import { MiniKpi } from '@/components/MiniKpi';
 import { FilterBar } from '@/components/FilterBar';
 import { ParicionesTable } from '@/components/ParicionesTable';
 import { ParicionesMensuales } from '@/charts/ParicionesMensuales';
-import { DistribucionEventos } from '@/charts/DistribucionEventos';
 import { ParicionesPorCampo } from '@/charts/ParicionesPorCampo';
 import { ParicionesPorGrupo } from '@/charts/ParicionesPorGrupo';
-import { SexoYAsistencia } from '@/charts/SexoYAsistencia';
+import { CausaDeMuertePariciones } from '@/charts/CausaDeMuertePariciones';
+import { EventosDonut } from '@/charts/EventosDonut';
+import { NacimientosSegmentados } from '@/charts/NacimientosSegmentados';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { aplicarFiltros, FILTROS_DEFAULT, type Filtros } from '@/data/filters';
 import { formatNumber, formatPercent } from '@/lib/utils';
@@ -37,22 +69,60 @@ export function ParicionesPage({ pariciones, campos }: Props) {
     [pariciones, filtros],
   );
 
+  // Campos visibles según el filtro de campo (1 o todos).
+  // El Stock Base se suma sobre los visibles para que cuando el cliente
+  // filtre "Picaflor", el denominador sea solo el de Picaflor.
+  const camposVisibles = useMemo(() => {
+    if (filtros.campoId === 'todos') return campos;
+    return campos.filter(c => c.id === filtros.campoId);
+  }, [filtros.campoId, campos]);
+
   const kpis = useMemo(() => {
     const total = filtrados.length;
     const nacimientos = filtrados.filter(p => p.evento === 'Nacimiento').length;
     const muertes = filtrados.filter(p => p.evento === 'Muerte').length;
     const abortos = filtrados.filter(p => p.evento === 'Aborto').length;
-    const tasaMuertes = total ? (muertes + abortos) / total : 0;
+    const retactos = filtrados.filter(p => p.evento === 'Retacto').length;
+
+    const muerteSenalado = filtrados.filter(p => p.causaTipo === 'Muerte Señalado').length;
+    const nacidoMuerto   = filtrados.filter(p => p.causaTipo === 'Nacido Muerto').length;
+
+    const ternerosEnPie = Math.max(0, nacimientos - muerteSenalado);
+    const stockBase = camposVisibles.reduce(
+      (s, c) => s + (c.stockInicialVacas ?? 0),
+      0,
+    );
+    const vacasSinParir = Math.max(0, stockBase - nacimientos - retactos);
+
+    const orejanos = filtrados.filter(p => (p.sexo ?? '').toLowerCase() === 'orejano').length;
     const asistidos = filtrados.filter(p => p.evento === 'Nacimiento' && p.asistencia === 'Si').length;
-    const pctAsistencia = nacimientos ? asistidos / nacimientos : 0;
 
-    const byCampo = new Map<string, number>();
-    for (const p of filtrados) byCampo.set(p.campoId, (byCampo.get(p.campoId) ?? 0) + 1);
-    const [topCampoId] = [...byCampo.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['', 0];
-    const topCampo = campos.find(c => c.id === topCampoId)?.nombre ?? '—';
+    return {
+      total,
+      nacimientos,
+      muertes,
+      abortos,
+      retactos,
+      muerteSenalado,
+      nacidoMuerto,
+      ternerosEnPie,
+      stockBase,
+      vacasSinParir,
+      orejanos,
+      asistidos,
+      // Porcentajes (las divisiones devuelven 0 si denom = 0)
+      pctDestete:       stockBase    ? ternerosEnPie / stockBase : 0,
+      pctAbortos:       stockBase    ? abortos / stockBase : 0,
+      pctMuerteSenal:   nacimientos  ? muerteSenalado / nacimientos : 0,
+      pctNacidoMuerto:  nacimientos  ? nacidoMuerto / nacimientos : 0,
+    };
+  }, [filtrados, camposVisibles]);
 
-    return { total, nacimientos, muertes, abortos, tasaMuertes, pctAsistencia, topCampo };
-  }, [filtrados, campos]);
+  // Texto del título: si hay un campo seleccionado, lo nombramos (estilo
+  // "Pariciones Picaflor" del Power BI). Sino, queda genérico.
+  const tituloCampo = filtros.campoId === 'todos'
+    ? null
+    : (campos.find(c => c.id === filtros.campoId)?.nombre ?? null);
 
   if (pariciones.length === 0) {
     return <EmptyModule label="pariciones" />;
@@ -62,94 +132,144 @@ export function ParicionesPage({ pariciones, campos }: Props) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold text-asfion-deep">Pariciones</h2>
+          <h2 className="text-3xl font-extrabold text-asfion-deep">
+            Pariciones{tituloCampo ? ` · ${tituloCampo}` : ''}
+          </h2>
           <p className="text-sm text-asfion-muted mt-1">
-            Resumen de actividad de parición a través de todos los campos.
+            {tituloCampo
+              ? `Resumen del campo ${tituloCampo}.`
+              : 'Resumen de actividad de parición a través de todos los campos.'}
           </p>
         </div>
-        <div className="text-sm text-asfion-muted">
-          <span className="font-semibold text-asfion-dark">{formatNumber(filtrados.length)}</span> eventos
-          <span className="mx-2">·</span>
-          últimos datos: <span className="tabular-nums text-asfion-dark">{filtrados[0]?.fecha ?? '—'}</span>
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-asfion-muted">
+            <span className="font-semibold text-asfion-dark">{formatNumber(filtrados.length)}</span> eventos
+            <span className="mx-2">·</span>
+            últimos datos: <span className="tabular-nums text-asfion-dark">{filtrados[0]?.fecha ?? '—'}</span>
+          </div>
+          <ExportCsvButton
+            onClick={() => exportPariciones(filtrados, campos)}
+            disabled={filtrados.length === 0}
+            count={filtrados.length}
+          />
         </div>
       </div>
 
       <FilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPIs principales — fila superior con los 4 más importantes */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Kpi
-          label="Total en el período"
+          label="Stock Base"
+          value={kpis.stockBase > 0 ? formatNumber(kpis.stockBase) : '—'}
+          sublabel={kpis.stockBase === 0 ? 'Sin stock cargado' : 'Vacas preñadas al inicio'}
+          accent="dark"
+          icon={<WarehouseIcon size={18} />}
+        />
+        <Kpi
+          label="Eventos"
           value={formatNumber(kpis.total)}
+          sublabel={`${formatNumber(kpis.retactos)} retactos · ${formatNumber(kpis.abortos)} abortos`}
           accent="dark"
           icon={<TrendingUpIcon size={18} />}
         />
         <Kpi
           label="Nacimientos"
           value={formatNumber(kpis.nacimientos)}
-          sublabel={`${formatPercent(kpis.total ? kpis.nacimientos / kpis.total : 0)} del total`}
+          sublabel={`${formatNumber(kpis.asistidos)} con asistencia`}
           accent="lime"
           icon={<BabyIcon size={18} />}
         />
         <Kpi
-          label="Muertes + Abortos"
-          value={formatNumber(kpis.muertes + kpis.abortos)}
-          sublabel={`${formatPercent(kpis.tasaMuertes)} de mortalidad`}
+          label="Muertes"
+          value={formatNumber(kpis.muertes + kpis.muerteSenalado + kpis.nacidoMuerto)}
+          sublabel={`${formatNumber(kpis.muerteSenalado)} señaladas · ${formatNumber(kpis.nacidoMuerto)} nac. muertos`}
           accent="terracota"
           icon={<SkullIcon size={18} />}
         />
+      </div>
+
+      {/* KPIs derivados — fila inferior */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Kpi
-          label="% Asistencia"
-          value={formatPercent(kpis.pctAsistencia)}
-          sublabel={`Campo top: ${kpis.topCampo}`}
+          label="Vacas sin Parir"
+          value={kpis.stockBase > 0 ? formatNumber(kpis.vacasSinParir) : '—'}
+          sublabel="Stock − Nacimientos − Retactos"
+          accent="dark"
+          icon={<ShieldOffIcon size={18} />}
+        />
+        <Kpi
+          label="Ternero en Pie"
+          value={formatNumber(kpis.ternerosEnPie)}
+          sublabel="Nacimientos − Muerte Señalado"
+          accent="lime"
+          icon={<UsersIcon size={18} />}
+        />
+        <Kpi
+          label="Asistencia (Si)"
+          value={formatNumber(kpis.asistidos)}
+          sublabel={kpis.nacimientos ? `${formatPercent(kpis.asistidos / kpis.nacimientos)} de nacimientos` : ''}
           accent="dark"
           icon={<HeartCrackIcon size={18} />}
         />
       </div>
 
-      {/* Charts row 1 */}
+      {/* Fila de % eficiencia — mini-tiles compactos */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <MiniKpi
+          label="% Destete Parcial"
+          value={kpis.stockBase ? formatPercent(kpis.pctDestete) : '—'}
+          accent="lime"
+        />
+        <MiniKpi
+          label="% Abortos"
+          value={kpis.stockBase ? formatPercent(kpis.pctAbortos) : '—'}
+          accent="terracota"
+        />
+        <MiniKpi
+          label="% Muerte Señalado"
+          value={kpis.nacimientos ? formatPercent(kpis.pctMuerteSenal) : '—'}
+          accent="terracota"
+        />
+        <MiniKpi
+          label="% Nacido Muerto"
+          value={kpis.nacimientos ? formatPercent(kpis.pctNacidoMuerto) : '—'}
+          accent="danger"
+        />
+        <MiniKpi
+          label="Orejanos"
+          value={formatNumber(kpis.orejanos)}
+          accent="dark"
+        />
+      </div>
+
+      {/* Charts row A: 2 donuts (eventos + nacimientos segmentados) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card title="Eventos" subtitle="Nacimientos vs muertes / abortos">
+          <EventosDonut data={filtrados} />
+        </Card>
+        <Card title="Nacimientos segmentados" subtitle="Cabeza / Cuerpo / Cola — calculado por fecha">
+          <NacimientosSegmentados data={filtrados} campos={campos} />
+        </Card>
+      </div>
+
+      {/* Charts row B: causa de muerte + evolución mensual */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card
-          title="Evolución mensual"
-          subtitle="Eventos cargados por mes, por tipo"
-          className="lg:col-span-2"
-        >
+        <Card title="Causa de muerte" subtitle="Detalle desde Pariciones">
+          <CausaDeMuertePariciones data={filtrados} />
+        </Card>
+        <Card title="Evolución mensual" subtitle="Eventos cargados por mes, por tipo" className="lg:col-span-2">
           <ParicionesMensuales data={filtrados} />
         </Card>
-
-        <Card title="Distribución" subtitle="Por tipo de evento">
-          <DistribucionEventos data={filtrados} />
-        </Card>
       </div>
 
-      {/* Charts row 2: grupo + nacimientos
-          La distribución por grupo de vaca (cabeza/cuerpo/cola) es
-          información clave del cliente final — permite ver qué cohorte
-          tiene más muertes/abortos. La pusimos arriba de "actividad por
-          campo" porque el agrupamiento por grupo es más conceptual
-          (zoom out: cómo se distribuye el rodeo) y el de campo es más
-          operativo (zoom in: dónde focusear). */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card
-          title="Por grupo de vaca"
-          subtitle="Cabeza / Cuerpo / Cola — stack por tipo de evento"
-          className="lg:col-span-2"
-        >
-          <ParicionesPorGrupo data={filtrados} />
-        </Card>
-
-        <Card title="Nacimientos" subtitle="Detalle de cría">
-          <SexoYAsistencia data={filtrados} />
-        </Card>
-      </div>
-
-      {/* Charts row 3 */}
+      {/* Charts row C: por campo y por grupo */}
       <div className="grid grid-cols-1 gap-4">
-        <Card
-          title="Actividad por campo"
-          subtitle="Ranking de pariciones cargadas — stack por tipo de evento"
-        >
+        <Card title="Actividad por campo" subtitle="Ranking de pariciones cargadas">
           <ParicionesPorCampo data={filtrados} campos={campos} />
+        </Card>
+        <Card title="Por grupo de vaca" subtitle="Cabeza / Cuerpo / Cola — stack por tipo de evento">
+          <ParicionesPorGrupo data={filtrados} campos={campos} />
         </Card>
       </div>
 
@@ -196,7 +316,6 @@ function exportPariciones(rows: Paricion[], campos: Campo[]): void {
   downloadCsv(csv, csvFilename('pariciones'));
 }
 
-// Empty state compartido (extraerlo a un componente más adelante si crece).
 function EmptyModule({ label }: { label: string }) {
   return (
     <div className="rounded-xl border border-asfion-borderSoft bg-white px-6 py-10 text-center">

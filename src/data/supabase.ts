@@ -25,7 +25,11 @@ import type {
 } from './types';
 
 function rowToCampo(r: any): Campo {
-  return { id: r.id, nombre: r.nombre };
+  return {
+    id: r.id,
+    nombre: r.nombre,
+    stockInicialVacas: r.stock_inicial_vacas != null ? Number(r.stock_inicial_vacas) : undefined,
+  };
 }
 
 function rowToParicion(r: any): Paricion {
@@ -52,7 +56,7 @@ function rowToParicion(r: any): Paricion {
 export async function fetchCampos(): Promise<Campo[]> {
   const { data, error } = await supabase
     .from('campos')
-    .select('id, nombre')
+    .select('id, nombre, stock_inicial_vacas')
     .order('nombre');
   if (error) throw new Error(`fetchCampos: ${error.message}`);
   return (data ?? []).map(rowToCampo);

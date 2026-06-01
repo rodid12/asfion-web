@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, LabelList, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { Campo, Paricion } from '@/data/types';
 
 interface Props {
@@ -26,17 +26,32 @@ export function ParicionesPorCampo({ data, campos }: Props) {
       );
   }, [data, campos]);
 
+  // Top label total por campo — sumamos las 4 series. Visible siempre,
+  // útil para capturas de pantalla sin pasar mouse encima.
+  const serieConTotal = useMemo(
+    () => serie.map(r => ({
+      ...r,
+      total: r.nacimientos + r.retactos + r.muertes + r.abortos,
+    })),
+    [serie],
+  );
+
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={serie} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={serieConTotal} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
         <XAxis dataKey="campo" stroke="#6B7280" fontSize={12} />
         <YAxis stroke="#6B7280" fontSize={12} />
         <Tooltip />
+        <Legend wrapperStyle={{ fontSize: 12 }} iconType="square" />
         <Bar dataKey="nacimientos" name="Nacimientos" stackId="x" fill="#1B4332" radius={[0, 0, 0, 0]} />
         <Bar dataKey="retactos"    name="Retactos"    stackId="x" fill="#52B788" />
         <Bar dataKey="muertes"     name="Muertes"     stackId="x" fill="#C9823F" />
-        <Bar dataKey="abortos"     name="Abortos"     stackId="x" fill="#C9423F" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="abortos"     name="Abortos"     stackId="x" fill="#C9423F" radius={[4, 4, 0, 0]}>
+          {/* LabelList sobre la última serie del stack — recharts ubica el
+              label sobre el top del stack completo, así da el TOTAL del campo. */}
+          <LabelList dataKey="total" position="top" fontSize={11} fill="#1B4332" />
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );

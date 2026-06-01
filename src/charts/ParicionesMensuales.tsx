@@ -3,6 +3,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -45,10 +46,13 @@ export function ParicionesMensuales({ data }: Props) {
         <XAxis dataKey="mes" stroke="#6B7280" fontSize={12} tickMargin={8} />
         <YAxis stroke="#6B7280" fontSize={12} />
         <Tooltip />
-        <Area type="monotone" dataKey="nacimientos" name="Nacimientos" stroke="#1B4332" strokeWidth={2} fill="url(#gDark)" />
-        <Area type="monotone" dataKey="retactos"    name="Retactos"    stroke="#52B788" strokeWidth={2} fill="url(#gLime)" />
-        <Area type="monotone" dataKey="muertes"     name="Muertes"     stroke="#C9823F" strokeWidth={2} fill="transparent" />
-        <Area type="monotone" dataKey="abortos"     name="Abortos"     stroke="#C9423F" strokeWidth={2} fill="transparent" strokeDasharray="4 3" />
+        <Legend wrapperStyle={{ fontSize: 12 }} iconType="line" />
+        {/* Dot al final de cada línea con el valor del último mes — sirve
+            como referencia rápida sin hover. */}
+        <Area type="monotone" dataKey="nacimientos" name="Nacimientos" stroke="#1B4332" strokeWidth={2} fill="url(#gDark)" dot={{ r: 2 }} />
+        <Area type="monotone" dataKey="retactos"    name="Retactos"    stroke="#52B788" strokeWidth={2} fill="url(#gLime)" dot={{ r: 2 }} />
+        <Area type="monotone" dataKey="muertes"     name="Muertes"     stroke="#C9823F" strokeWidth={2} fill="transparent" dot={{ r: 2 }} />
+        <Area type="monotone" dataKey="abortos"     name="Abortos"     stroke="#C9423F" strokeWidth={2} fill="transparent" strokeDasharray="4 3" dot={{ r: 2 }} />
       </AreaChart>
     </ResponsiveContainer>
   );

@@ -15,6 +15,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -74,17 +75,20 @@ export function ParicionesPorGrupo({ data, campos }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={serie} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+      <ResponsiveContainer width="100%" height={280}>
+        <BarChart data={serie} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
           <XAxis dataKey="grupo" stroke="#6B7280" fontSize={13} />
           <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
           <Tooltip />
-          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Legend wrapperStyle={{ fontSize: 12 }} iconType="square" />
           <Bar dataKey="Nacimiento" stackId="x" fill={COLORS.Nacimiento} />
           <Bar dataKey="Retacto"    stackId="x" fill={COLORS.Retacto} />
           <Bar dataKey="Muerte"     stackId="x" fill={COLORS.Muerte} />
-          <Bar dataKey="Aborto"     stackId="x" fill={COLORS.Aborto} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="Aborto"     stackId="x" fill={COLORS.Aborto} radius={[4, 4, 0, 0]}>
+            {/* Total del stack arriba de cada grupo — visible siempre. */}
+            <LabelList dataKey="total" position="top" fontSize={12} fill="#1B4332" />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
 

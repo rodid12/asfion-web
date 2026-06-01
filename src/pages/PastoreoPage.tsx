@@ -13,6 +13,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -21,8 +23,12 @@ import {
 import {
   ActivityIcon,
   ClockIcon,
+  LandPlotIcon,
   MapPinIcon,
   RouteIcon,
+  ScaleIcon,
+  UsersIcon,
+  WeightIcon,
 } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Kpi } from '@/components/Kpi';
@@ -62,6 +68,24 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
   }, [pastoreo, filtros]);
 
   // ---------- KPIs ----------
+  //
+  // El Power BI del cliente tiene 5 KPIs en pastoreo:
+  //   Animales · Has Circuito · KG/Cab · Kg Totales · Carga (kg/ha)
+  //
+  // Migration 0003 agregó animales + kg_promedio al schema, así que ya
+  // podemos calcular los 5. Fórmulas (replican el DAX del cliente):
+  //
+  //   Animales    = SUM(animales) sobre stays con dato
+  //   Kg Totales  = SUM(animales × kg_promedio) sobre stays con ambos datos
+  //   KG/Cab      = AVG(kg_promedio) sobre stays con dato (no weighted —
+  //                 así matchea el cálculo del Power BI: 309.64 vs el
+  //                 weighted que daría 292.06 con los mismos números).
+  //   Carga       = Kg Totales / Has Circuito (kg / ha)
+  //   Has Circuito = SUM(hectareas) sobre circuitos con al menos un stay.
+  //
+  // Si un stay no tiene animales o kg_promedio cargados (stays viejos
+  // previos a migration 0003), se ignora en esos KPIs — el peón que cargue
+  // datos productivos completos los va a ver reflejados.
   const kpis = useMemo(() => {
     const abiertos = filtrados.filter(p => !p.fechaSalida).length;
     const cerrados = filtrados.length - abiertos;
@@ -71,6 +95,28 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
       if (!p.fechaSalida) parcelas.add(p.parcelaId);
       circuitosUsados.add(p.circuitoId);
     });
+    let hectareas = 0;
+    circuitosUsados.forEach(id => {
+      const c = circuitoMap.get(id);
+      if (c?.hectareas) hectareas += c.hectareas;
+    });
+    // KPIs productivos (migration 0003)
+    let animalesTotal = 0;
+    let kgTotales = 0;
+    let sumKgPromedio = 0;
+    let nConKg = 0;
+    filtrados.forEach(p => {
+      if (p.animales != null) animalesTotal += p.animales;
+      if (p.kgPromedio != null) {
+        sumKgPromedio += p.kgPromedio;
+        nConKg++;
+      }
+      if (p.animales != null && p.kgPromedio != null) {
+        kgTotales += p.animales * p.kgPromedio;
+      }
+    });
+    const kgPorCab = nConKg > 0 ? sumKgPromedio / nConKg : 0;
+    const carga    = hectareas > 0 ? kgTotales / hectareas : 0;
     // Días promedio de stay (solo cerrados)
     let totalDias = 0;
     let nCerrados = 0;
@@ -91,8 +137,27 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
       cerrados,
       parcelasEnUso: parcelas.size,
       circuitosActivos: circuitosUsados.size,
+      hectareas,
+      animalesTotal,
+      kgTotales,
+      kgPorCab,
+      carga,
+      nConKg,
       diasProm,
     };
+  }, [filtrados, circuitoMap]);
+
+  // Kg Totales por categoría — para el chart estilo Power BI.
+  const kgPorCategoria = useMemo(() => {
+    const map = new Map<string, number>();
+    filtrados.forEach(p => {
+      if (p.animales == null || p.kgPromedio == null) return;
+      const cat = p.categoria || 'Sin categoría';
+      map.set(cat, (map.get(cat) ?? 0) + p.animales * p.kgPromedio);
+    });
+    return [...map.entries()]
+      .map(([categoria, kg]) => ({ categoria, kg: Math.round(kg) }))
+      .sort((a, b) => b.kg - a.kg);
   }, [filtrados]);
 
   // ---------- Por circuito (top 12) ----------
@@ -160,7 +225,47 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
 
       <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPIs productivos — fila Power BI estilo */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <Kpi
+          label="Animales"
+          value={kpis.animalesTotal > 0 ? formatNumber(kpis.animalesTotal) : '—'}
+          sublabel="Cabezas en movimientos"
+          accent="lime"
+          icon={<UsersIcon size={18} />}
+        />
+        <Kpi
+          label="Has Circuito"
+          value={kpis.hectareas > 0 ? formatNumber(kpis.hectareas) : '—'}
+          sublabel="Hectáreas activas"
+          accent="dark"
+          icon={<LandPlotIcon size={18} />}
+        />
+        <Kpi
+          label="KG/Cab"
+          value={kpis.kgPorCab > 0 ? kpis.kgPorCab.toFixed(2) : '—'}
+          sublabel={`Prom. en ${formatNumber(kpis.nConKg)} stays`}
+          accent="dark"
+          icon={<ScaleIcon size={18} />}
+        />
+        <Kpi
+          label="Kg Totales"
+          value={kpis.kgTotales > 0 ? formatNumber(Math.round(kpis.kgTotales)) : '—'}
+          sublabel="Σ (animales × kg/cab)"
+          accent="dark"
+          icon={<WeightIcon size={18} />}
+        />
+        <Kpi
+          label="Carga (kg/ha)"
+          value={kpis.carga > 0 ? kpis.carga.toFixed(2) : '—'}
+          sublabel="Kg Totales / Has"
+          accent="terracota"
+          icon={<LandPlotIcon size={18} />}
+        />
+      </div>
+
+      {/* KPIs operativos — fila secundaria */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Kpi
           label="Total movimientos"
           value={formatNumber(kpis.total)}
@@ -182,7 +287,7 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
           icon={<RouteIcon size={18} />}
         />
         <Kpi
-          label="Días promedio / stay"
+          label="Días prom. / stay"
           value={kpis.diasProm > 0 ? kpis.diasProm.toFixed(1) : '—'}
           sublabel="Solo stays cerrados"
           accent="terracota"
@@ -191,34 +296,137 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
       </div>
 
       <Card
-        title="Por circuito"
-        subtitle="Top 12 — total movimientos + cuántos siguen abiertos"
+        title="Animales por Campo y Circuito"
+        subtitle="Top 12 — total movimientos · barras con cuántos siguen abiertos"
       >
-        <ResponsiveContainer width="100%" height={Math.max(280, porCircuito.length * 28)}>
-          <BarChart data={porCircuito} layout="vertical" margin={{ top: 8, right: 16, left: 40, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height={Math.max(300, porCircuito.length * 32)}>
+          <BarChart data={porCircuito} layout="vertical" margin={{ top: 8, right: 60, left: 40, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" horizontal={false} />
             <XAxis type="number" stroke="#6B7280" fontSize={12} allowDecimals={false} />
             <YAxis type="category" dataKey="label" stroke="#6B7280" fontSize={11} width={180} />
             <Tooltip />
-            <Bar dataKey="total" name="Movimientos" fill="#1B4332" radius={[0, 0, 0, 0]} />
+            <Legend wrapperStyle={{ fontSize: 12 }} iconType="square" />
+            <Bar dataKey="total" name="Movimientos" fill="#1B4332" radius={[0, 0, 0, 0]}>
+              <LabelList dataKey="total" position="right" fontSize={11} fill="#1B4332" />
+            </Bar>
             <Bar dataKey="abiertos" name="Abiertos" fill="#52B788" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </Card>
 
       <Card title="Por categoría animal" subtitle="Animales que más se rotan">
-        <ResponsiveContainer width="100%" height={Math.max(280, porCategoria.length * 28)}>
-          <BarChart data={porCategoria} layout="vertical" margin={{ top: 8, right: 16, left: 30, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height={Math.max(280, porCategoria.length * 32)}>
+          <BarChart data={porCategoria} layout="vertical" margin={{ top: 8, right: 60, left: 30, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" horizontal={false} />
             <XAxis type="number" stroke="#6B7280" fontSize={12} allowDecimals={false} />
             <YAxis type="category" dataKey="categoria" stroke="#6B7280" fontSize={11} width={140} />
             <Tooltip />
             <Bar dataKey="n" radius={[0, 4, 4, 0]}>
               {porCategoria.map((_, i) => <Cell key={i} fill="#52B788" />)}
+              <LabelList dataKey="n" position="right" fontSize={11} fill="#1B4332" />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </Card>
+
+      {/* Kg Totales por Categoría — uno de los charts del Power BI del
+          cliente. Solo aparece si hay stays con animales+kg cargados,
+          sino daría todo 0. */}
+      {kgPorCategoria.length > 0 && (
+        <Card
+          title="Kg Totales por Categoría"
+          subtitle="Producción total = animales × kg/cab, agregado por categoría"
+        >
+          <ResponsiveContainer width="100%" height={Math.max(300, kgPorCategoria.length * 36)}>
+            <BarChart data={kgPorCategoria} margin={{ top: 24, right: 8, left: 8, bottom: 30 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
+              <XAxis dataKey="categoria" stroke="#6B7280" fontSize={11} angle={-15} textAnchor="end" height={60} interval={0} />
+              <YAxis stroke="#6B7280" fontSize={12} />
+              <Tooltip formatter={(v: number) => [`${formatNumber(v)} kg`, 'Total']} />
+              <Bar dataKey="kg" name="Kg Totales" fill="#1B4332" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="kg" position="top" fontSize={11} fill="#1B4332" formatter={(v: number) => formatNumber(v)} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      )}
+
+      {/* Tabla detalle — replica el "Campo / Fecha Entrada / Circuito / Has /
+          Kg Promedio / Animales" del Power BI. Kg Promedio y Animales no
+          existen en el schema actual, así que mostramos categoría y caravana
+          en su lugar. Cuando el cliente agregue esos campos al INSERT,
+          basta cambiar 2 columnas y se replica 1:1. */}
+      <Card title="Detalle de movimientos" subtitle="Últimos 50 — ordenados por fecha de entrada">
+        <DetalleTabla rows={filtrados.slice(0, 50)} campos={campos} circuitos={circuitos} />
+      </Card>
+    </div>
+  );
+}
+
+// Tabla de detalle de pastoreo — vista plana al estilo Power BI.
+// Antes mostrábamos esta info SOLO en el CSV exportado; ahora también
+// inline para ver de un vistazo / hacer screenshots.
+function DetalleTabla({
+  rows, campos, circuitos,
+}: {
+  rows: Pastoreo[];
+  campos: Campo[];
+  circuitos: Circuito[];
+}) {
+  const campoNombre = (id: string) => campos.find(c => c.id === id)?.nombre ?? id;
+  const circuitoNombre = (id: string) => circuitos.find(c => c.id === id)?.nombre ?? id;
+  const circuitoHas = (id: string) => circuitos.find(c => c.id === id)?.hectareas;
+
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm text-asfion-muted italic py-4">
+        Sin movimientos en el rango filtrado.
+      </p>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-asfion-borderSoft text-xs uppercase tracking-wide text-asfion-muted">
+            <th className="text-left font-semibold py-2 pr-3">Campo</th>
+            <th className="text-left font-semibold py-2 pr-3">Fecha entrada</th>
+            <th className="text-left font-semibold py-2 pr-3">Salida</th>
+            <th className="text-left font-semibold py-2 pr-3">Circuito</th>
+            <th className="text-right font-semibold py-2 pr-3">Has</th>
+            <th className="text-left font-semibold py-2 pr-3">Categoría</th>
+            <th className="text-left font-semibold py-2 pr-3">Caravana</th>
+            <th className="text-left font-semibold py-2">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.id} className="border-b border-asfion-borderSoft/50">
+              <td className="py-2 pr-3 font-semibold text-asfion-dark">{campoNombre(r.campoId)}</td>
+              <td className="py-2 pr-3 tabular-nums text-asfion-dark">{r.fecha}</td>
+              <td className="py-2 pr-3 tabular-nums text-asfion-muted">{r.fechaSalida ?? '—'}</td>
+              <td className="py-2 pr-3 text-asfion-dark">{circuitoNombre(r.circuitoId)}</td>
+              <td className="py-2 pr-3 tabular-nums text-right text-asfion-muted">
+                {circuitoHas(r.circuitoId)?.toFixed(0) ?? '—'}
+              </td>
+              <td className="py-2 pr-3 text-asfion-dark">{r.categoria}</td>
+              <td className="py-2 pr-3 text-asfion-muted">{r.caravanaNumero ?? '—'}</td>
+              <td className="py-2">
+                {r.fechaSalida ? (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-asfion-borderSoft text-asfion-muted">
+                    Cerrado
+                  </span>
+                ) : (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-asfion-lime/20 text-asfion-dark">
+                    Abierto
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -247,6 +455,9 @@ function exportPastoreo(rows: Pastoreo[], campos: Campo[], circuitos: Circuito[]
     { header: 'Categoría',      value: r => r.categoria },
     { header: 'Categoría animal', value: r => r.categoriaAnimal ?? '' },
     { header: 'Evento',         value: r => r.evento ?? '' },
+    { header: 'Animales',       value: r => r.animales ?? '' },
+    { header: 'Kg promedio',    value: r => r.kgPromedio ?? '' },
+    { header: 'Kg totales',     value: r => (r.animales != null && r.kgPromedio != null) ? r.animales * r.kgPromedio : '' },
     { header: 'Caravana número',value: r => r.caravanaNumero ?? '' },
     { header: 'Causa',          value: r => r.causa ?? '' },
     { header: 'Cargado por',    value: r => r.usuarioEmail },

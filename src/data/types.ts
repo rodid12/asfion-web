@@ -107,6 +107,11 @@ export interface Pastoreo {
   evento?: string;
   caravanaNumero?: string;
   causa?: string;
+  // Datos productivos (migration 0003) — alimentan los KPIs Animales,
+  // KG/Cab, Kg Totales y Carga del dashboard. Opcionales en stays viejos
+  // sin estos datos.
+  animales?: number;
+  kgPromedio?: number;
   createdAt: string;
 }
 

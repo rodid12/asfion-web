@@ -153,6 +153,8 @@ function rowToPastoreo(r: any): Pastoreo {
     evento: r.evento ?? undefined,
     caravanaNumero: r.caravana_numero ?? undefined,
     causa: r.causa ?? undefined,
+    animales:   r.animales    != null ? Number(r.animales)    : undefined,
+    kgPromedio: r.kg_promedio != null ? Number(r.kg_promedio) : undefined,
     createdAt: r.created_at,
   };
 }

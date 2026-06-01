@@ -9,6 +9,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -158,13 +159,15 @@ export function MortandadPage({ mortandad, campos }: Props) {
           subtitle="Muertes registradas por mes"
           className="lg:col-span-2"
         >
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porMes} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={porMes} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
               <XAxis dataKey="mes" stroke="#6B7280" fontSize={12} />
               <YAxis stroke="#6B7280" fontSize={12} />
               <Tooltip />
-              <Bar dataKey="n" name="Muertes" fill="#C9823F" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="n" name="Muertes" fill="#C9823F" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="n" position="top" fontSize={11} fill="#1B4332" />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -176,26 +179,29 @@ export function MortandadPage({ mortandad, campos }: Props) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card title="Por categoría" subtitle="Animales más afectados" className="lg:col-span-2">
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porCategoria} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={porCategoria} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
               <XAxis dataKey="categoria" stroke="#6B7280" fontSize={11} angle={-15} textAnchor="end" height={60} interval={0} />
               <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
               <Tooltip />
-              <Bar dataKey="n" name="Muertes" fill="#1B4332" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="n" name="Muertes" fill="#1B4332" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="n" position="top" fontSize={11} fill="#1B4332" />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Card>
 
         <Card title="Por campo" subtitle="Ranking">
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porCampo} layout="vertical" margin={{ top: 8, right: 8, left: 30, bottom: 0 }}>
+            <BarChart data={porCampo} layout="vertical" margin={{ top: 8, right: 36, left: 30, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" horizontal={false} />
               <XAxis type="number" stroke="#6B7280" fontSize={12} allowDecimals={false} />
               <YAxis type="category" dataKey="campo" stroke="#6B7280" fontSize={12} width={90} />
               <Tooltip />
               <Bar dataKey="n" radius={[0, 4, 4, 0]}>
                 {porCampo.map((_, i) => <Cell key={i} fill="#52B788" />)}
+                <LabelList dataKey="n" position="right" fontSize={11} fill="#1B4332" />
               </Bar>
             </BarChart>
           </ResponsiveContainer>

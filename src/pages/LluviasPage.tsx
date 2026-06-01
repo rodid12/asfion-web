@@ -11,6 +11,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -165,20 +166,22 @@ export function LluviasPage({ lluvias, campos }: Props) {
           subtitle="mm acumulados por mes"
           className="lg:col-span-2"
         >
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porMes} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={porMes} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
               <XAxis dataKey="mes" stroke="#6B7280" fontSize={12} />
               <YAxis stroke="#6B7280" fontSize={12} />
               <Tooltip formatter={(v: number) => [`${v} mm`, 'Lluvia']} />
-              <Bar dataKey="mm" fill="#1B4332" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="mm" fill="#1B4332" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="mm" position="top" fontSize={11} fill="#1B4332" formatter={(v: number) => `${v}`} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Card>
 
         <Card title="Por campo" subtitle="Ranking de mm acumulados">
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={porCampo} layout="vertical" margin={{ top: 8, right: 8, left: 60, bottom: 0 }}>
+            <BarChart data={porCampo} layout="vertical" margin={{ top: 8, right: 36, left: 60, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" horizontal={false} />
               <XAxis type="number" stroke="#6B7280" fontSize={12} />
               <YAxis type="category" dataKey="campo" stroke="#6B7280" fontSize={12} width={80} />
@@ -187,6 +190,7 @@ export function LluviasPage({ lluvias, campos }: Props) {
                 {porCampo.map((_, i) => (
                   <Cell key={i} fill="#52B788" />
                 ))}
+                <LabelList dataKey="mm" position="right" fontSize={11} fill="#1B4332" formatter={(v: number) => `${v}`} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>

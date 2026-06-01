@@ -79,27 +79,55 @@ export function ParicionesPage({ pariciones, campos }: Props) {
 
   const kpis = useMemo(() => {
     const total = filtrados.length;
-    const nacimientos = filtrados.filter(p => p.evento === 'Nacimiento').length;
-    const muertes = filtrados.filter(p => p.evento === 'Muerte').length;
-    const abortos = filtrados.filter(p => p.evento === 'Aborto').length;
-    const retactos = filtrados.filter(p => p.evento === 'Retacto').length;
+    // En el modelo de datos hay 4 tipos de evento:
+    //   Nacimiento → parto, ternero vivo
+    //   Muerte     → parto, ternero murió (también es un parto, contado aparte)
+    //   Aborto     → no hubo parto a término
+    //   Retacto    → no es parto (re-chequeo)
+    //
+    // El Power BI del cliente considera "Nacimientos" = TODOS los partos
+    // (con o sin muerte del ternero). Por eso el denominador de los % es:
+    //
+    //   nacimientosTotales = count(Nacimiento) + count(Muerte)
+    //
+    // Sin esta corrección, % Muerte Señalado en campos con pocos eventos
+    // explotaba (ej. Picaflor: 9/2 = 450% — era el bug reportado por Ro).
+    const nacimientosVivos = filtrados.filter(p => p.evento === 'Nacimiento').length;
+    const muertes          = filtrados.filter(p => p.evento === 'Muerte').length;
+    const abortos          = filtrados.filter(p => p.evento === 'Aborto').length;
+    const retactos         = filtrados.filter(p => p.evento === 'Retacto').length;
 
+    // "Nacimientos totales" = todos los partos (con o sin muerte del ternero).
+    const nacimientos = nacimientosVivos + muertes;
+
+    // Causa de muerte (solo aplica sobre las muertes). Son subconjuntos:
+    //   muerteSenalado + nacidoMuerto + (desconocido / sin causa) = muertes
     const muerteSenalado = filtrados.filter(p => p.causaTipo === 'Muerte Señalado').length;
     const nacidoMuerto   = filtrados.filter(p => p.causaTipo === 'Nacido Muerto').length;
 
+    // Ternero en Pie = nacimientos totales - muertes señaladas
+    // (los nacidos muertos se cuentan dentro de "Nacimientos" pero en Power BI
+    //  no se restan acá — replica la fórmula del cliente).
     const ternerosEnPie = Math.max(0, nacimientos - muerteSenalado);
     const stockBase = camposVisibles.reduce(
       (s, c) => s + (c.stockInicialVacas ?? 0),
       0,
     );
-    const vacasSinParir = Math.max(0, stockBase - nacimientos - retactos);
+    // Vacas sin Parir = Stock - Nacimientos totales - Retactos
+    // (los abortos son vacas que SÍ entraron en gestación, así que cuentan
+    //  como "consumieron stock" — están afuera de "sin parir").
+    const vacasSinParir = Math.max(0, stockBase - nacimientos - retactos - abortos);
 
     const orejanos = filtrados.filter(p => (p.sexo ?? '').toLowerCase() === 'orejano').length;
-    const asistidos = filtrados.filter(p => p.evento === 'Nacimiento' && p.asistencia === 'Si').length;
+    // Asistencia se considera para CUALQUIER parto (vivo o muerto).
+    const asistidos = filtrados.filter(
+      p => (p.evento === 'Nacimiento' || p.evento === 'Muerte') && p.asistencia === 'Si',
+    ).length;
 
     return {
       total,
-      nacimientos,
+      nacimientosVivos,
+      nacimientos,   // ← total de partos (incluye muertes)
       muertes,
       abortos,
       retactos,
@@ -176,13 +204,13 @@ export function ParicionesPage({ pariciones, campos }: Props) {
         <Kpi
           label="Nacimientos"
           value={formatNumber(kpis.nacimientos)}
-          sublabel={`${formatNumber(kpis.asistidos)} con asistencia`}
+          sublabel={`${formatNumber(kpis.nacimientosVivos)} vivos · ${formatNumber(kpis.muertes)} muertos`}
           accent="lime"
           icon={<BabyIcon size={18} />}
         />
         <Kpi
           label="Muertes"
-          value={formatNumber(kpis.muertes + kpis.muerteSenalado + kpis.nacidoMuerto)}
+          value={formatNumber(kpis.muertes)}
           sublabel={`${formatNumber(kpis.muerteSenalado)} señaladas · ${formatNumber(kpis.nacidoMuerto)} nac. muertos`}
           accent="terracota"
           icon={<SkullIcon size={18} />}
@@ -194,7 +222,7 @@ export function ParicionesPage({ pariciones, campos }: Props) {
         <Kpi
           label="Vacas sin Parir"
           value={kpis.stockBase > 0 ? formatNumber(kpis.vacasSinParir) : '—'}
-          sublabel="Stock − Nacimientos − Retactos"
+          sublabel="Stock − Partos − Retactos − Abortos"
           accent="dark"
           icon={<ShieldOffIcon size={18} />}
         />
@@ -208,7 +236,7 @@ export function ParicionesPage({ pariciones, campos }: Props) {
         <Kpi
           label="Asistencia (Si)"
           value={formatNumber(kpis.asistidos)}
-          sublabel={kpis.nacimientos ? `${formatPercent(kpis.asistidos / kpis.nacimientos)} de nacimientos` : ''}
+          sublabel={kpis.nacimientos ? `${formatPercent(kpis.asistidos / kpis.nacimientos)} de partos` : ''}
           accent="dark"
           icon={<HeartCrackIcon size={18} />}
         />

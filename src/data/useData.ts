@@ -7,10 +7,11 @@
 // en hooks por módulo y cargamos on-demand.
 
 import { useEffect, useState } from 'react';
-import type { Campo, Circuito, Lluvia, Mortandad, Paricion, Pastoreo } from './types';
+import type { Campo, Circuito, Compra, Lluvia, Mortandad, Paricion, Pastoreo } from './types';
 import {
   fetchCampos,
   fetchCircuitos,
+  fetchCompras,
   fetchLluvias,
   fetchMortandad,
   fetchPariciones,
@@ -24,6 +25,7 @@ export interface DashboardData {
   lluvias: Lluvia[];
   mortandad: Mortandad[];
   pastoreo: Pastoreo[];
+  compras: Compra[];
 }
 
 export interface UseDataResult {
@@ -40,6 +42,7 @@ const EMPTY: DashboardData = {
   lluvias: [],
   mortandad: [],
   pastoreo: [],
+  compras: [],
 };
 
 export function useDashboardData(): UseDataResult {
@@ -55,7 +58,7 @@ export function useDashboardData(): UseDataResult {
 
     (async () => {
       try {
-        const [campos, circuitos, pariciones, lluvias, mortandad, pastoreo] =
+        const [campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras] =
           await Promise.all([
             fetchCampos(),
             fetchCircuitos(),
@@ -63,9 +66,10 @@ export function useDashboardData(): UseDataResult {
             fetchLluvias(),
             fetchMortandad(),
             fetchPastoreo(),
+            fetchCompras(),
           ]);
         if (!cancelled) {
-          setData({ campos, circuitos, pariciones, lluvias, mortandad, pastoreo });
+          setData({ campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras });
         }
       } catch (err: any) {
         if (!cancelled) setError(err?.message ?? 'Error desconocido cargando datos');

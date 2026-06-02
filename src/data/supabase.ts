@@ -14,6 +14,7 @@ import type {
   CaravanaColor,
   CausaMuerteTipo,
   Circuito,
+  Compra,
   EventoParicion,
   Lluvia,
   Mortandad,
@@ -166,6 +167,43 @@ export async function fetchPastoreo(): Promise<Pastoreo[]> {
     .order('fecha_entrada', { ascending: false });
   if (error) throw new Error(`fetchPastoreo: ${error.message}`);
   return (data ?? []).map(rowToPastoreo);
+}
+
+// =============================================================================
+// Compras (migration 0004)
+// =============================================================================
+
+function rowToCompra(r: any): Compra {
+  return {
+    id: r.id,
+    fecha: r.fecha,
+    campoId: r.campo_id,
+    usuarioEmail: r.usuario_email,
+    actividad:       r.actividad ?? undefined,
+    cantCabYCat:     r.cant_cab_y_cat ?? undefined,
+    kgNetosOrigen:   Number(r.kg_netos_origen),
+    kgNetosDestino:  Number(r.kg_netos_destino),
+    mermaPorcentaje: r.merma_porcentaje != null ? Number(r.merma_porcentaje) : undefined,
+    kgCorregidos:    r.kg_corregidos    != null ? Number(r.kg_corregidos) : undefined,
+    precio:          r.precio != null ? Number(r.precio) : undefined,
+    consignado:      r.consignado ?? undefined,
+    titular:         r.titular ?? undefined,
+    plazo:           r.plazo ?? undefined,
+    numeroDte:       r.numero_dte ?? undefined,
+    numeroOperacion: r.numero_operacion ?? undefined,
+    kmRecorrido:     r.km_recorrido != null ? Number(r.km_recorrido) : undefined,
+    observaciones:   r.observaciones ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+export async function fetchCompras(): Promise<Compra[]> {
+  const { data, error } = await supabase
+    .from('compras')
+    .select('*')
+    .order('fecha', { ascending: false });
+  if (error) throw new Error(`fetchCompras: ${error.message}`);
+  return (data ?? []).map(rowToCompra);
 }
 
 // =============================================================================

@@ -11,6 +11,7 @@ import { ParicionesPage } from './ParicionesPage';
 import { LluviasPage } from './LluviasPage';
 import { MortandadPage } from './MortandadPage';
 import { PastoreoPage } from './PastoreoPage';
+import { ComprasPage } from './ComprasPage';
 
 export function Dashboard() {
   const { user, signOut } = useAuth();
@@ -68,6 +69,7 @@ export function Dashboard() {
           lluvias:    d.lluvias.length,
           mortandad:  d.mortandad.length,
           pastoreo:   d.pastoreo.length,
+          compras:    d.compras.length,
         }}
       />
 
@@ -98,9 +100,12 @@ export function Dashboard() {
         {data && modulo === 'pastoreo' && (
           <PastoreoPage pastoreo={d.pastoreo} campos={d.campos} circuitos={d.circuitos} />
         )}
+        {data && modulo === 'compras' && (
+          <ComprasPage compras={d.compras} campos={d.campos} />
+        )}
 
         <footer className="text-center text-xs text-asfion-muted py-6">
-          ASFION · Dashboard v0.3 · Conectado a Supabase
+          ASFION · Dashboard v0.4 · Conectado a Supabase
         </footer>
       </main>
     </div>

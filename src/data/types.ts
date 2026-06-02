@@ -116,6 +116,38 @@ export interface Pastoreo {
 }
 
 // -----------------------------------------------------------------------------
+// Compra (migration 0004)
+// -----------------------------------------------------------------------------
+//
+// Replica el módulo "Compra" del AppSheet del cliente. Captura entrada de
+// hacienda (compra) — datos físicos (kg origen/destino), comerciales
+// (precio, consignado) y logísticos (DTE, km, número de operación).
+export interface Compra {
+  id: string;
+  fecha: string;
+  campoId: string;
+  usuarioEmail: string;
+  // Físico
+  actividad?: string;            // Destete Precoz / Engorde / Invernada
+  cantCabYCat?: string;          // "83 machos. 27 hembras"
+  kgNetosOrigen: number;
+  kgNetosDestino: number;
+  mermaPorcentaje?: number;      // auto-calculado en form
+  kgCorregidos?: number;         // manual
+  // Comerciales
+  precio?: number;               // ARS/kg típicamente
+  consignado?: string;
+  titular?: string;
+  plazo?: string;
+  // Logística
+  numeroDte?: string;
+  numeroOperacion?: string;
+  kmRecorrido?: number;
+  observaciones?: string;
+  createdAt: string;
+}
+
+// -----------------------------------------------------------------------------
 // Catálogos secundarios — necesarios para resolver nombres en charts
 // -----------------------------------------------------------------------------
 export interface Circuito {

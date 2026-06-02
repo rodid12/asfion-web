@@ -21,17 +21,19 @@ export function DistribucionEventos({ data }: Props) {
   const total = serie.reduce((a, b) => a + b.value, 0);
 
   return (
-    <div className="flex items-center gap-6">
-      <ResponsiveContainer width="50%" height={220}>
-        <PieChart>
-          <Pie data={serie} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
-            {serie.map(entry => (
-              <Cell key={entry.name} fill={COLORS[entry.name] ?? '#6B7280'} />
-            ))}
-          </Pie>
-          <Tooltip />
-        </PieChart>
-      </ResponsiveContainer>
+    <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
+      <div className="w-full md:w-[50%] h-[220px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={serie} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
+              {serie.map(entry => (
+                <Cell key={entry.name} fill={COLORS[entry.name] ?? '#6B7280'} />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
       <div className="flex-1 flex flex-col gap-2">
         {serie.map(s => (
           <div key={s.name} className="flex items-center gap-2 text-sm">

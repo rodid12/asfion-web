@@ -270,22 +270,24 @@ function CausaMuerteDonut({ data }: { data: Array<{ causa: string; n: number }> 
   }
 
   return (
-    <div className="flex items-center gap-4">
-      <ResponsiveContainer width="50%" height={260}>
-        <PieChart>
-          <Pie
-            data={serie}
-            dataKey="value"
-            nameKey="name"
-            innerRadius={55}
-            outerRadius={95}
-            paddingAngle={2}
-          >
-            {serie.map(s => <Cell key={s.name} fill={s.fill} />)}
-          </Pie>
-          <Tooltip formatter={(v: number, n: string) => [`${v} casos`, n]} />
-        </PieChart>
-      </ResponsiveContainer>
+    <div className="flex flex-col md:flex-row md:items-center gap-4">
+      <div className="w-full md:w-[50%] h-[260px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={serie}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={55}
+              outerRadius={95}
+              paddingAngle={2}
+            >
+              {serie.map(s => <Cell key={s.name} fill={s.fill} />)}
+            </Pie>
+            <Tooltip formatter={(v: number, n: string) => [`${v} casos`, n]} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
 
       {/* Leyenda con nombre, conteo y %. Compatible con el patrón visual
           del Power BI (etiqueta + número + porcentaje). */}

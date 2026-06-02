@@ -47,15 +47,17 @@ export function NacimientosSegmentados({ data, campos }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-4">
-      <ResponsiveContainer width="55%" height={220}>
-        <PieChart>
-          <Pie data={serie} dataKey="value" nameKey="name" innerRadius={50} outerRadius={85} paddingAngle={2}>
-            {serie.map(s => <Cell key={s.name} fill={s.fill} />)}
-          </Pie>
-          <Tooltip />
-        </PieChart>
-      </ResponsiveContainer>
+    <div className="flex flex-col md:flex-row md:items-center gap-4">
+      <div className="w-full md:w-[55%] h-[220px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={serie} dataKey="value" nameKey="name" innerRadius={50} outerRadius={85} paddingAngle={2}>
+              {serie.map(s => <Cell key={s.name} fill={s.fill} />)}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
       <div className="flex-1 flex flex-col gap-2">
         {serie.map(s => (
           <div key={s.name} className="flex items-center gap-2 text-sm">

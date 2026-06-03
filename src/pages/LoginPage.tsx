@@ -1,7 +1,8 @@
 // Pantalla de login del dashboard.
 //
-// Misma identidad visual que el deck/app: fondo oscuro premium, acento lime,
-// tipografía Inter. El email/password van directo a supabase.auth.
+// Misma identidad visual que el deck/app: fondo oscuro premium (navyDeep),
+// acento orange brand (#FF8409), tipografía Inter. El email/password van
+// directo a supabase.auth.
 // La app entera está envuelta en <AuthProvider>, que decide qué renderear:
 // si no hay sesión, muestra esta pantalla; si la hay, muestra el Dashboard.
 
@@ -31,15 +32,15 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-asfion-deep text-white flex items-center justify-center px-4">
+    <div className="min-h-screen bg-asfion-navyDeep text-white flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* Branding */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-3">
-            <div className="w-4 h-4 rounded-full bg-asfion-lime" />
+            <div className="w-4 h-4 rounded-full bg-asfion-orange" />
             <h1 className="text-3xl font-extrabold tracking-wide">ASFION</h1>
           </div>
-          <p className="text-sm text-asfion-lime italic">
+          <p className="text-sm text-asfion-orange italic">
             Del campo al tablero, sin fricción.
           </p>
         </div>
@@ -47,7 +48,7 @@ export function LoginPage() {
         {/* Card de login */}
         <form
           onSubmit={onSubmit}
-          className="bg-white text-asfion-deep rounded-2xl p-8 shadow-card space-y-5"
+          className="bg-white text-asfion-navyDeep rounded-2xl p-8 shadow-card space-y-5"
         >
           <div>
             <h2 className="text-xl font-extrabold">Acceso al tablero</h2>
@@ -68,7 +69,7 @@ export function LoginPage() {
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg border border-asfion-borderSoft focus:outline-none focus:ring-2 focus:ring-asfion-lime focus:border-transparent text-base"
+              className="w-full px-3 py-2.5 rounded-lg border border-asfion-borderSoft focus:outline-none focus:ring-2 focus:ring-asfion-orange focus:border-transparent text-base"
               placeholder="usuario@ejemplo.com"
             />
           </div>
@@ -83,12 +84,12 @@ export function LoginPage() {
               required
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg border border-asfion-borderSoft focus:outline-none focus:ring-2 focus:ring-asfion-lime focus:border-transparent text-base"
+              className="w-full px-3 py-2.5 rounded-lg border border-asfion-borderSoft focus:outline-none focus:ring-2 focus:ring-asfion-orange focus:border-transparent text-base"
             />
           </div>
 
           {error && (
-            <div className="text-sm text-asfion-danger bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div className="text-sm text-asfion-danger bg-asfion-danger/10 border border-asfion-danger/30 rounded-lg px-3 py-2">
               {error}
             </div>
           )}
@@ -96,13 +97,13 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={submitting || !email || !password}
-            className="w-full px-4 py-3 rounded-lg bg-asfion-dark text-white font-bold hover:bg-asfion-deep transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-3 rounded-lg bg-asfion-navy text-white font-bold hover:bg-asfion-navyDeep transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? 'Ingresando…' : 'Entrar'}
           </button>
         </form>
 
-        <p className="text-center text-xs text-asfion-lime/60 mt-6">
+        <p className="text-center text-xs text-asfion-orange/60 mt-6">
           Dashboard v0.1 · Solo usuarios autorizados
         </p>
       </div>

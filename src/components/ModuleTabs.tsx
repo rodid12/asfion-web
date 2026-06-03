@@ -35,9 +35,11 @@ export function ModuleTabs({ active, onChange, counts }: Props) {
               onClick={() => onChange(t.key)}
               className={clsx(
                 'px-4 py-3 text-sm font-semibold border-b-2 -mb-px transition whitespace-nowrap',
+                // Tab activa: underline en orange (acento del brand) + texto navy fuerte.
+                // Hover en inactivas: tinte peach suave para warmth, no gris frío.
                 isActive
-                  ? 'border-asfion-dark text-asfion-deep'
-                  : 'border-transparent text-asfion-muted hover:text-asfion-dark hover:bg-asfion-bg',
+                  ? 'border-asfion-orange text-asfion-navyDeep'
+                  : 'border-transparent text-asfion-muted hover:text-asfion-navyDeep hover:bg-asfion-orangeSoft/25',
               )}
               aria-current={isActive ? 'page' : undefined}
             >
@@ -46,7 +48,7 @@ export function ModuleTabs({ active, onChange, counts }: Props) {
                 <span
                   className={clsx(
                     'ml-2 inline-block min-w-[1.5rem] px-1.5 text-xs font-bold rounded-full',
-                    isActive ? 'bg-asfion-lime text-asfion-deep' : 'bg-asfion-borderSoft text-asfion-muted',
+                    isActive ? 'bg-asfion-orange text-asfion-navyDeep' : 'bg-asfion-borderSoft text-asfion-muted',
                   )}
                 >
                   {n}

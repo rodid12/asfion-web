@@ -25,7 +25,7 @@ export function ExportCsvButton({ onClick, disabled, count }: Props) {
         'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold transition',
         disabled
           ? 'bg-asfion-borderSoft text-asfion-muted cursor-not-allowed'
-          : 'bg-asfion-dark text-white hover:bg-asfion-deep',
+          : 'bg-asfion-navy text-white hover:bg-asfion-navyDeep',
       )}
       title="Descargar CSV con los datos filtrados"
     >

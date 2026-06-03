@@ -51,6 +51,8 @@ import { CausaDeMuertePariciones } from '@/charts/CausaDeMuertePariciones';
 import { EventosDonut } from '@/charts/EventosDonut';
 import { NacimientosSegmentados } from '@/charts/NacimientosSegmentados';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyModule } from '@/components/EmptyModule';
 import { aplicarFiltros, FILTROS_DEFAULT, type Filtros } from '@/data/filters';
 import { formatNumber, formatPercent } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
@@ -158,30 +160,23 @@ export function ParicionesPage({ pariciones, campos }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold text-asfion-deep">
-            Pariciones{tituloCampo ? ` · ${tituloCampo}` : ''}
-          </h2>
-          <p className="text-sm text-asfion-muted mt-1">
-            {tituloCampo
-              ? `Resumen del campo ${tituloCampo}.`
-              : 'Resumen de actividad de parición a través de todos los campos.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-asfion-muted">
-            <span className="font-semibold text-asfion-dark">{formatNumber(filtrados.length)}</span> eventos
-            <span className="mx-2">·</span>
-            últimos datos: <span className="tabular-nums text-asfion-dark">{filtrados[0]?.fecha ?? '—'}</span>
-          </div>
+      <PageHeader
+        title={`Pariciones${tituloCampo ? ` · ${tituloCampo}` : ''}`}
+        subtitle={
+          tituloCampo
+            ? `Resumen del campo ${tituloCampo}.`
+            : 'Resumen de actividad de parición a través de todos los campos.'
+        }
+        count={{ value: filtrados.length, label: 'eventos' }}
+        lastDate={filtrados[0]?.fecha}
+        actions={
           <ExportCsvButton
             onClick={() => exportPariciones(filtrados, campos)}
             disabled={filtrados.length === 0}
             count={filtrados.length}
           />
-        </div>
-      </div>
+        }
+      />
 
       <FilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
 
@@ -191,21 +186,21 @@ export function ParicionesPage({ pariciones, campos }: Props) {
           label="Stock Base"
           value={kpis.stockBase > 0 ? formatNumber(kpis.stockBase) : '—'}
           sublabel={kpis.stockBase === 0 ? 'Sin stock cargado' : 'Vacas preñadas al inicio'}
-          accent="dark"
+          accent="navy"
           icon={<WarehouseIcon size={18} />}
         />
         <Kpi
           label="Eventos"
           value={formatNumber(kpis.total)}
           sublabel={`${formatNumber(kpis.retactos)} retactos · ${formatNumber(kpis.abortos)} abortos`}
-          accent="dark"
+          accent="navy"
           icon={<TrendingUpIcon size={18} />}
         />
         <Kpi
           label="Nacimientos"
           value={formatNumber(kpis.nacimientos)}
           sublabel={`${formatNumber(kpis.nacimientosVivos)} vivos · ${formatNumber(kpis.muertes)} muertos`}
-          accent="lime"
+          accent="orange"
           icon={<BabyIcon size={18} />}
         />
         <Kpi
@@ -223,21 +218,21 @@ export function ParicionesPage({ pariciones, campos }: Props) {
           label="Vacas sin Parir"
           value={kpis.stockBase > 0 ? formatNumber(kpis.vacasSinParir) : '—'}
           sublabel="Stock − Partos − Retactos − Abortos"
-          accent="dark"
+          accent="navy"
           icon={<ShieldOffIcon size={18} />}
         />
         <Kpi
           label="Ternero en Pie"
           value={formatNumber(kpis.ternerosEnPie)}
           sublabel="Nacimientos − Muerte Señalado"
-          accent="lime"
+          accent="orange"
           icon={<UsersIcon size={18} />}
         />
         <Kpi
           label="Asistencia (Si)"
           value={formatNumber(kpis.asistidos)}
           sublabel={kpis.nacimientos ? `${formatPercent(kpis.asistidos / kpis.nacimientos)} de partos` : ''}
-          accent="dark"
+          accent="navy"
           icon={<HeartCrackIcon size={18} />}
         />
       </div>
@@ -247,7 +242,7 @@ export function ParicionesPage({ pariciones, campos }: Props) {
         <MiniKpi
           label="% Destete Parcial"
           value={kpis.stockBase ? formatPercent(kpis.pctDestete) : '—'}
-          accent="lime"
+          accent="orange"
         />
         <MiniKpi
           label="% Abortos"
@@ -267,7 +262,7 @@ export function ParicionesPage({ pariciones, campos }: Props) {
         <MiniKpi
           label="Orejanos"
           value={formatNumber(kpis.orejanos)}
-          accent="dark"
+          accent="navy"
         />
       </div>
 
@@ -344,13 +339,3 @@ function exportPariciones(rows: Paricion[], campos: Campo[]): void {
   downloadCsv(csv, csvFilename('pariciones'));
 }
 
-function EmptyModule({ label }: { label: string }) {
-  return (
-    <div className="rounded-xl border border-asfion-borderSoft bg-white px-6 py-10 text-center">
-      <p className="text-asfion-dark font-semibold">Todavía no hay {label} cargadas.</p>
-      <p className="text-sm text-asfion-muted mt-1">
-        En cuanto los operarios carguen eventos desde la app, los vas a ver acá.
-      </p>
-    </div>
-  );
-}

@@ -4,24 +4,35 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Paleta ASFION (misma que el deck y la app)
+        // Paleta ASFION — derivada del logo oficial (naranja + navy).
+        // Cambia un valor acá y se actualiza todo el dashboard.
         asfion: {
-          deep:       '#0F1F16',
-          dark:       '#1B4332',
-          lime:       '#52B788',
-          terracota:  '#C9823F',
-          amber:      '#B8802E',
-          bg:         '#F8F9F6',
-          borderSoft: '#E2E8E0',
-          muted:      '#6B7280',
+          // Brand — orange fiel al SVG (#FF8409), navy softeneado para UI.
+          navyDeep:   '#0F2535',
+          navy:       '#163349',
+          orange:     '#FF8409',
+          orangeSoft: '#FFCB95',
+          // Variante un toque más saturada del peach, solo para uso sobre
+          // bg navy (tiles del Home en la app). Disponible acá por si la
+          // usamos en alguna sección dark del dashboard.
+          orangeTile: '#FFB97A',
+          // Status
+          success:    '#3FAE5A',
           danger:     '#C9423F',
+          amber:      '#D89425',
+          terracota:  '#C9823F',
+          // Neutrales
+          bg:         '#F7F5F1',
+          borderSoft: '#E5E2DD',
+          muted:      '#6B7280',
+          dark:       '#1A1A1A', // text dark
         },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
-        card: '0 1px 3px rgba(15, 31, 22, 0.06), 0 1px 2px rgba(15, 31, 22, 0.04)',
+        card: '0 1px 3px rgba(30, 46, 63, 0.06), 0 1px 2px rgba(30, 46, 63, 0.04)',
       },
     },
   },

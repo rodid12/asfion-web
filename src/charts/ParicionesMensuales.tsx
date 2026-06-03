@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { Paricion } from '@/data/types';
+import { CHART_BRAND, EVENTO_COLOR } from './palette';
 
 interface Props { data: Paricion[]; }
 
@@ -33,26 +34,32 @@ export function ParicionesMensuales({ data }: Props) {
     <ResponsiveContainer width="100%" height={280}>
       <AreaChart data={serie} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
         <defs>
-          <linearGradient id="gLime" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#52B788" stopOpacity={0.4} />
-            <stop offset="95%" stopColor="#52B788" stopOpacity={0} />
+          {/* En este chart específico, navy lleva el área protagonista
+              (Nacimientos = la masa grande de datos) y orange acentúa la
+              serie secundaria (Retactos). Es una excepción consciente al
+              mapeo EVENTO_COLOR — en una AreaChart, navy "pesa" mejor que
+              orange como área dominante; orange queda mejor como acento.
+              Para donuts/badges seguimos usando EVENTO_COLOR (Nacimiento
+              orange). Muertes y Abortos son solo líneas para no saturar
+              áreas superpuestas. */}
+          <linearGradient id="gNavy" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%"  stopColor={CHART_BRAND.navy} stopOpacity={0.35} />
+            <stop offset="95%" stopColor={CHART_BRAND.navy} stopOpacity={0} />
           </linearGradient>
-          <linearGradient id="gDark" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#1B4332" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#1B4332" stopOpacity={0} />
+          <linearGradient id="gOrange" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%"  stopColor={CHART_BRAND.orange} stopOpacity={0.4} />
+            <stop offset="95%" stopColor={CHART_BRAND.orange} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
-        <XAxis dataKey="mes" stroke="#6B7280" fontSize={12} tickMargin={8} />
-        <YAxis stroke="#6B7280" fontSize={12} />
+        <CartesianGrid strokeDasharray="3 3" stroke={CHART_BRAND.border} vertical={false} />
+        <XAxis dataKey="mes" stroke={CHART_BRAND.textMuted} fontSize={12} tickMargin={8} />
+        <YAxis stroke={CHART_BRAND.textMuted} fontSize={12} />
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: 12 }} iconType="line" />
-        {/* Dot al final de cada línea con el valor del último mes — sirve
-            como referencia rápida sin hover. */}
-        <Area type="monotone" dataKey="nacimientos" name="Nacimientos" stroke="#1B4332" strokeWidth={2} fill="url(#gDark)" dot={{ r: 2 }} />
-        <Area type="monotone" dataKey="retactos"    name="Retactos"    stroke="#52B788" strokeWidth={2} fill="url(#gLime)" dot={{ r: 2 }} />
-        <Area type="monotone" dataKey="muertes"     name="Muertes"     stroke="#C9823F" strokeWidth={2} fill="transparent" dot={{ r: 2 }} />
-        <Area type="monotone" dataKey="abortos"     name="Abortos"     stroke="#C9423F" strokeWidth={2} fill="transparent" strokeDasharray="4 3" dot={{ r: 2 }} />
+        <Area type="monotone" dataKey="nacimientos" name="Nacimientos" stroke={CHART_BRAND.navy}    strokeWidth={2.5} fill="url(#gNavy)"   dot={{ r: 2 }} />
+        <Area type="monotone" dataKey="retactos"    name="Retactos"    stroke={CHART_BRAND.orange}  strokeWidth={2}   fill="url(#gOrange)" dot={{ r: 2 }} />
+        <Area type="monotone" dataKey="muertes"     name="Muertes"     stroke={EVENTO_COLOR.Muerte} strokeWidth={2}   fill="transparent"   dot={{ r: 2 }} />
+        <Area type="monotone" dataKey="abortos"     name="Abortos"     stroke={EVENTO_COLOR.Aborto} strokeWidth={2}   fill="transparent"   strokeDasharray="4 3" dot={{ r: 2 }} />
       </AreaChart>
     </ResponsiveContainer>
   );

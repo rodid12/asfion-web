@@ -8,14 +8,14 @@ html, body, #root {
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: #F8F9F6;
+  background-color: #F7F5F1;
   color: #1A1A1A;
   -webkit-font-smoothing: antialiased;
 }
 
-/* recharts tooltip override para que matchee la paleta */
+/* recharts tooltip override para que matchee la paleta navy/naranja */
 .recharts-tooltip-wrapper .recharts-default-tooltip {
-  background-color: #0F1F16 !important;
+  background-color: #0F2535 !important;
   border: none !important;
   border-radius: 8px !important;
   padding: 8px 12px !important;
@@ -23,7 +23,7 @@ body {
   color: white !important;
 }
 .recharts-tooltip-wrapper .recharts-default-tooltip .recharts-tooltip-label {
-  color: #CFDAD2 !important;
+  color: #C7D0DA !important;
   margin-bottom: 4px !important;
 }
 .recharts-tooltip-wrapper .recharts-tooltip-item-list .recharts-tooltip-item {

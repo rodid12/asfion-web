@@ -8,11 +8,13 @@ interface Props {
   pageSize?: number;
 }
 
+// Estados de sync — coherentes con el sync dot verde de la app: OK = success,
+// pending = amber, syncing = gris, failed = danger.
 const SYNC_COPY: Record<SyncState, { label: string; cls: string }> = {
-  synced:  { label: 'OK',        cls: 'bg-asfion-lime/20 text-asfion-dark' },
+  synced:  { label: 'OK',        cls: 'bg-asfion-success/15 text-asfion-success' },
   pending: { label: 'PENDIENTE', cls: 'bg-asfion-amber/20 text-asfion-amber' },
   syncing: { label: 'SUBIENDO',  cls: 'bg-asfion-muted/20 text-asfion-muted' },
-  failed:  { label: 'FALLÓ',     cls: 'bg-asfion-terracota/20 text-asfion-terracota' },
+  failed:  { label: 'FALLÓ',     cls: 'bg-asfion-danger/15 text-asfion-danger' },
 };
 
 export function ParicionesTable({ data, campos, pageSize = 20 }: Props) {
@@ -39,15 +41,17 @@ export function ParicionesTable({ data, campos, pageSize = 20 }: Props) {
         <tbody>
           {slice.map(p => (
             <tr key={p.id} className="border-b border-asfion-borderSoft/50 hover:bg-asfion-bg/60 transition">
-              <td className="py-3 px-2 tabular-nums text-asfion-dark">{p.fecha}</td>
-              <td className="py-3 px-2 font-semibold text-asfion-dark">{campoNom(p.campoId)}</td>
+              <td className="py-3 px-2 tabular-nums text-asfion-navy">{p.fecha}</td>
+              <td className="py-3 px-2 font-semibold text-asfion-navy">{campoNom(p.campoId)}</td>
               <td className="py-3 px-2 text-asfion-muted">{p.vacasGrupo}</td>
               <td className="py-3 px-2">
                 <span
                   className={cn(
                     'px-2 py-0.5 rounded-full text-xs font-semibold',
-                    p.evento === 'Nacimiento' ? 'bg-asfion-dark text-white' :
-                    p.evento === 'Retacto'    ? 'bg-asfion-lime/30 text-asfion-dark' :
+                    // Nacimiento dominante (navy); Retacto neutral (peach);
+                    // Muerte/Aborto warning escalado (terracota / danger).
+                    p.evento === 'Nacimiento' ? 'bg-asfion-navy text-white' :
+                    p.evento === 'Retacto'    ? 'bg-asfion-orangeSoft text-asfion-navyDeep' :
                     p.evento === 'Muerte'     ? 'bg-asfion-terracota/20 text-asfion-terracota' :
                                                 'bg-asfion-danger/20 text-asfion-danger',
                   )}
@@ -87,14 +91,14 @@ export function ParicionesTable({ data, campos, pageSize = 20 }: Props) {
             <button
               onClick={() => setPage(p => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="px-3 py-1.5 rounded-lg border border-asfion-borderSoft text-asfion-dark font-semibold disabled:opacity-40"
+              className="px-3 py-1.5 rounded-lg border border-asfion-borderSoft text-asfion-navy font-semibold disabled:opacity-40"
             >
               Anterior
             </button>
             <button
               onClick={() => setPage(p => Math.min(pages - 1, p + 1))}
               disabled={page === pages - 1}
-              className="px-3 py-1.5 rounded-lg border border-asfion-borderSoft text-asfion-dark font-semibold disabled:opacity-40"
+              className="px-3 py-1.5 rounded-lg border border-asfion-borderSoft text-asfion-navy font-semibold disabled:opacity-40"
             >
               Siguiente
             </button>

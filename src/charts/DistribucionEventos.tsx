@@ -1,15 +1,12 @@
 import React, { useMemo } from 'react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import type { Paricion } from '@/data/types';
+import { CHART_BRAND, EVENTO_COLOR } from './palette';
 
 interface Props { data: Paricion[]; }
 
-const COLORS: Record<string, string> = {
-  Nacimiento: '#1B4332',
-  Retacto:    '#52B788',
-  Muerte:     '#C9823F',
-  Aborto:     '#C9423F',
-};
+// Mapeo semántico unificado con el donut Eventos, la tabla y los demás charts.
+const COLORS = EVENTO_COLOR;
 
 export function DistribucionEventos({ data }: Props) {
   const serie = useMemo(() => {
@@ -27,7 +24,7 @@ export function DistribucionEventos({ data }: Props) {
           <PieChart>
             <Pie data={serie} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
               {serie.map(entry => (
-                <Cell key={entry.name} fill={COLORS[entry.name] ?? '#6B7280'} />
+                <Cell key={entry.name} fill={COLORS[entry.name as keyof typeof COLORS] ?? CHART_BRAND.textMuted} />
               ))}
             </Pie>
             <Tooltip />
@@ -39,9 +36,9 @@ export function DistribucionEventos({ data }: Props) {
           <div key={s.name} className="flex items-center gap-2 text-sm">
             <span
               className="w-3 h-3 rounded-sm inline-block"
-              style={{ backgroundColor: COLORS[s.name] ?? '#6B7280' }}
+              style={{ backgroundColor: COLORS[s.name as keyof typeof COLORS] ?? CHART_BRAND.textMuted }}
             />
-            <span className="flex-1 font-semibold text-asfion-dark">{s.name}</span>
+            <span className="flex-1 font-semibold text-asfion-navy">{s.name}</span>
             <span className="tabular-nums text-asfion-muted">{s.value}</span>
             <span className="tabular-nums text-asfion-muted w-12 text-right">
               {total ? ((s.value / total) * 100).toFixed(1) : '0'}%

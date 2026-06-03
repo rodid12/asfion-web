@@ -27,6 +27,8 @@ import {
   type SimpleFiltros,
 } from '@/components/SimpleFilterBar';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyModule } from '@/components/EmptyModule';
 import { formatNumber } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Lluvia } from '@/data/types';
@@ -108,26 +110,19 @@ export function LluviasPage({ lluvias, campos }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold text-asfion-deep">Lluvias</h2>
-          <p className="text-sm text-asfion-muted mt-1">
-            Milímetros registrados por pluviómetro a través de todos los campos.
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-asfion-muted">
-            <span className="font-semibold text-asfion-dark">{formatNumber(filtradas.length)}</span> registros
-            <span className="mx-2">·</span>
-            últimos datos: <span className="tabular-nums text-asfion-dark">{filtradas[0]?.fecha ?? '—'}</span>
-          </div>
+      <PageHeader
+        title="Lluvias"
+        subtitle="Milímetros registrados por pluviómetro a través de todos los campos."
+        count={{ value: filtradas.length, label: 'registros' }}
+        lastDate={filtradas[0]?.fecha}
+        actions={
           <ExportCsvButton
             onClick={() => exportLluvias(filtradas, campos)}
             disabled={filtradas.length === 0}
             count={filtradas.length}
           />
-        </div>
-      </div>
+        }
+      />
 
       <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
 
@@ -135,13 +130,13 @@ export function LluviasPage({ lluvias, campos }: Props) {
         <Kpi
           label="mm acumulados"
           value={`${formatNumber(kpis.totalMM)} mm`}
-          accent="dark"
+          accent="navy"
           icon={<CloudRainIcon size={18} />}
         />
         <Kpi
           label="Días con lluvia"
           value={formatNumber(kpis.diasConLluvia)}
-          accent="lime"
+          accent="orange"
           icon={<CalendarDaysIcon size={18} />}
         />
         <Kpi
@@ -155,7 +150,7 @@ export function LluviasPage({ lluvias, campos }: Props) {
           label="Campo top"
           value={kpis.topCampo}
           sublabel={`${formatNumber(kpis.topMM)} mm`}
-          accent="dark"
+          accent="navy"
           icon={<MapPinIcon size={18} />}
         />
       </div>
@@ -168,12 +163,12 @@ export function LluviasPage({ lluvias, campos }: Props) {
         >
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={porMes} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" vertical={false} />
               <XAxis dataKey="mes" stroke="#6B7280" fontSize={12} />
               <YAxis stroke="#6B7280" fontSize={12} />
               <Tooltip formatter={(v: number) => [`${v} mm`, 'Lluvia']} />
-              <Bar dataKey="mm" fill="#1B4332" radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="mm" position="top" fontSize={11} fill="#1B4332" formatter={(v: number) => `${v}`} />
+              <Bar dataKey="mm" fill="#163349" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="mm" position="top" fontSize={11} fill="#163349" formatter={(v: number) => `${v}`} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -182,15 +177,15 @@ export function LluviasPage({ lluvias, campos }: Props) {
         <Card title="Por campo" subtitle="Ranking de mm acumulados">
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={porCampo} layout="vertical" margin={{ top: 8, right: 36, left: 60, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" horizontal={false} />
               <XAxis type="number" stroke="#6B7280" fontSize={12} />
               <YAxis type="category" dataKey="campo" stroke="#6B7280" fontSize={12} width={80} />
               <Tooltip formatter={(v: number) => [`${v} mm`, 'Lluvia']} />
               <Bar dataKey="mm" radius={[0, 4, 4, 0]}>
                 {porCampo.map((_, i) => (
-                  <Cell key={i} fill="#52B788" />
+                  <Cell key={i} fill="#FF8409" />
                 ))}
-                <LabelList dataKey="mm" position="right" fontSize={11} fill="#1B4332" formatter={(v: number) => `${v}`} />
+                <LabelList dataKey="mm" position="right" fontSize={11} fill="#163349" formatter={(v: number) => `${v}`} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -215,13 +210,3 @@ function exportLluvias(rows: Lluvia[], campos: Campo[]): void {
   downloadCsv(csv, csvFilename('lluvias'));
 }
 
-function EmptyModule({ label }: { label: string }) {
-  return (
-    <div className="rounded-xl border border-asfion-borderSoft bg-white px-6 py-10 text-center">
-      <p className="text-asfion-dark font-semibold">Todavía no hay {label} cargadas.</p>
-      <p className="text-sm text-asfion-muted mt-1">
-        En cuanto los operarios carguen eventos desde la app, los vas a ver acá.
-      </p>
-    </div>
-  );
-}

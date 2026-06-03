@@ -19,6 +19,13 @@ const RANGOS: Array<[RangoFecha, string]> = [
 
 const EVENTOS: Array<EventoParicion | 'todos'> = ['todos', 'Nacimiento', 'Muerte', 'Retacto', 'Aborto'];
 
+// Clases compartidas para los <select> de campo y evento — outline foco
+// en orange, hover peach suave, padding/typography consistente con los
+// botones del rango.
+const SELECT_CLS =
+  'bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy ' +
+  'hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange transition cursor-pointer';
+
 export function FilterBar({ filtros, campos, onChange }: Props) {
   return (
     <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 flex flex-wrap items-center gap-3">
@@ -31,8 +38,8 @@ export function FilterBar({ filtros, campos, onChange }: Props) {
             className={cn(
               'px-3 py-1.5 rounded-lg text-sm font-semibold transition',
               filtros.rango === val
-                ? 'bg-asfion-dark text-white'
-                : 'bg-asfion-bg text-asfion-dark hover:bg-asfion-borderSoft',
+                ? 'bg-asfion-navy text-white'
+                : 'bg-asfion-bg text-asfion-navy hover:bg-asfion-orangeSoft/25',
             )}
           >
             {label}
@@ -47,7 +54,7 @@ export function FilterBar({ filtros, campos, onChange }: Props) {
         <select
           value={filtros.campoId}
           onChange={e => onChange({ ...filtros, campoId: e.target.value as Filtros['campoId'] })}
-          className="bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-dark"
+          className={SELECT_CLS}
         >
           <option value="todos">Todos</option>
           {campos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
@@ -59,7 +66,7 @@ export function FilterBar({ filtros, campos, onChange }: Props) {
         <select
           value={filtros.evento}
           onChange={e => onChange({ ...filtros, evento: e.target.value as Filtros['evento'] })}
-          className="bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-dark"
+          className={SELECT_CLS}
         >
           {EVENTOS.map(ev => <option key={ev} value={ev}>{ev === 'todos' ? 'Todos' : ev}</option>)}
         </select>

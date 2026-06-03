@@ -21,15 +21,18 @@ import {
   YAxis,
 } from 'recharts';
 import type { Paricion } from '@/data/types';
+import { CHART_BRAND } from './palette';
 
 interface Props { data: Paricion[]; }
 
 const ORDEN = ['Muerte Señalado', 'Nacido Muerto', 'Desconocido'];
 
+// Paleta brand: terracota (warning) para muerte señalada, danger para nacido
+// muerto (irreversible), navy para desconocido (categoría neutra/falta dato).
 const COLOR_BY_CAUSA: Record<string, string> = {
-  'Muerte Señalado': '#7CB342',
-  'Nacido Muerto':   '#52B788',
-  'Desconocido':     '#1B4332',
+  'Muerte Señalado': CHART_BRAND.terracota,
+  'Nacido Muerto':   CHART_BRAND.danger,
+  'Desconocido':     CHART_BRAND.navy,
 };
 
 export function CausaDeMuertePariciones({ data }: Props) {
@@ -59,15 +62,15 @@ export function CausaDeMuertePariciones({ data }: Props) {
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={serie} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
-        <XAxis dataKey="name" stroke="#6B7280" fontSize={12} />
-        <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke={CHART_BRAND.border} vertical={false} />
+        <XAxis dataKey="name" stroke={CHART_BRAND.textMuted} fontSize={12} />
+        <YAxis stroke={CHART_BRAND.textMuted} fontSize={12} allowDecimals={false} />
         <Tooltip />
         <Bar dataKey="value" radius={[4, 4, 0, 0]}>
           {serie.map(s => (
-            <Cell key={s.name} fill={COLOR_BY_CAUSA[s.name] ?? '#52B788'} />
+            <Cell key={s.name} fill={COLOR_BY_CAUSA[s.name] ?? CHART_BRAND.orange} />
           ))}
-          <LabelList dataKey="value" position="top" fontSize={12} fill="#1B4332" />
+          <LabelList dataKey="value" position="top" fontSize={12} fill={CHART_BRAND.navy} />
         </Bar>
       </BarChart>
     </ResponsiveContainer>

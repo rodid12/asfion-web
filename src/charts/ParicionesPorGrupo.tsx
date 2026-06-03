@@ -24,18 +24,15 @@ import {
 } from 'recharts';
 import type { Campo, Paricion } from '@/data/types';
 import { segmentoPorFecha, SEGMENTO_ORDEN, type Segmento } from '@/lib/segmento';
+import { CHART_BRAND, EVENTO_COLOR } from './palette';
 
 interface Props {
   data: Paricion[];
   campos: Campo[];
 }
 
-const COLORS = {
-  Nacimiento: '#1B4332',
-  Retacto:    '#52B788',
-  Muerte:     '#C9823F',
-  Aborto:     '#C9423F',
-};
+// Colores de las 4 series — heredados del mapeo semántico unificado.
+const COLORS = EVENTO_COLOR;
 
 export function ParicionesPorGrupo({ data, campos }: Props) {
   // Map campoId → nombre, para pasarle el nombre al helper de segmentación.
@@ -77,9 +74,9 @@ export function ParicionesPorGrupo({ data, campos }: Props) {
     <div className="flex flex-col gap-3">
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={serie} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
-          <XAxis dataKey="grupo" stroke="#6B7280" fontSize={13} />
-          <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_BRAND.border} vertical={false} />
+          <XAxis dataKey="grupo" stroke={CHART_BRAND.textMuted} fontSize={13} />
+          <YAxis stroke={CHART_BRAND.textMuted} fontSize={12} allowDecimals={false} />
           <Tooltip />
           <Legend wrapperStyle={{ fontSize: 12 }} iconType="square" />
           <Bar dataKey="Nacimiento" stackId="x" fill={COLORS.Nacimiento} />
@@ -87,7 +84,7 @@ export function ParicionesPorGrupo({ data, campos }: Props) {
           <Bar dataKey="Muerte"     stackId="x" fill={COLORS.Muerte} />
           <Bar dataKey="Aborto"     stackId="x" fill={COLORS.Aborto} radius={[4, 4, 0, 0]}>
             {/* Total del stack arriba de cada grupo — visible siempre. */}
-            <LabelList dataKey="total" position="top" fontSize={12} fill="#1B4332" />
+            <LabelList dataKey="total" position="top" fontSize={12} fill={CHART_BRAND.navy} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -96,7 +93,7 @@ export function ParicionesPorGrupo({ data, campos }: Props) {
         {serie.map(s => (
           <div key={s.grupo} className="bg-asfion-bg rounded-lg px-3 py-2 text-center">
             <p className="text-xs uppercase font-semibold text-asfion-muted">{s.grupo}</p>
-            <p className="text-xl font-extrabold text-asfion-deep tabular-nums">{s.total}</p>
+            <p className="text-xl font-extrabold text-asfion-navyDeep tabular-nums">{s.total}</p>
           </div>
         ))}
       </div>

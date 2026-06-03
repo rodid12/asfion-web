@@ -36,11 +36,11 @@ export function SexoYAsistencia({ data }: Props) {
             {(['Macho', 'Hembra', 'Orejano'] as const).map(s => {
               const n = sexo[s];
               const pct = total ? (n / total) * 100 : 0;
-              const bg = s === 'Macho' ? 'bg-asfion-dark' : s === 'Hembra' ? 'bg-asfion-lime' : 'bg-asfion-terracota';
+              const bg = s === 'Macho' ? 'bg-asfion-navy' : s === 'Hembra' ? 'bg-asfion-orange' : 'bg-asfion-terracota';
               return (
                 <div key={s}>
                   <div className="flex items-center justify-between mb-1 text-sm">
-                    <span className="font-semibold text-asfion-dark">{s}</span>
+                    <span className="font-semibold text-asfion-navy">{s}</span>
                     <span className="tabular-nums text-asfion-muted">{n} · {pct.toFixed(1)}%</span>
                   </div>
                   <div className="w-full h-2 bg-asfion-bg rounded-full overflow-hidden">
@@ -55,7 +55,7 @@ export function SexoYAsistencia({ data }: Props) {
 
       <div className="pt-3 border-t border-asfion-borderSoft">
         <p className="text-xs uppercase font-semibold text-asfion-muted mb-2">Asistencia en nacimientos</p>
-        <p className="text-3xl font-extrabold text-asfion-dark tabular-nums">
+        <p className="text-3xl font-extrabold text-asfion-navy tabular-nums">
           {total ? (pctAsistencia * 100).toFixed(1) : '0'}%
           <span className="ml-2 text-sm font-semibold text-asfion-muted">({asistencia.Si} de {total})</span>
         </p>

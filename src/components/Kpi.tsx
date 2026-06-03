@@ -5,20 +5,25 @@ interface Props {
   label: string;
   value: string | number;
   delta?: { value: number; label?: string }; // value ya viene como fracción (0.12 = +12%)
-  accent?: 'dark' | 'lime' | 'terracota';
+  accent?: 'navy' | 'orange' | 'terracota' | 'danger';
   sublabel?: string;
   icon?: React.ReactNode;
 }
 
-export function Kpi({ label, value, delta, accent = 'dark', sublabel, icon }: Props) {
+export function Kpi({ label, value, delta, accent = 'navy', sublabel, icon }: Props) {
+  // Acentos: navy (texto + bg tenue) para KPIs neutros; orange para KPIs
+  // estrella (CTA / highlight); terracota para warnings; danger para errores
+  // fuertes (rojo).
   const accentBg =
-    accent === 'lime' ? 'bg-asfion-lime/10' :
+    accent === 'orange'    ? 'bg-asfion-orange/10' :
     accent === 'terracota' ? 'bg-asfion-terracota/10' :
-                              'bg-asfion-dark/5';
+    accent === 'danger'    ? 'bg-asfion-danger/10' :
+                             'bg-asfion-navy/5';
   const accentFg =
-    accent === 'lime' ? 'text-asfion-dark' :
+    accent === 'orange'    ? 'text-asfion-orange' :
     accent === 'terracota' ? 'text-asfion-terracota' :
-                              'text-asfion-dark';
+    accent === 'danger'    ? 'text-asfion-danger' :
+                             'text-asfion-navy';
 
   return (
     <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-5 flex flex-col gap-2">
@@ -32,7 +37,7 @@ export function Kpi({ label, value, delta, accent = 'dark', sublabel, icon }: Pr
           <span
             className={cn(
               'px-2 py-0.5 rounded-full font-semibold tabular-nums',
-              delta.value >= 0 ? 'bg-asfion-lime/20 text-asfion-dark' : 'bg-asfion-terracota/15 text-asfion-terracota',
+              delta.value >= 0 ? 'bg-asfion-orange/20 text-asfion-navy' : 'bg-asfion-terracota/15 text-asfion-terracota',
             )}
           >
             {delta.value >= 0 ? '▲' : '▼'} {Math.abs(delta.value * 100).toFixed(1)}%

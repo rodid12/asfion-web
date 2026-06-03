@@ -10,18 +10,21 @@ import React, { useMemo } from 'react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import type { Campo, Paricion } from '@/data/types';
 import { segmentoPorFecha, SEGMENTO_ORDEN } from '@/lib/segmento';
+import { CHART_BRAND } from './palette';
 
 interface Props {
   data: Paricion[];
   campos: Campo[];
 }
 
-// Mismos colores que usa el Power BI del cliente (cabeza verde, cuerpo
-// azul, cola amarillo). Si el cliente prefiere otra paleta, se cambia acá.
+// Paleta de las 3 fases del calendario reproductivo.
+// Cabeza → orange brand (dominante, "the leaders").
+// Cuerpo → navy (la masa de partos).
+// Cola   → blueSoft (categoría terciaria templada, no celeste frío).
 const COLORS: Record<string, string> = {
-  Cabeza: '#52B788', // verde lima
-  Cuerpo: '#2F4E7E', // azul
-  Cola:   '#F5C842', // amarillo
+  Cabeza: CHART_BRAND.orange,
+  Cuerpo: CHART_BRAND.navy,
+  Cola:   CHART_BRAND.blueSoft,
 };
 
 export function NacimientosSegmentados({ data, campos }: Props) {
@@ -62,7 +65,7 @@ export function NacimientosSegmentados({ data, campos }: Props) {
         {serie.map(s => (
           <div key={s.name} className="flex items-center gap-2 text-sm">
             <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: s.fill }} />
-            <span className="flex-1 font-semibold text-asfion-dark">{s.name}</span>
+            <span className="flex-1 font-semibold text-asfion-navy">{s.name}</span>
             <span className="tabular-nums text-asfion-muted">{s.value}</span>
             <span className="tabular-nums text-asfion-muted w-12 text-right">
               {((s.value / total) * 100).toFixed(1)}%

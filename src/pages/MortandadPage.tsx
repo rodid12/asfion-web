@@ -27,6 +27,8 @@ import {
   type SimpleFiltros,
 } from '@/components/SimpleFilterBar';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyModule } from '@/components/EmptyModule';
 import { formatNumber } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Mortandad } from '@/data/types';
@@ -100,26 +102,19 @@ export function MortandadPage({ mortandad, campos }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold text-asfion-deep">Mortandad</h2>
-          <p className="text-sm text-asfion-muted mt-1">
-            Animales muertos (fuera de parto) — agrupado por categoría, causa y campo.
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-asfion-muted">
-            <span className="font-semibold text-asfion-dark">{formatNumber(filtradas.length)}</span> eventos
-            <span className="mx-2">·</span>
-            últimos datos: <span className="tabular-nums text-asfion-dark">{filtradas[0]?.fecha ?? '—'}</span>
-          </div>
+      <PageHeader
+        title="Mortandad"
+        subtitle="Animales muertos (fuera de parto) — agrupado por categoría, causa y campo."
+        count={{ value: filtradas.length, label: 'eventos' }}
+        lastDate={filtradas[0]?.fecha}
+        actions={
           <ExportCsvButton
             onClick={() => exportMortandad(filtradas, campos)}
             disabled={filtradas.length === 0}
             count={filtradas.length}
           />
-        </div>
-      </div>
+        }
+      />
 
       <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
 
@@ -134,21 +129,21 @@ export function MortandadPage({ mortandad, campos }: Props) {
           label="Categoría top"
           value={topCategoria?.categoria ?? '—'}
           sublabel={topCategoria ? `${formatNumber(topCategoria.n)} animales` : ''}
-          accent="dark"
+          accent="navy"
           icon={<TagIcon size={18} />}
         />
         <Kpi
           label="Causa top"
           value={topCausa?.causa ?? '—'}
           sublabel={topCausa ? `${formatNumber(topCausa.n)} casos` : ''}
-          accent="dark"
+          accent="navy"
           icon={<AlertTriangleIcon size={18} />}
         />
         <Kpi
           label="Campo top"
           value={topCampo?.campo ?? '—'}
           sublabel={topCampo ? `${formatNumber(topCampo.n)} eventos` : ''}
-          accent="lime"
+          accent="orange"
           icon={<MapPinIcon size={18} />}
         />
       </div>
@@ -161,12 +156,12 @@ export function MortandadPage({ mortandad, campos }: Props) {
         >
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={porMes} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" vertical={false} />
               <XAxis dataKey="mes" stroke="#6B7280" fontSize={12} />
               <YAxis stroke="#6B7280" fontSize={12} />
               <Tooltip />
               <Bar dataKey="n" name="Muertes" fill="#C9823F" radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="n" position="top" fontSize={11} fill="#1B4332" />
+                <LabelList dataKey="n" position="top" fontSize={11} fill="#163349" />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -181,12 +176,12 @@ export function MortandadPage({ mortandad, campos }: Props) {
         <Card title="Por categoría" subtitle="Animales más afectados" className="lg:col-span-2">
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={porCategoria} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" vertical={false} />
               <XAxis dataKey="categoria" stroke="#6B7280" fontSize={11} angle={-15} textAnchor="end" height={60} interval={0} />
               <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
               <Tooltip />
-              <Bar dataKey="n" name="Muertes" fill="#1B4332" radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="n" position="top" fontSize={11} fill="#1B4332" />
+              <Bar dataKey="n" name="Muertes" fill="#163349" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="n" position="top" fontSize={11} fill="#163349" />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -195,13 +190,13 @@ export function MortandadPage({ mortandad, campos }: Props) {
         <Card title="Por campo" subtitle="Ranking">
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={porCampo} layout="vertical" margin={{ top: 8, right: 36, left: 30, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" horizontal={false} />
               <XAxis type="number" stroke="#6B7280" fontSize={12} allowDecimals={false} />
               <YAxis type="category" dataKey="campo" stroke="#6B7280" fontSize={12} width={90} />
               <Tooltip />
               <Bar dataKey="n" radius={[0, 4, 4, 0]}>
-                {porCampo.map((_, i) => <Cell key={i} fill="#52B788" />)}
-                <LabelList dataKey="n" position="right" fontSize={11} fill="#1B4332" />
+                {porCampo.map((_, i) => <Cell key={i} fill="#FF8409" />)}
+                <LabelList dataKey="n" position="right" fontSize={11} fill="#163349" />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -236,20 +231,22 @@ function exportMortandad(rows: Mortandad[], campos: Campo[]): void {
 // cliente. Asigna colores deterministas por nombre de causa, fallback a
 // paleta cíclica para causas nuevas. Leyenda a la derecha con conteo y %.
 function CausaMuerteDonut({ data }: { data: Array<{ causa: string; n: number }> }) {
-  // Colores semánticos para las causas más frecuentes en Ganaderas (los que
-  // se ven en el Power BI del cliente). Para causas no listadas, ciclamos
-  // por una paleta secundaria.
+  // Paleta brand para las causas más frecuentes en Ganaderas. Conservamos
+  // los nombres del Power BI del cliente pero reasignamos los hex a la
+  // paleta brand: Tristeza (la dominante) en orange, status reales en
+  // amber/danger/terracota, descriptivos neutros en navy/blueSoft/gris.
+  // Para causas nuevas que no estén acá, ciclamos por CHART_PALETTE.
   const FIXED: Record<string, string> = {
-    'Tristeza':              '#7CB342', // verde dominante (mayoría)
-    'Distocia':              '#F5C842', // amarillo
-    'Rabia':                 '#C9423F', // rojo
-    'Problema respiratorio': '#1F4E6A', // azul oscuro
-    'Sin identificar':       '#C9823F', // naranja
-    'Sin especificar':       '#9AA3A8', // gris
-    'Callo en un pozo':      '#7EC4E8', // celeste
-    'Tristeza/Anaplas':      '#52B788', // verde alt
+    'Tristeza':              '#FF8409', // orange brand (dominante)
+    'Distocia':              '#D89425', // amber (warning)
+    'Rabia':                 '#C9423F', // danger
+    'Problema respiratorio': '#163349', // navy (descriptivo)
+    'Sin identificar':       '#C9823F', // terracota
+    'Sin especificar':       '#9AA3A8', // gris neutro (sin info)
+    'Callo en un pozo':      '#6B9DBE', // blueSoft (templado, on-brand)
+    'Tristeza/Anaplas':      '#FFCB95', // peach (variante de Tristeza)
   };
-  const FALLBACK = ['#1B4332', '#52B788', '#B8802E', '#6D2E46', '#8E5A29', '#3E8AB4', '#A26769', '#65A5C8'];
+  const FALLBACK = ['#163349', '#FF8409', '#FFCB95', '#C9823F', '#6B9DBE', '#D89425', '#0F2535', '#3FAE5A'];
 
   let fallbackIdx = 0;
   const serie = data
@@ -298,7 +295,7 @@ function CausaMuerteDonut({ data }: { data: Array<{ causa: string; n: number }> 
               className="w-3 h-3 rounded-sm shrink-0"
               style={{ backgroundColor: s.fill }}
             />
-            <span className="flex-1 truncate font-semibold text-asfion-dark" title={s.name}>
+            <span className="flex-1 truncate font-semibold text-asfion-navy" title={s.name}>
               {s.name}
             </span>
             <span className="tabular-nums text-asfion-muted">{s.value}</span>
@@ -312,13 +309,3 @@ function CausaMuerteDonut({ data }: { data: Array<{ causa: string; n: number }> 
   );
 }
 
-function EmptyModule({ label }: { label: string }) {
-  return (
-    <div className="rounded-xl border border-asfion-borderSoft bg-white px-6 py-10 text-center">
-      <p className="text-asfion-dark font-semibold">Todavía no hay {label} cargadas.</p>
-      <p className="text-sm text-asfion-muted mt-1">
-        En cuanto los operarios carguen eventos desde la app, los vas a ver acá.
-      </p>
-    </div>
-  );
-}

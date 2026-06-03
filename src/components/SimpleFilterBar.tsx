@@ -35,6 +35,11 @@ const DEFAULT_RANGOS: Array<[RangoFecha, string]> = [
   ['todo', 'Todo'],
 ];
 
+// Mismo SELECT_CLS que FilterBar — hover peach + foco orange, transición suave.
+const SELECT_CLS =
+  'bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy ' +
+  'hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange transition cursor-pointer';
+
 export function SimpleFilterBar({ filtros, campos, onChange, rangos }: Props) {
   const presets = rangos ?? DEFAULT_RANGOS;
 
@@ -49,8 +54,8 @@ export function SimpleFilterBar({ filtros, campos, onChange, rangos }: Props) {
             className={cn(
               'px-3 py-1.5 rounded-lg text-sm font-semibold transition',
               filtros.rango === val
-                ? 'bg-asfion-dark text-white'
-                : 'bg-asfion-bg text-asfion-dark hover:bg-asfion-borderSoft',
+                ? 'bg-asfion-navy text-white'
+                : 'bg-asfion-bg text-asfion-navy hover:bg-asfion-orangeSoft/25',
             )}
           >
             {label}
@@ -65,7 +70,7 @@ export function SimpleFilterBar({ filtros, campos, onChange, rangos }: Props) {
         <select
           value={filtros.campoId}
           onChange={e => onChange({ ...filtros, campoId: e.target.value })}
-          className="bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-dark"
+          className={SELECT_CLS}
         >
           <option value="todos">Todos</option>
           {campos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}

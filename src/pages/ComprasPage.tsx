@@ -32,6 +32,8 @@ import {
 import { Card } from '@/components/Card';
 import { Kpi } from '@/components/Kpi';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyModule } from '@/components/EmptyModule';
 import {
   SimpleFilterBar,
   SIMPLE_FILTROS_DEFAULT,
@@ -157,26 +159,19 @@ export function ComprasPage({ compras, campos }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold text-asfion-deep">Compras</h2>
-          <p className="text-sm text-asfion-muted mt-1">
-            Hacienda comprada — entrada al sistema con datos físicos y comerciales.
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-asfion-muted">
-            <span className="font-semibold text-asfion-dark">{formatNumber(filtradas.length)}</span> compras
-            <span className="mx-2">·</span>
-            últimos datos: <span className="tabular-nums text-asfion-dark">{filtradas[0]?.fecha ?? '—'}</span>
-          </div>
+      <PageHeader
+        title="Compras"
+        subtitle="Hacienda comprada — entrada al sistema con datos físicos y comerciales."
+        count={{ value: filtradas.length, label: 'compras' }}
+        lastDate={filtradas[0]?.fecha}
+        actions={
           <ExportCsvButton
             onClick={() => exportCompras(filtradas, campos)}
             disabled={filtradas.length === 0}
             count={filtradas.length}
           />
-        </div>
-      </div>
+        }
+      />
 
       <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
 
@@ -185,28 +180,28 @@ export function ComprasPage({ compras, campos }: Props) {
         <Kpi
           label="Total compras"
           value={formatNumber(kpis.total)}
-          accent="dark"
+          accent="navy"
           icon={<ActivityIcon size={18} />}
         />
         <Kpi
           label="Cabezas aprox"
           value={kpis.cabezas > 0 ? formatNumber(kpis.cabezas) : '—'}
           sublabel="Suma de números en cant/cat"
-          accent="lime"
+          accent="orange"
           icon={<UsersIcon size={18} />}
         />
         <Kpi
           label="Kg totales"
           value={kpis.kgTotales > 0 ? formatNumber(kpis.kgTotales) : '—'}
           sublabel="Kg netos destino"
-          accent="dark"
+          accent="navy"
           icon={<ScaleIcon size={18} />}
         />
         <Kpi
           label="Inversión total"
           value={kpis.inversion > 0 ? `$${formatNumber(kpis.inversion)}` : '—'}
           sublabel="Σ (precio × kg destino)"
-          accent="dark"
+          accent="navy"
           icon={<CoinsIcon size={18} />}
         />
         <Kpi
@@ -228,12 +223,12 @@ export function ComprasPage({ compras, campos }: Props) {
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={porMes} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" vertical={false} />
                 <XAxis dataKey="mes" stroke="#6B7280" fontSize={12} />
                 <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="compras" name="Compras" fill="#1B4332" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="compras" position="top" fontSize={11} fill="#1B4332" />
+                <Bar dataKey="compras" name="Compras" fill="#163349" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="compras" position="top" fontSize={11} fill="#163349" />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -248,19 +243,22 @@ export function ComprasPage({ compras, campos }: Props) {
           ) : (
             <ResponsiveContainer width="100%" height={Math.max(260, porCampo.length * 36)}>
               <BarChart data={porCampo} layout="vertical" margin={{ top: 8, right: 80, left: 30, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" horizontal={false} />
                 <XAxis type="number" stroke="#6B7280" fontSize={12} />
                 <YAxis type="category" dataKey="campo" stroke="#6B7280" fontSize={12} width={90} />
                 <Tooltip formatter={(v: number) => [`${formatNumber(v)} kg`, 'Kg destino']} />
                 <Bar dataKey="kg" radius={[0, 4, 4, 0]}>
+                  {/* Orange brand (#FF8409) — coherente con "por campo" en
+                      Lluvias / Mortandad / Pastoreo. Antes usaba un mostaza
+                      #B8802E que no pertenecía a la paleta. */}
                   {porCampo.map((_, i) => (
-                    <Cell key={i} fill="#B8802E" />
+                    <Cell key={i} fill="#FF8409" />
                   ))}
                   <LabelList
                     dataKey="kg"
                     position="right"
                     fontSize={11}
-                    fill="#1B4332"
+                    fill="#163349"
                     formatter={(v: number) => formatNumber(v)}
                   />
                 </Bar>
@@ -314,15 +312,15 @@ function DetalleTabla({ rows, campos }: { rows: Compra[]; campos: Campo[] }) {
         <tbody>
           {rows.map(r => (
             <tr key={r.id} className="border-b border-asfion-borderSoft/50">
-              <td className="py-2 pr-3 font-semibold text-asfion-dark">{r.numeroOperacion ?? '—'}</td>
-              <td className="py-2 pr-3 tabular-nums text-asfion-dark">{r.fecha}</td>
-              <td className="py-2 pr-3 text-asfion-dark">{campoNombre(r.campoId)}</td>
+              <td className="py-2 pr-3 font-semibold text-asfion-navy">{r.numeroOperacion ?? '—'}</td>
+              <td className="py-2 pr-3 tabular-nums text-asfion-navy">{r.fecha}</td>
+              <td className="py-2 pr-3 text-asfion-navy">{campoNombre(r.campoId)}</td>
               <td className="py-2 pr-3 text-asfion-muted">{r.actividad ?? '—'}</td>
               <td className="py-2 pr-3 text-asfion-muted">{r.cantCabYCat ?? '—'}</td>
-              <td className="py-2 pr-3 tabular-nums text-right text-asfion-dark">
+              <td className="py-2 pr-3 tabular-nums text-right text-asfion-navy">
                 {formatNumber(Math.round(r.kgNetosOrigen))}
               </td>
-              <td className="py-2 pr-3 tabular-nums text-right text-asfion-dark">
+              <td className="py-2 pr-3 tabular-nums text-right text-asfion-navy">
                 {formatNumber(Math.round(r.kgNetosDestino))}
               </td>
               <td className="py-2 pr-3 tabular-nums text-right text-asfion-muted">
@@ -371,13 +369,3 @@ function exportCompras(rows: Compra[], campos: Campo[]): void {
   downloadCsv(csv, csvFilename('compras'));
 }
 
-function EmptyModule({ label }: { label: string }) {
-  return (
-    <div className="rounded-xl border border-asfion-borderSoft bg-white px-6 py-10 text-center">
-      <p className="text-asfion-dark font-semibold">Todavía no hay {label} cargadas.</p>
-      <p className="text-sm text-asfion-muted mt-1">
-        En cuanto los operarios carguen eventos desde la app, los vas a ver acá.
-      </p>
-    </div>
-  );
-}

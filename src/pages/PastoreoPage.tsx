@@ -39,6 +39,8 @@ import {
   type SimpleFiltros,
 } from '@/components/SimpleFilterBar';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyModule } from '@/components/EmptyModule';
 import { formatNumber } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Circuito, Pastoreo } from '@/data/types';
@@ -197,31 +199,24 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
   }, [filtrados]);
 
   if (pastoreo.length === 0) {
-    return <EmptyModule label="movimientos de pastoreo" />;
+    return <EmptyModule label="movimientos de pastoreo" genero="masc" />;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold text-asfion-deep">Pastoreo</h2>
-          <p className="text-sm text-asfion-muted mt-1">
-            Movimientos de animales entre parcelas — entrada, salida y ocupación actual.
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-asfion-muted">
-            <span className="font-semibold text-asfion-dark">{formatNumber(filtrados.length)}</span> movimientos
-            <span className="mx-2">·</span>
-            últimos datos: <span className="tabular-nums text-asfion-dark">{filtrados[0]?.fecha ?? '—'}</span>
-          </div>
+      <PageHeader
+        title="Pastoreo"
+        subtitle="Movimientos de animales entre parcelas — entrada, salida y ocupación actual."
+        count={{ value: filtrados.length, label: 'movimientos' }}
+        lastDate={filtrados[0]?.fecha}
+        actions={
           <ExportCsvButton
             onClick={() => exportPastoreo(filtrados, campos, circuitos)}
             disabled={filtrados.length === 0}
             count={filtrados.length}
           />
-        </div>
-      </div>
+        }
+      />
 
       <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
 
@@ -231,28 +226,28 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
           label="Animales"
           value={kpis.animalesTotal > 0 ? formatNumber(kpis.animalesTotal) : '—'}
           sublabel="Cabezas en movimientos"
-          accent="lime"
+          accent="orange"
           icon={<UsersIcon size={18} />}
         />
         <Kpi
           label="Has Circuito"
           value={kpis.hectareas > 0 ? formatNumber(kpis.hectareas) : '—'}
           sublabel="Hectáreas activas"
-          accent="dark"
+          accent="navy"
           icon={<LandPlotIcon size={18} />}
         />
         <Kpi
           label="KG/Cab"
           value={kpis.kgPorCab > 0 ? kpis.kgPorCab.toFixed(2) : '—'}
           sublabel={`Prom. en ${formatNumber(kpis.nConKg)} stays`}
-          accent="dark"
+          accent="navy"
           icon={<ScaleIcon size={18} />}
         />
         <Kpi
           label="Kg Totales"
           value={kpis.kgTotales > 0 ? formatNumber(Math.round(kpis.kgTotales)) : '—'}
           sublabel="Σ (animales × kg/cab)"
-          accent="dark"
+          accent="navy"
           icon={<WeightIcon size={18} />}
         />
         <Kpi
@@ -270,20 +265,20 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
           label="Total movimientos"
           value={formatNumber(kpis.total)}
           sublabel={`${formatNumber(kpis.cerrados)} cerrados`}
-          accent="dark"
+          accent="navy"
           icon={<ActivityIcon size={18} />}
         />
         <Kpi
           label="Stays abiertos"
           value={formatNumber(kpis.abiertos)}
           sublabel={`${formatNumber(kpis.parcelasEnUso)} parcelas en uso`}
-          accent="lime"
+          accent="orange"
           icon={<MapPinIcon size={18} />}
         />
         <Kpi
           label="Circuitos activos"
           value={formatNumber(kpis.circuitosActivos)}
-          accent="dark"
+          accent="navy"
           icon={<RouteIcon size={18} />}
         />
         <Kpi
@@ -301,15 +296,15 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
       >
         <ResponsiveContainer width="100%" height={Math.max(300, porCircuito.length * 32)}>
           <BarChart data={porCircuito} layout="vertical" margin={{ top: 8, right: 60, left: 40, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" horizontal={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" horizontal={false} />
             <XAxis type="number" stroke="#6B7280" fontSize={12} allowDecimals={false} />
             <YAxis type="category" dataKey="label" stroke="#6B7280" fontSize={11} width={180} />
             <Tooltip />
             <Legend wrapperStyle={{ fontSize: 12 }} iconType="square" />
-            <Bar dataKey="total" name="Movimientos" fill="#1B4332" radius={[0, 0, 0, 0]}>
-              <LabelList dataKey="total" position="right" fontSize={11} fill="#1B4332" />
+            <Bar dataKey="total" name="Movimientos" fill="#163349" radius={[0, 0, 0, 0]}>
+              <LabelList dataKey="total" position="right" fontSize={11} fill="#163349" />
             </Bar>
-            <Bar dataKey="abiertos" name="Abiertos" fill="#52B788" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="abiertos" name="Abiertos" fill="#FF8409" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </Card>
@@ -317,13 +312,13 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
       <Card title="Por categoría animal" subtitle="Animales que más se rotan">
         <ResponsiveContainer width="100%" height={Math.max(280, porCategoria.length * 32)}>
           <BarChart data={porCategoria} layout="vertical" margin={{ top: 8, right: 60, left: 30, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" horizontal={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" horizontal={false} />
             <XAxis type="number" stroke="#6B7280" fontSize={12} allowDecimals={false} />
             <YAxis type="category" dataKey="categoria" stroke="#6B7280" fontSize={11} width={140} />
             <Tooltip />
             <Bar dataKey="n" radius={[0, 4, 4, 0]}>
-              {porCategoria.map((_, i) => <Cell key={i} fill="#52B788" />)}
-              <LabelList dataKey="n" position="right" fontSize={11} fill="#1B4332" />
+              {porCategoria.map((_, i) => <Cell key={i} fill="#FF8409" />)}
+              <LabelList dataKey="n" position="right" fontSize={11} fill="#163349" />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -339,12 +334,12 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
         >
           <ResponsiveContainer width="100%" height={Math.max(300, kgPorCategoria.length * 36)}>
             <BarChart data={kgPorCategoria} margin={{ top: 24, right: 8, left: 8, bottom: 30 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8E0" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" vertical={false} />
               <XAxis dataKey="categoria" stroke="#6B7280" fontSize={11} angle={-15} textAnchor="end" height={60} interval={0} />
               <YAxis stroke="#6B7280" fontSize={12} />
               <Tooltip formatter={(v: number) => [`${formatNumber(v)} kg`, 'Total']} />
-              <Bar dataKey="kg" name="Kg Totales" fill="#1B4332" radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="kg" position="top" fontSize={11} fill="#1B4332" formatter={(v: number) => formatNumber(v)} />
+              <Bar dataKey="kg" name="Kg Totales" fill="#163349" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="kg" position="top" fontSize={11} fill="#163349" formatter={(v: number) => formatNumber(v)} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -403,14 +398,14 @@ function DetalleTabla({
         <tbody>
           {rows.map(r => (
             <tr key={r.id} className="border-b border-asfion-borderSoft/50">
-              <td className="py-2 pr-3 font-semibold text-asfion-dark">{campoNombre(r.campoId)}</td>
-              <td className="py-2 pr-3 tabular-nums text-asfion-dark">{r.fecha}</td>
+              <td className="py-2 pr-3 font-semibold text-asfion-navy">{campoNombre(r.campoId)}</td>
+              <td className="py-2 pr-3 tabular-nums text-asfion-navy">{r.fecha}</td>
               <td className="py-2 pr-3 tabular-nums text-asfion-muted">{r.fechaSalida ?? '—'}</td>
-              <td className="py-2 pr-3 text-asfion-dark">{circuitoNombre(r.circuitoId)}</td>
+              <td className="py-2 pr-3 text-asfion-navy">{circuitoNombre(r.circuitoId)}</td>
               <td className="py-2 pr-3 tabular-nums text-right text-asfion-muted">
                 {circuitoHas(r.circuitoId)?.toFixed(0) ?? '—'}
               </td>
-              <td className="py-2 pr-3 text-asfion-dark">{r.categoria}</td>
+              <td className="py-2 pr-3 text-asfion-navy">{r.categoria}</td>
               <td className="py-2 pr-3 text-asfion-muted">{r.caravanaNumero ?? '—'}</td>
               <td className="py-2">
                 {r.fechaSalida ? (
@@ -418,7 +413,7 @@ function DetalleTabla({
                     Cerrado
                   </span>
                 ) : (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-asfion-lime/20 text-asfion-dark">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-asfion-orange/20 text-asfion-navy">
                     Abierto
                   </span>
                 )}
@@ -467,13 +462,3 @@ function exportPastoreo(rows: Pastoreo[], campos: Campo[], circuitos: Circuito[]
   downloadCsv(csv, csvFilename('pastoreo'));
 }
 
-function EmptyModule({ label }: { label: string }) {
-  return (
-    <div className="rounded-xl border border-asfion-borderSoft bg-white px-6 py-10 text-center">
-      <p className="text-asfion-dark font-semibold">Todavía no hay {label} cargados.</p>
-      <p className="text-sm text-asfion-muted mt-1">
-        En cuanto los operarios carguen eventos desde la app, los vas a ver acá.
-      </p>
-    </div>
-  );
-}

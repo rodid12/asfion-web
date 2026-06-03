@@ -14,18 +14,18 @@ import { LoginPage } from '@/pages/LoginPage';
 
 function MissingEnv() {
   return (
-    <div className="min-h-screen bg-asfion-deep text-white flex items-center justify-center px-4">
-      <div className="max-w-lg bg-white text-asfion-deep rounded-2xl p-8 shadow-card">
+    <div className="min-h-screen bg-asfion-navyDeep text-white flex items-center justify-center px-4">
+      <div className="max-w-lg bg-white text-asfion-navyDeep rounded-2xl p-8 shadow-card">
         <div className="flex items-center gap-2 mb-4">
-          <div className="w-3 h-3 rounded-full bg-asfion-lime" />
+          <div className="w-3 h-3 rounded-full bg-asfion-orange" />
           <h1 className="text-lg font-extrabold">ASFION · Setup pendiente</h1>
         </div>
         <p className="text-sm text-asfion-muted mb-4">
           No se encontraron las credenciales de Supabase. Para arrancar el
-          dashboard tenés que crear el archivo <code className="bg-asfion-bg px-1.5 py-0.5 rounded text-asfion-deep font-mono text-xs">.env.local</code> en
-          la raíz de <code className="bg-asfion-bg px-1.5 py-0.5 rounded text-asfion-deep font-mono text-xs">asfion-web/</code> con:
+          dashboard tenés que crear el archivo <code className="bg-asfion-bg px-1.5 py-0.5 rounded text-asfion-navyDeep font-mono text-xs">.env.local</code> en
+          la raíz de <code className="bg-asfion-bg px-1.5 py-0.5 rounded text-asfion-navyDeep font-mono text-xs">asfion-web/</code> con:
         </p>
-        <pre className="bg-asfion-deep text-asfion-lime text-xs rounded-lg p-3 overflow-x-auto">
+        <pre className="bg-asfion-navyDeep text-asfion-orange text-xs rounded-lg p-3 overflow-x-auto">
 {`VITE_SUPABASE_URL=https://xxxxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ...`}
         </pre>
@@ -43,8 +43,8 @@ function Gate() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-asfion-deep flex items-center justify-center">
-        <div className="text-asfion-lime/70 text-sm">Cargando…</div>
+      <div className="min-h-screen bg-asfion-navyDeep flex items-center justify-center">
+        <div className="text-asfion-orange/70 text-sm">Cargando…</div>
       </div>
     );
   }

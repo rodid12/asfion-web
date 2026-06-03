@@ -3,20 +3,29 @@
 // `modulo`. No hay router — el dashboard es single-page por diseño.
 
 import React, { useState } from 'react';
-import { LogOutIcon, RefreshCwIcon } from 'lucide-react';
+import { LogOutIcon, RefreshCwIcon, ShieldIcon } from 'lucide-react';
 import { useDashboardData, EMPTY_DATA } from '@/data/useData';
 import { useAuth } from '@/lib/auth';
+import { isSuperAdmin } from '@/lib/billing';
 import { ModuleTabs, type ModuleKey } from '@/components/ModuleTabs';
 import { ParicionesPage } from './ParicionesPage';
 import { LluviasPage } from './LluviasPage';
 import { MortandadPage } from './MortandadPage';
 import { PastoreoPage } from './PastoreoPage';
 import { ComprasPage } from './ComprasPage';
+import { BillingAdminPage } from './BillingAdminPage';
+
+type View = 'modules' | 'billing';
 
 export function Dashboard() {
   const { user, signOut } = useAuth();
   const { data, loading, error, refresh } = useDashboardData();
   const [modulo, setModulo] = useState<ModuleKey>('pariciones');
+  // 'modules' = vista operativa normal (tabs + pages). 'billing' = panel de
+  // cobranzas, solo accesible para super-admin. Lo guardamos en state local
+  // (single-page, sin router) — al cerrar el browser se reinicia a 'modules'.
+  const [view, setView] = useState<View>('modules');
+  const showAdmin = isSuperAdmin(user?.email);
 
   const d = data ?? EMPTY_DATA;
   const initials = (user?.email ?? '?').charAt(0).toUpperCase();
@@ -24,34 +33,48 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-asfion-bg">
       {/* Header oscuro */}
-      <header className="bg-asfion-deep text-white">
+      <header className="bg-asfion-navyDeep text-white">
         <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded-full bg-asfion-lime" />
+            <div className="w-4 h-4 rounded-full bg-asfion-orange" />
             <div>
               <h1 className="text-xl font-extrabold tracking-wide">ASFION</h1>
-              <p className="text-xs text-asfion-lime italic">Del campo al tablero, sin fricción.</p>
+              <p className="text-xs text-asfion-orange italic">Del campo al tablero, sin fricción.</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {showAdmin && (
+              <button
+                onClick={() => setView(v => (v === 'billing' ? 'modules' : 'billing'))}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  view === 'billing'
+                    ? 'bg-asfion-orange text-asfion-navyDeep'
+                    : 'bg-asfion-orange/15 text-asfion-orange hover:bg-asfion-orange/25'
+                }`}
+                title={view === 'billing' ? 'Volver al tablero' : 'Panel de cobranzas'}
+              >
+                <ShieldIcon size={13} />
+                {view === 'billing' ? 'Tablero' : 'Cobranzas'}
+              </button>
+            )}
             <button
               onClick={refresh}
               disabled={loading}
-              className="text-asfion-lime/70 hover:text-asfion-lime transition disabled:opacity-40"
+              className="text-asfion-orange/70 hover:text-asfion-orange transition disabled:opacity-40"
               title="Refrescar datos"
             >
               <RefreshCwIcon size={18} className={loading ? 'animate-spin' : ''} />
             </button>
             <div className="text-right">
-              <p className="text-xs uppercase text-asfion-lime/70">Sesión</p>
+              <p className="text-xs uppercase text-asfion-orange/70">Sesión</p>
               <p className="text-sm font-semibold">{user?.email ?? '—'}</p>
             </div>
-            <div className="w-9 h-9 rounded-full bg-asfion-lime text-asfion-deep font-extrabold grid place-items-center">
+            <div className="w-9 h-9 rounded-full bg-asfion-orange text-asfion-navyDeep font-extrabold grid place-items-center">
               {initials}
             </div>
             <button
               onClick={signOut}
-              className="ml-1 text-asfion-lime/70 hover:text-asfion-lime transition"
+              className="ml-1 text-asfion-orange/70 hover:text-asfion-orange transition"
               title="Salir"
             >
               <LogOutIcon size={18} />
@@ -60,23 +83,26 @@ export function Dashboard() {
         </div>
       </header>
 
-      {/* Tabs por módulo — sticky para no perderlas al scrollear */}
-      <ModuleTabs
-        active={modulo}
-        onChange={setModulo}
-        counts={{
-          pariciones: d.pariciones.length,
-          lluvias:    d.lluvias.length,
-          mortandad:  d.mortandad.length,
-          pastoreo:   d.pastoreo.length,
-          compras:    d.compras.length,
-        }}
-      />
+      {/* Tabs por módulo — solo en la vista de operaciones (la de billing
+          es una página independiente sin tabs). */}
+      {view === 'modules' && (
+        <ModuleTabs
+          active={modulo}
+          onChange={setModulo}
+          counts={{
+            pariciones: d.pariciones.length,
+            lluvias:    d.lluvias.length,
+            mortandad:  d.mortandad.length,
+            pastoreo:   d.pastoreo.length,
+            compras:    d.compras.length,
+          }}
+        />
+      )}
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Estado de error global */}
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-asfion-danger">
+          <div className="rounded-xl border border-asfion-danger/30 bg-asfion-danger/10 px-4 py-3 text-sm text-asfion-danger">
             <strong>Error cargando datos:</strong> {error}
             <button onClick={refresh} className="ml-3 underline font-semibold">
               Reintentar
@@ -84,23 +110,26 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* Skeleton mientras carga la primera vez */}
-        {loading && !data && <LoadingSkeleton />}
+        {/* Skeleton mientras carga la primera vez (solo en vista operativa) */}
+        {view === 'modules' && loading && !data && <LoadingSkeleton />}
 
-        {/* Página activa */}
-        {data && modulo === 'pariciones' && (
+        {/* Vista de cobranzas (solo super-admin) */}
+        {view === 'billing' && showAdmin && <BillingAdminPage />}
+
+        {/* Vista operativa: página activa según tab */}
+        {view === 'modules' && data && modulo === 'pariciones' && (
           <ParicionesPage pariciones={d.pariciones} campos={d.campos} />
         )}
-        {data && modulo === 'lluvias' && (
+        {view === 'modules' && data && modulo === 'lluvias' && (
           <LluviasPage lluvias={d.lluvias} campos={d.campos} />
         )}
-        {data && modulo === 'mortandad' && (
+        {view === 'modules' && data && modulo === 'mortandad' && (
           <MortandadPage mortandad={d.mortandad} campos={d.campos} />
         )}
-        {data && modulo === 'pastoreo' && (
+        {view === 'modules' && data && modulo === 'pastoreo' && (
           <PastoreoPage pastoreo={d.pastoreo} campos={d.campos} circuitos={d.circuitos} />
         )}
-        {data && modulo === 'compras' && (
+        {view === 'modules' && data && modulo === 'compras' && (
           <ComprasPage compras={d.compras} campos={d.campos} />
         )}
 

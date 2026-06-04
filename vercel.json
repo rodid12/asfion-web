@@ -6,7 +6,8 @@
   "installCommand": "npm install",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "//": "SPA rewrite: cualquier path SIN extensión va a /index.html. Excluimos explícitamente /assets/* (bundles Vite) y rutas con extensión (svg, png, html, json, js, css, ico, txt, webmanifest, woff, etc.) para que se sirvan estáticos como corresponde. El (?!) negative-lookahead es la forma estándar de Vercel para SPA + assets juntos.",
+      "source": "/((?!assets/|.*\\.(js|css|svg|png|jpg|jpeg|gif|webp|ico|html|json|webmanifest|txt|woff|woff2|ttf|map)).*)",
       "destination": "/index.html"
     }
   ],

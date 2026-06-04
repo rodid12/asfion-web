@@ -46,7 +46,7 @@ function Gate() {
   if (loading) {
     return (
       <div className="min-h-screen bg-asfion-navyDeep flex flex-col items-center justify-center gap-4">
-        <Logo height={48} />
+        <Logo height={56} variant="onDark" />
         <div className="text-asfion-orange/70 text-sm">Cargando…</div>
       </div>
     );

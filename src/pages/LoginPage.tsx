@@ -35,11 +35,11 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-asfion-navyDeep text-white flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        {/* Branding — logo oficial centrado + tagline */}
+        {/* Branding — logo oficial centrado (variante blanca para navy bg) + tagline */}
         <div className="text-center mb-8">
-          <Logo height={56} className="mx-auto mb-4" />
+          <Logo height={64} variant="onDark" className="mx-auto mb-4" />
           <p className="text-sm text-asfion-orange italic">
-            Del campo al tablero, sin fricción.
+            Gestión integral del campo.
           </p>
         </div>
 

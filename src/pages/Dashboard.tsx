@@ -34,23 +34,29 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-asfion-bg">
-      {/* Header oscuro */}
-      <header className="bg-asfion-navyDeep text-white">
-        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Logo height={36} />
-            <p className="text-xs text-asfion-orange italic hidden sm:block">
-              Del campo al tablero, sin fricción.
+      {/* Header oscuro — rediseñado para que el logo se lea claro sobre
+          navy (variante onDark, "ASF" en blanco) y la jerarquía sea más
+          prolija. Bottom border naranja muy fina como acento de brand. */}
+      <header className="bg-asfion-navyDeep text-white border-b-2 border-asfion-orange/60">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
+          {/* Brand */}
+          <div className="flex items-center gap-4 min-w-0">
+            <Logo height={40} variant="onDark" />
+            <div className="hidden md:block h-8 w-px bg-white/15" />
+            <p className="text-xs text-asfion-orange italic hidden md:block whitespace-nowrap">
+              Gestión integral del campo.
             </p>
           </div>
-          <div className="flex items-center gap-4">
+
+          {/* Acciones + sesión */}
+          <div className="flex items-center gap-3">
             {showAdmin && (
               <button
                 onClick={() => setView(v => (v === 'billing' ? 'modules' : 'billing'))}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition ${
                   view === 'billing'
                     ? 'bg-asfion-orange text-asfion-navyDeep'
-                    : 'bg-asfion-orange/15 text-asfion-orange hover:bg-asfion-orange/25'
+                    : 'bg-white/5 text-asfion-orange hover:bg-asfion-orange/20 ring-1 ring-asfion-orange/30'
                 }`}
                 title={view === 'billing' ? 'Volver al tablero' : 'Panel de cobranzas'}
               >
@@ -61,22 +67,32 @@ export function Dashboard() {
             <button
               onClick={refresh}
               disabled={loading}
-              className="text-asfion-orange/70 hover:text-asfion-orange transition disabled:opacity-40"
+              className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/5 transition disabled:opacity-40"
               title="Refrescar datos"
             >
               <RefreshCwIcon size={18} className={loading ? 'animate-spin' : ''} />
             </button>
-            <div className="text-right">
-              <p className="text-xs uppercase text-asfion-orange/70">Sesión</p>
-              <p className="text-sm font-semibold">{user?.email ?? '—'}</p>
+
+            {/* Separador */}
+            <div className="h-8 w-px bg-white/15" />
+
+            {/* Sesión: avatar + email */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-asfion-orange text-asfion-navyDeep font-extrabold grid place-items-center shadow-sm">
+                {initials}
+              </div>
+              <div className="text-right hidden sm:block leading-tight">
+                <p className="text-[10px] uppercase tracking-wider text-white/50 font-semibold">Sesión</p>
+                <p className="text-sm font-semibold truncate max-w-[200px]" title={user?.email ?? ''}>
+                  {user?.email ?? '—'}
+                </p>
+              </div>
             </div>
-            <div className="w-9 h-9 rounded-full bg-asfion-orange text-asfion-navyDeep font-extrabold grid place-items-center">
-              {initials}
-            </div>
+
             <button
               onClick={signOut}
-              className="ml-1 text-asfion-orange/70 hover:text-asfion-orange transition"
-              title="Salir"
+              className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/5 transition"
+              title="Cerrar sesión"
             >
               <LogOutIcon size={18} />
             </button>

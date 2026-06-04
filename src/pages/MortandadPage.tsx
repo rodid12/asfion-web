@@ -51,9 +51,10 @@ export function MortandadPage({ mortandad, campos }: Props) {
   }, [mortandad, filtros]);
 
   // ---------- KPIs + chart data ----------
-  const { porCampo, porCategoria, porCausa, porMes, topCampo, topCategoria, topCausa } = useMemo(() => {
+  const { porCampo, porCategoria, porActividad, porCausa, porMes, topCampo, topCategoria, topCausa } = useMemo(() => {
     const byCampo = new Map<string, number>();
     const byCat = new Map<string, number>();
+    const byAct = new Map<string, number>();
     const byCausa = new Map<string, number>();
     const byMes = new Map<string, number>();
 
@@ -61,6 +62,10 @@ export function MortandadPage({ mortandad, campos }: Props) {
       byCampo.set(m.campoId, (byCampo.get(m.campoId) ?? 0) + 1);
       const cat = m.categoria || 'Sin categoría';
       byCat.set(cat, (byCat.get(cat) ?? 0) + 1);
+      // Replica el chart "Total Muertes by Actividad" del Power BI del cliente.
+      // actividad es texto libre del catálogo (Cria, Destete Precoz, Recria P, etc.).
+      const act = m.actividad?.trim() || 'Sin actividad';
+      byAct.set(act, (byAct.get(act) ?? 0) + 1);
       const causa = m.causaTipo ?? 'Sin especificar';
       byCausa.set(causa, (byCausa.get(causa) ?? 0) + 1);
       const mes = m.fecha.slice(0, 7);
@@ -73,6 +78,9 @@ export function MortandadPage({ mortandad, campos }: Props) {
       .sort((a, b) => b.n - a.n);
     const porCategoria = [...byCat.entries()]
       .map(([categoria, n]) => ({ categoria, n }))
+      .sort((a, b) => b.n - a.n);
+    const porActividad = [...byAct.entries()]
+      .map(([actividad, n]) => ({ actividad, n }))
       .sort((a, b) => b.n - a.n);
     const porCausa = [...byCausa.entries()]
       .map(([causa, n]) => ({ causa, n }))
@@ -89,7 +97,7 @@ export function MortandadPage({ mortandad, campos }: Props) {
       });
 
     return {
-      porCampo, porCategoria, porCausa, porMes,
+      porCampo, porCategoria, porActividad, porCausa, porMes,
       topCampo: porCampo[0] ?? null,
       topCategoria: porCategoria[0] ?? null,
       topCausa: porCausa[0] ?? null,
@@ -202,6 +210,30 @@ export function MortandadPage({ mortandad, campos }: Props) {
           </ResponsiveContainer>
         </Card>
       </div>
+
+      {/* Total Muertes by Actividad — replica del Power BI del cliente.
+          Útil para ver si las muertes se concentran en Cría, Destete Precoz,
+          Recría o etapas posteriores (Engorde / Invernada). */}
+      <Card title="Por actividad" subtitle="Distribución de muertes según etapa productiva">
+        {porActividad.length === 0 ? (
+          <div className="h-[260px] flex items-center justify-center text-sm text-asfion-muted">
+            Sin actividad registrada en las muertes del período.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={Math.max(260, porActividad.length * 42)}>
+            <BarChart data={porActividad} layout="vertical" margin={{ top: 8, right: 60, left: 40, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" horizontal={false} />
+              <XAxis type="number" stroke="#6B7280" fontSize={12} allowDecimals={false} />
+              <YAxis type="category" dataKey="actividad" stroke="#6B7280" fontSize={12} width={140} />
+              <Tooltip />
+              <Bar dataKey="n" name="Muertes" radius={[0, 4, 4, 0]}>
+                {porActividad.map((_, i) => <Cell key={i} fill="#C9823F" />)}
+                <LabelList dataKey="n" position="right" fontSize={11} fill="#163349" />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </Card>
     </div>
   );
 }

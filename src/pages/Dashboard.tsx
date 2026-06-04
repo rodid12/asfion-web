@@ -13,6 +13,7 @@ import { LluviasPage } from './LluviasPage';
 import { MortandadPage } from './MortandadPage';
 import { PastoreoPage } from './PastoreoPage';
 import { ComprasPage } from './ComprasPage';
+import { CorralesPage } from './CorralesPage';
 import { BillingAdminPage } from './BillingAdminPage';
 
 type View = 'modules' | 'billing';
@@ -131,6 +132,11 @@ export function Dashboard() {
         )}
         {view === 'modules' && data && modulo === 'compras' && (
           <ComprasPage compras={d.compras} campos={d.campos} />
+        )}
+        {view === 'modules' && data && modulo === 'corrales' && (
+          // corrales=[] hasta que se conecte la fuente (Google Sheets o app móvil).
+          // La página maneja el empty state internamente.
+          <CorralesPage corrales={[]} />
         )}
 
         <footer className="text-center text-xs text-asfion-muted py-6">

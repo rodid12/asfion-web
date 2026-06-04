@@ -11,14 +11,16 @@ import { AuthProvider, useAuth } from '@/lib/auth';
 import { envOk } from '@/lib/supabase';
 import { Dashboard } from '@/pages/Dashboard';
 import { LoginPage } from '@/pages/LoginPage';
+import { Logo } from '@/components/Logo';
 
 function MissingEnv() {
   return (
     <div className="min-h-screen bg-asfion-navyDeep text-white flex items-center justify-center px-4">
       <div className="max-w-lg bg-white text-asfion-navyDeep rounded-2xl p-8 shadow-card">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-3 h-3 rounded-full bg-asfion-orange" />
-          <h1 className="text-lg font-extrabold">ASFION · Setup pendiente</h1>
+        <div className="flex items-center gap-3 mb-4">
+          <Logo height={28} />
+          <span className="text-asfion-muted">·</span>
+          <h1 className="text-lg font-extrabold">Setup pendiente</h1>
         </div>
         <p className="text-sm text-asfion-muted mb-4">
           No se encontraron las credenciales de Supabase. Para arrancar el
@@ -43,7 +45,8 @@ function Gate() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-asfion-navyDeep flex items-center justify-center">
+      <div className="min-h-screen bg-asfion-navyDeep flex flex-col items-center justify-center gap-4">
+        <Logo height={48} />
         <div className="text-asfion-orange/70 text-sm">Cargando…</div>
       </div>
     );

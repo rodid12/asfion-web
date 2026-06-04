@@ -15,6 +15,7 @@ import { PastoreoPage } from './PastoreoPage';
 import { ComprasPage } from './ComprasPage';
 import { CorralesPage } from './CorralesPage';
 import { BillingAdminPage } from './BillingAdminPage';
+import { Logo } from '@/components/Logo';
 
 type View = 'modules' | 'billing';
 
@@ -37,11 +38,10 @@ export function Dashboard() {
       <header className="bg-asfion-navyDeep text-white">
         <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded-full bg-asfion-orange" />
-            <div>
-              <h1 className="text-xl font-extrabold tracking-wide">ASFION</h1>
-              <p className="text-xs text-asfion-orange italic">Del campo al tablero, sin fricción.</p>
-            </div>
+            <Logo height={36} />
+            <p className="text-xs text-asfion-orange italic hidden sm:block">
+              Del campo al tablero, sin fricción.
+            </p>
           </div>
           <div className="flex items-center gap-4">
             {showAdmin && (

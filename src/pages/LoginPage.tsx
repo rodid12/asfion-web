@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/auth';
+import { Logo } from '@/components/Logo';
 
 export function LoginPage() {
   const { signIn } = useAuth();
@@ -34,12 +35,9 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-asfion-navyDeep text-white flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        {/* Branding */}
+        {/* Branding — logo oficial centrado + tagline */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-3">
-            <div className="w-4 h-4 rounded-full bg-asfion-orange" />
-            <h1 className="text-3xl font-extrabold tracking-wide">ASFION</h1>
-          </div>
+          <Logo height={56} className="mx-auto mb-4" />
           <p className="text-sm text-asfion-orange italic">
             Del campo al tablero, sin fricción.
           </p>

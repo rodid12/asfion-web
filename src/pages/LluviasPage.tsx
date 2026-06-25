@@ -50,20 +50,55 @@ export function LluviasPage({ lluvias, campos }: Props) {
     });
   }, [lluvias, filtros]);
 
-  // ---------- KPIs ----------
+  // Filtro adicional para KPIs/charts agregados: solo lecturas del pluviómetro
+  // "principal" de cada campo, según el mapeo que pasó Agus. Los pluviómetros
+  // secundarios siguen cargándose (la tabla detalle los muestra todos) pero
+  // NO entran en el cálculo de mm acumulados, días con lluvia, ranking ni
+  // evolución mensual. Esto replica la fórmula del Power BI del cliente.
+  //
+  // Mapeo campo (uppercase) → pluviómetro principal (uppercase):
+  //   QUIRQUINCHO → PUESTO
+  //   AGISOT      → S
+  //   ICO POZO    → TANQUI
+  //   PICAFLOR    → PUESTO
+  //   CAROLINA    → CASCO
+  //   PROGRESO    → CASCO
+  //   MARGARITA   → CASCO
+  const PLUVIOMETRO_PRINCIPAL: Record<string, string> = {
+    'QUIRQUINCHO': 'PUESTO',
+    'AGISOT':      'S',
+    'ICO POZO':    'TANQUI',
+    'PICAFLOR':    'PUESTO',
+    'CAROLINA':    'CASCO',
+    'PROGRESO':    'CASCO',
+    'MARGARITA':   'CASCO',
+  };
+  const campoNombreById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of campos) m.set(c.id, c.nombre);
+    return m;
+  }, [campos]);
+  const lecturasPrincipales = useMemo(() => {
+    return filtradas.filter(l => {
+      const campoName = (campoNombreById.get(l.campoId) ?? '').toUpperCase().trim();
+      const expected = PLUVIOMETRO_PRINCIPAL[campoName];
+      if (!expected) return true; // Campo sin mapeo definido → no filtramos (incluimos todo)
+      return (l.pluviometro ?? '').toUpperCase().trim() === expected;
+    });
+  }, [filtradas, campoNombreById]);
+
+  // ---------- KPIs (sobre lecturas del pluviómetro principal) ----------
   const kpis = useMemo(() => {
-    const totalMM = filtradas.reduce((acc, l) => acc + (Number.isFinite(l.milimetros) ? l.milimetros : 0), 0);
-    // Días distintos con al menos un registro de lluvia > 0
+    const totalMM = lecturasPrincipales.reduce((acc, l) => acc + (Number.isFinite(l.milimetros) ? l.milimetros : 0), 0);
     const diasSet = new Set<string>();
     let maxDia = { fecha: '', mm: 0 };
-    filtradas.forEach(l => {
+    lecturasPrincipales.forEach(l => {
       if (l.milimetros > 0) diasSet.add(l.fecha);
       if (l.milimetros > maxDia.mm) maxDia = { fecha: l.fecha, mm: l.milimetros };
     });
 
-    // Campo top por mm acumulados
     const mmPorCampo = new Map<string, number>();
-    filtradas.forEach(l => mmPorCampo.set(l.campoId, (mmPorCampo.get(l.campoId) ?? 0) + l.milimetros));
+    lecturasPrincipales.forEach(l => mmPorCampo.set(l.campoId, (mmPorCampo.get(l.campoId) ?? 0) + l.milimetros));
     const [topId, topN] = [...mmPorCampo.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['', 0];
     const topCampo = campos.find(c => c.id === topId)?.nombre ?? '—';
 
@@ -74,13 +109,13 @@ export function LluviasPage({ lluvias, campos }: Props) {
       topCampo,
       topMM: Math.round(topN),
     };
-  }, [filtradas, campos]);
+  }, [lecturasPrincipales, campos]);
 
-  // ---------- Serie por mes ----------
+  // ---------- Serie por mes (sobre lecturas principales) ----------
   const porMes = useMemo(() => {
     const mmPorMes = new Map<string, number>();
-    filtradas.forEach(l => {
-      const key = l.fecha.slice(0, 7); // YYYY-MM
+    lecturasPrincipales.forEach(l => {
+      const key = l.fecha.slice(0, 7);
       mmPorMes.set(key, (mmPorMes.get(key) ?? 0) + l.milimetros);
     });
     const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -92,17 +127,17 @@ export function LluviasPage({ lluvias, campos }: Props) {
         const idx = Math.max(0, Math.min(11, parseInt(m ?? '1', 10) - 1));
         return { key, mes: `${MESES[idx]} ${(y ?? '').slice(2)}`, mm: Math.round(mm) };
       });
-  }, [filtradas]);
+  }, [lecturasPrincipales]);
 
-  // ---------- Ranking por campo ----------
+  // ---------- Ranking por campo (sobre lecturas principales) ----------
   const porCampo = useMemo(() => {
     const mmPorCampo = new Map<string, number>();
-    filtradas.forEach(l => mmPorCampo.set(l.campoId, (mmPorCampo.get(l.campoId) ?? 0) + l.milimetros));
+    lecturasPrincipales.forEach(l => mmPorCampo.set(l.campoId, (mmPorCampo.get(l.campoId) ?? 0) + l.milimetros));
     return campos
       .map(c => ({ campo: c.nombre, mm: Math.round(mmPorCampo.get(c.id) ?? 0) }))
       .filter(r => r.mm > 0)
       .sort((a, b) => b.mm - a.mm);
-  }, [filtradas, campos]);
+  }, [lecturasPrincipales, campos]);
 
   if (lluvias.length === 0) {
     return <EmptyModule label="lluvias" />;

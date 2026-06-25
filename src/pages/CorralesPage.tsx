@@ -78,31 +78,36 @@ export function CorralesPage({ corrales = [] }: Props) {
   //   Animales, Kg Prod Total, Kg Producidos (por animal),
   //   ADPV(kg/an/día), EC Kg/Kg, CMS (% PV), $ Ración Prom.
   const kpis = useMemo(() => {
-    const n = filtrados.length;
-    if (n === 0) {
+    if (filtrados.length === 0) {
       return {
         animales: 0, kgProdTotal: 0, kgProducidos: 0,
         adpv: 0, ecPromedio: 0, cmsPctPv: 0, racionProm: 0,
       };
     }
+    // KPIs ponderados por animales (= Cantidad en el Power BI de Ganaderas).
+    // Fórmula DAX que pidió Agus:
+    //   ADPV Ponderado = DIVIDE(SUMX(rows, ADPV × Cantidad), SUM(Cantidad))
+    // Tropas con más animales pesan más en el promedio — refleja mejor el
+    // mix real del feedlot que un promedio simple.
     let animales = 0, kgProdTotal = 0;
-    let sumAdpv = 0, sumEc = 0, sumCms = 0, sumRacion = 0;
+    let wAdpv = 0, wEc = 0, wCms = 0, wRacion = 0;
     filtrados.forEach(c => {
-      animales += c.animales;
-      kgProdTotal += (c.pesoFinal - c.pesoInicial) * c.animales;
-      sumAdpv += c.adpv;
-      sumEc += c.ecPromedio;
-      sumCms += c.cmsPctPv;
-      sumRacion += c.racionPesoMs;
+      const cantidad = c.animales || 0;
+      animales += cantidad;
+      kgProdTotal += (c.pesoFinal - c.pesoInicial) * cantidad;
+      wAdpv  += c.adpv             * cantidad;
+      wEc    += c.ecPromedio       * cantidad;
+      wCms   += c.cmsPctPv         * cantidad;
+      wRacion += c.racionPesoMs    * cantidad;
     });
     return {
       animales,
       kgProdTotal,
       kgProducidos: animales > 0 ? kgProdTotal / animales : 0,
-      adpv: sumAdpv / n,
-      ecPromedio: sumEc / n,
-      cmsPctPv: sumCms / n,
-      racionProm: sumRacion / n,
+      adpv:        animales > 0 ? wAdpv   / animales : 0,
+      ecPromedio:  animales > 0 ? wEc     / animales : 0,
+      cmsPctPv:    animales > 0 ? wCms    / animales : 0,
+      racionProm:  animales > 0 ? wRacion / animales : 0,
     };
   }, [filtrados]);
 

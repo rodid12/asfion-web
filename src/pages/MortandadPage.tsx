@@ -51,12 +51,16 @@ export function MortandadPage({ mortandad, campos }: Props) {
   }, [mortandad, filtros]);
 
   // ---------- KPIs + chart data ----------
-  const { porCampo, porCategoria, porActividad, porCausa, porMes, topCampo, topCategoria, topCausa } = useMemo(() => {
+  const { porCampo, porCategoria, porActividad, porCausa, porMes, topCampo, topCategoria, topCausa, totalMuertesDistinct } = useMemo(() => {
     const byCampo = new Map<string, number>();
     const byCat = new Map<string, number>();
     const byAct = new Map<string, number>();
     const byCausa = new Map<string, number>();
     const byMes = new Map<string, number>();
+    // DISTINCTCOUNT(N° Caravana) — replica la fórmula DAX del Power BI.
+    // Cada caravana distinta es 1 muerte, sin importar cuántas rows tenga
+    // (a veces hay rows duplicadas por re-registro del síntoma vs causa).
+    const caravanasUnicas = new Set<string>();
 
     filtradas.forEach(m => {
       byCampo.set(m.campoId, (byCampo.get(m.campoId) ?? 0) + 1);
@@ -70,6 +74,9 @@ export function MortandadPage({ mortandad, campos }: Props) {
       byCausa.set(causa, (byCausa.get(causa) ?? 0) + 1);
       const mes = m.fecha.slice(0, 7);
       byMes.set(mes, (byMes.get(mes) ?? 0) + 1);
+      // Caravana única para el conteo total. Sin caravana → trackeamos por id.
+      const key = m.caravanaNumero?.trim() || `__noid__:${m.id}`;
+      caravanasUnicas.add(key);
     });
 
     const porCampo = campos
@@ -101,6 +108,7 @@ export function MortandadPage({ mortandad, campos }: Props) {
       topCampo: porCampo[0] ?? null,
       topCategoria: porCategoria[0] ?? null,
       topCausa: porCausa[0] ?? null,
+      totalMuertesDistinct: caravanasUnicas.size,
     };
   }, [filtradas, campos]);
 
@@ -129,7 +137,11 @@ export function MortandadPage({ mortandad, campos }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi
           label="Total muertes"
-          value={formatNumber(filtradas.length)}
+          // DISTINCTCOUNT(N° Caravana) — el Power BI de Ganaderas cuenta caravanas
+          // únicas, no rows. Una vaca con dos eventos asociados (típico cuando se
+          // registra primero el síntoma y luego la causa) cuenta como 1 muerte.
+          // Eventos sin caravana caen en un grupo "sin caravana" y se cuentan como 1.
+          value={formatNumber(totalMuertesDistinct)}
           accent="terracota"
           icon={<SkullIcon size={18} />}
         />

@@ -15,6 +15,7 @@ import { PastoreoPage } from './PastoreoPage';
 import { ComprasPage } from './ComprasPage';
 import { CorralesPage } from './CorralesPage';
 import { PrenezPage, type Tacto } from './PrenezPage';
+import { NdviPage } from './NdviPage';
 import { BillingAdminPage } from './BillingAdminPage';
 
 // Snapshot de los 7 rodeos tactados — tomado del sheet "Prenez" del GVA
@@ -174,6 +175,12 @@ export function Dashboard() {
           // tenga form en app móvil o sync periódico de su planilla, esto
           // pasa a venir de Supabase como los demás módulos.
           <PrenezPage tactos={TACTOS_GVA} />
+        )}
+        {view === 'modules' && data && modulo === 'ndvi' && (
+          // NDVI/Materia Seca — empty state hasta que enchufemos una fuente
+          // satelital (Auravant/Sentinel) o sync de planilla del agrónomo.
+          // Pasamos los nombres de campos para alimentar el slicer de filtro.
+          <NdviPage mediciones={[]} campos={d.campos.map(c => c.nombre)} />
         )}
 
         <footer className="text-center text-xs text-asfion-muted py-6">

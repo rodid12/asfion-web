@@ -6,7 +6,7 @@
 import React from 'react';
 import { clsx } from 'clsx';
 
-export type ModuleKey = 'pariciones' | 'lluvias' | 'mortandad' | 'pastoreo' | 'compras' | 'corrales' | 'prenez';
+export type ModuleKey = 'pariciones' | 'lluvias' | 'mortandad' | 'pastoreo' | 'compras' | 'corrales' | 'prenez' | 'ndvi';
 
 interface Props {
   active: ModuleKey;
@@ -23,6 +23,7 @@ const TABS: { key: ModuleKey | 'ventas'; label: string; disabled?: boolean }[] =
   { key: 'lluvias',    label: 'Lluvias'    },
   { key: 'mortandad',  label: 'Mortandad'  },
   { key: 'pastoreo',   label: 'Pastoreo'   },
+  { key: 'ndvi',       label: 'NDVI / MS'  },
   { key: 'compras',    label: 'Compras'    },
   { key: 'corrales',   label: 'Corrales'   },
   { key: 'prenez',     label: 'Preñez'     },

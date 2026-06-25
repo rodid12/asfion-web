@@ -81,7 +81,7 @@ export function CorralesPage({ corrales = [] }: Props) {
     if (filtrados.length === 0) {
       return {
         animales: 0, kgProdTotal: 0, kgProducidos: 0,
-        adpv: 0, ecPromedio: 0, cmsPctPv: 0, racionProm: 0,
+        adpv: 0, ecPromedio: 0, cmsPctPv: 0, racionProm: 0, alimProm: 0,
       };
     }
     // KPIs ponderados por animales (= Cantidad en el Power BI de Ganaderas).
@@ -89,8 +89,12 @@ export function CorralesPage({ corrales = [] }: Props) {
     //   ADPV Ponderado = DIVIDE(SUMX(rows, ADPV × Cantidad), SUM(Cantidad))
     // Tropas con más animales pesan más en el promedio — refleja mejor el
     // mix real del feedlot que un promedio simple.
+    //
+    // Costo Alim Promedio 2 (medida que faltaba): es el costo de
+    // alimentación por kg producido — DISTINTO al Costo Ración Promedio
+    // (que es $/kg de MS). Ambos son métricas económicas complementarias.
     let animales = 0, kgProdTotal = 0;
-    let wAdpv = 0, wEc = 0, wCms = 0, wRacion = 0;
+    let wAdpv = 0, wEc = 0, wCms = 0, wRacion = 0, wAlim = 0;
     filtrados.forEach(c => {
       const cantidad = c.animales || 0;
       animales += cantidad;
@@ -99,6 +103,7 @@ export function CorralesPage({ corrales = [] }: Props) {
       wEc    += c.ecPromedio       * cantidad;
       wCms   += c.cmsPctPv         * cantidad;
       wRacion += c.racionPesoMs    * cantidad;
+      wAlim  += c.alimPesoProducido * cantidad;
     });
     return {
       animales,
@@ -108,6 +113,7 @@ export function CorralesPage({ corrales = [] }: Props) {
       ecPromedio:  animales > 0 ? wEc     / animales : 0,
       cmsPctPv:    animales > 0 ? wCms    / animales : 0,
       racionProm:  animales > 0 ? wRacion / animales : 0,
+      alimProm:    animales > 0 ? wAlim   / animales : 0,
     };
   }, [filtrados]);
 
@@ -214,7 +220,7 @@ export function CorralesPage({ corrales = [] }: Props) {
               icon={<CoinsIcon size={18} />}
             />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Kpi
               label="ADPV (kg/an/día)"
               value={kpis.adpv.toFixed(2)}
@@ -232,6 +238,13 @@ export function CorralesPage({ corrales = [] }: Props) {
               value={kpis.cmsPctPv.toFixed(2)}
               sublabel="Consumo MS sobre peso vivo"
               accent="navy"
+            />
+            <Kpi
+              label="$ Alim Prom"
+              value={kpis.alimProm.toFixed(2)}
+              sublabel="$/kg producido — costo de alimentación"
+              accent="terracota"
+              icon={<CoinsIcon size={18} />}
             />
           </div>
 

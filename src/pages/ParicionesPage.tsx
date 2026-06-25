@@ -141,6 +141,13 @@ export function ParicionesPage({ pariciones, campos }: Props) {
       orejanos,
       asistidos,
       // Porcentajes (las divisiones devuelven 0 si denom = 0)
+      // % Parición = Nacimientos Totales (partos) / Stock Base → mide
+      //   qué proporción del rodeo parió, incluyendo terneros que después
+      //   murieron. Es la métrica del Power BI de Agus.
+      // % Destete Parcial = Ternero en Pie / Stock Base → mide qué
+      //   proporción del rodeo terminó con un ternero vivo a la fecha.
+      //   Es nuestra métrica complementaria (más conservadora).
+      pctParicion:      stockBase    ? nacimientos / stockBase : 0,
       pctDestete:       stockBase    ? ternerosEnPie / stockBase : 0,
       pctAbortos:       stockBase    ? abortos / stockBase : 0,
       pctMuerteSenal:   nacimientos  ? muerteSenalado / nacimientos : 0,
@@ -238,7 +245,12 @@ export function ParicionesPage({ pariciones, campos }: Props) {
       </div>
 
       {/* Fila de % eficiencia — mini-tiles compactos */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <MiniKpi
+          label="% Parición"
+          value={kpis.stockBase ? formatPercent(kpis.pctParicion) : '—'}
+          accent="orange"
+        />
         <MiniKpi
           label="% Destete Parcial"
           value={kpis.stockBase ? formatPercent(kpis.pctDestete) : '—'}
@@ -260,7 +272,7 @@ export function ParicionesPage({ pariciones, campos }: Props) {
           accent="danger"
         />
         <MiniKpi
-          label="Orejanos"
+          label="Orejanos Excluidos"
           value={formatNumber(kpis.orejanos)}
           accent="navy"
         />

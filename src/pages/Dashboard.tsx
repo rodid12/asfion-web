@@ -14,7 +14,22 @@ import { MortandadPage } from './MortandadPage';
 import { PastoreoPage } from './PastoreoPage';
 import { ComprasPage } from './ComprasPage';
 import { CorralesPage } from './CorralesPage';
+import { PrenezPage, type Tacto } from './PrenezPage';
 import { BillingAdminPage } from './BillingAdminPage';
+
+// Snapshot de los 7 rodeos tactados — tomado del sheet "Prenez" del GVA
+// (Excel del cliente, version GVA_F(7).xlsx). Hardcodeado hasta que el
+// veterinario tenga form de carga propio en la app móvil o se haga sync
+// periódico de la planilla. Mismo enfoque que usamos con Stock Inicial.
+const TACTOS_GVA: Tacto[] = [
+  { id: 'p1', rodeo: 'VQ 27M Margarita',     origenTotal: 254, prenezCabeza: 123, prenezCuerpo:  86, prenezCola: 26, vacias: 19, perdon: 0, descarte: 0, feedLot: 0 },
+  { id: 'p2', rodeo: 'Vaquillas 15M Ag',     origenTotal: 529, prenezCabeza: 336, prenezCuerpo:  96, prenezCola: 31, vacias: 65, perdon: 0, descarte: 0, feedLot: 0 },
+  { id: 'p3', rodeo: 'Vaquillas 2° Serv C',  origenTotal: 540, prenezCabeza:   0, prenezCuerpo:   0, prenezCola:  0, vacias:  0, perdon: 0, descarte: 0, feedLot: 0 },
+  { id: 'p4', rodeo: 'Vacas Carolina',       origenTotal: 416, prenezCabeza: 141, prenezCuerpo: 140, prenezCola: 86, vacias: 48, perdon: 0, descarte: 0, feedLot: 0 },
+  { id: 'p5', rodeo: 'Vacas Progreso',       origenTotal: 418, prenezCabeza: 192, prenezCuerpo: 138, prenezCola: 58, vacias: 30, perdon: 0, descarte: 0, feedLot: 0 },
+  { id: 'p6', rodeo: 'Vacas Picaflor IATF',  origenTotal: 557, prenezCabeza:   0, prenezCuerpo:   0, prenezCola:  0, vacias:  0, perdon: 0, descarte: 0, feedLot: 0 },
+  { id: 'p7', rodeo: 'Vacas Picaflor Toro',  origenTotal: 358, prenezCabeza:   0, prenezCuerpo:   0, prenezCola:  0, vacias:  0, perdon: 0, descarte: 0, feedLot: 0 },
+];
 import { Logo } from '@/components/Logo';
 
 type View = 'modules' | 'billing';
@@ -153,6 +168,12 @@ export function Dashboard() {
           // corrales=[] hasta que se conecte la fuente (Google Sheets o app móvil).
           // La página maneja el empty state internamente.
           <CorralesPage corrales={[]} />
+        )}
+        {view === 'modules' && data && modulo === 'prenez' && (
+          // Por ahora con snapshot del GVA (7 rodeos). Cuando el veterinario
+          // tenga form en app móvil o sync periódico de su planilla, esto
+          // pasa a venir de Supabase como los demás módulos.
+          <PrenezPage tactos={TACTOS_GVA} />
         )}
 
         <footer className="text-center text-xs text-asfion-muted py-6">

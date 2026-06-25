@@ -121,6 +121,11 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
     });
     const kgPorCab = nConKg > 0 ? sumKgPromedio / nConKg : 0;
     const carga    = hectareas > 0 ? kgTotales / hectareas : 0;
+    // Carga Animal = cabezas/ha (réplica del Power BI de Agus).
+    // Distinta de "Carga (kg/ha)" que mide peso vivo por hectárea.
+    // Carga Animal es la métrica más estándar en ganadería argentina —
+    // sirve para evaluar sobrepastoreo / capacidad de la parcela.
+    const cargaAnimal = hectareas > 0 ? animalesTotal / hectareas : 0;
     // Días promedio de stay (solo cerrados)
     let totalDias = 0;
     let nCerrados = 0;
@@ -146,6 +151,7 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
       kgTotales,
       kgPorCab,
       carga,
+      cargaAnimal,
       nConKg,
       diasProm,
     };
@@ -463,6 +469,13 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
           sublabel="Kg Totales / Has"
           accent="terracota"
           icon={<LandPlotIcon size={18} />}
+        />
+        <Kpi
+          label="Carga Animal"
+          value={kpis.cargaAnimal > 0 ? kpis.cargaAnimal.toFixed(2) : '—'}
+          sublabel="Cabezas / Ha"
+          accent="terracota"
+          icon={<UsersIcon size={18} />}
         />
       </div>
 

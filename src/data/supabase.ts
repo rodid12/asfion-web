@@ -26,6 +26,44 @@ import type {
   VacasGrupo,
 } from './types';
 
+// ----------------------------------------------------------------------------
+// Paginación
+// ----------------------------------------------------------------------------
+//
+// Supabase tiene un límite por defecto de 1000 rows por query. Si la tabla
+// pasa de eso (pariciones tiene 2500+, mortandad llega a 200+, etc.), el
+// dashboard mostraba data truncada — y los KPIs salían a ~40% del valor real.
+//
+// Esta helper itera con .range() hasta que la página llega vacía o más
+// chica que el page size. Devuelve todas las rows en un solo array.
+//
+// Uso: const data = await fetchAllPaginated('pariciones', q => q.order('fecha', { ascending: false }));
+
+const PAGE_SIZE = 1000;
+
+type QueryBuilder = ReturnType<ReturnType<typeof supabase.from>['select']>;
+
+async function fetchAllPaginated<T = any>(
+  table: string,
+  applyOrder: (q: QueryBuilder) => QueryBuilder,
+): Promise<T[]> {
+  const out: T[] = [];
+  let from = 0;
+  // Sin tope superior — confiamos en que el último page va a venir < PAGE_SIZE.
+  // Para seguridad, ponemos un máximo de 100k para evitar loops infinitos.
+  while (out.length < 100_000) {
+    const base = supabase.from(table).select('*');
+    const ordered = applyOrder(base);
+    const { data, error } = await ordered.range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    out.push(...(data as T[]));
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return out;
+}
+
 function rowToCampo(r: any): Campo {
   return {
     id: r.id,
@@ -71,12 +109,13 @@ export async function fetchCampos(): Promise<Campo[]> {
  * paginación o un view materializado con agregados.
  */
 export async function fetchPariciones(): Promise<Paricion[]> {
-  const { data, error } = await supabase
-    .from('pariciones')
-    .select('*')
-    .order('fecha', { ascending: false });
-  if (error) throw new Error(`fetchPariciones: ${error.message}`);
-  return (data ?? []).map(rowToParicion);
+  try {
+    const rows = await fetchAllPaginated<any>('pariciones',
+      q => q.order('fecha', { ascending: false }) as QueryBuilder);
+    return rows.map(rowToParicion);
+  } catch (err: any) {
+    throw new Error(`fetchPariciones: ${err?.message ?? err}`);
+  }
 }
 
 // =============================================================================
@@ -97,12 +136,13 @@ function rowToLluvia(r: any): Lluvia {
 }
 
 export async function fetchLluvias(): Promise<Lluvia[]> {
-  const { data, error } = await supabase
-    .from('lluvias')
-    .select('*')
-    .order('fecha', { ascending: false });
-  if (error) throw new Error(`fetchLluvias: ${error.message}`);
-  return (data ?? []).map(rowToLluvia);
+  try {
+    const rows = await fetchAllPaginated<any>('lluvias',
+      q => q.order('fecha', { ascending: false }) as QueryBuilder);
+    return rows.map(rowToLluvia);
+  } catch (err: any) {
+    throw new Error(`fetchLluvias: ${err?.message ?? err}`);
+  }
 }
 
 // =============================================================================
@@ -131,12 +171,13 @@ function rowToMortandad(r: any): Mortandad {
 }
 
 export async function fetchMortandad(): Promise<Mortandad[]> {
-  const { data, error } = await supabase
-    .from('mortandad')
-    .select('*')
-    .order('fecha', { ascending: false });
-  if (error) throw new Error(`fetchMortandad: ${error.message}`);
-  return (data ?? []).map(rowToMortandad);
+  try {
+    const rows = await fetchAllPaginated<any>('mortandad',
+      q => q.order('fecha', { ascending: false }) as QueryBuilder);
+    return rows.map(rowToMortandad);
+  } catch (err: any) {
+    throw new Error(`fetchMortandad: ${err?.message ?? err}`);
+  }
 }
 
 // =============================================================================
@@ -165,12 +206,13 @@ function rowToPastoreo(r: any): Pastoreo {
 }
 
 export async function fetchPastoreo(): Promise<Pastoreo[]> {
-  const { data, error } = await supabase
-    .from('pastoreo')
-    .select('*')
-    .order('fecha_entrada', { ascending: false });
-  if (error) throw new Error(`fetchPastoreo: ${error.message}`);
-  return (data ?? []).map(rowToPastoreo);
+  try {
+    const rows = await fetchAllPaginated<any>('pastoreo',
+      q => q.order('fecha_entrada', { ascending: false }) as QueryBuilder);
+    return rows.map(rowToPastoreo);
+  } catch (err: any) {
+    throw new Error(`fetchPastoreo: ${err?.message ?? err}`);
+  }
 }
 
 // =============================================================================
@@ -202,12 +244,13 @@ function rowToCompra(r: any): Compra {
 }
 
 export async function fetchCompras(): Promise<Compra[]> {
-  const { data, error } = await supabase
-    .from('compras')
-    .select('*')
-    .order('fecha', { ascending: false });
-  if (error) throw new Error(`fetchCompras: ${error.message}`);
-  return (data ?? []).map(rowToCompra);
+  try {
+    const rows = await fetchAllPaginated<any>('compras',
+      q => q.order('fecha', { ascending: false }) as QueryBuilder);
+    return rows.map(rowToCompra);
+  } catch (err: any) {
+    throw new Error(`fetchCompras: ${err?.message ?? err}`);
+  }
 }
 
 // =============================================================================
@@ -254,21 +297,19 @@ function rowToNdvi(r: any): NdviPastura {
 }
 
 export async function fetchNdvi(): Promise<NdviPastura[]> {
-  const { data, error } = await supabase
-    .from('ndvi_pasturas')
-    .select('*')
-    .order('fecha', { ascending: false });
-  // La tabla recién se crea en migration 0009. Si todavía no aplicó (por
-  // ejemplo en un entorno nuevo), devolvemos array vacío en lugar de
-  // tirar error — el módulo NDVI sigue funcionando con su empty state.
-  if (error) {
-    if (error.message?.toLowerCase().includes('does not exist') ||
-        error.message?.toLowerCase().includes('relation') ||
-        error.code === '42P01') {
+  try {
+    const rows = await fetchAllPaginated<any>('ndvi_pasturas',
+      q => q.order('fecha', { ascending: false }) as QueryBuilder);
+    return rows.map(rowToNdvi);
+  } catch (err: any) {
+    // La tabla recién se crea en migration 0009. Si todavía no aplicó,
+    // devolvemos array vacío para que el módulo siga funcionando con
+    // su empty state en vez de tirar error global.
+    const msg = String(err?.message ?? err).toLowerCase();
+    if (msg.includes('does not exist') || msg.includes('relation') || err?.code === '42P01') {
       console.warn('Tabla ndvi_pasturas no existe todavía — aplicá migration 0009');
       return [];
     }
-    throw new Error(`fetchNdvi: ${error.message}`);
+    throw new Error(`fetchNdvi: ${err?.message ?? err}`);
   }
-  return (data ?? []).map(rowToNdvi);
 }

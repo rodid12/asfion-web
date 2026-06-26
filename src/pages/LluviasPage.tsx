@@ -7,6 +7,8 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -129,6 +131,51 @@ export function LluviasPage({ lluvias, campos }: Props) {
       });
   }, [lecturasPrincipales]);
 
+  // ---------- Serie por día (sobre lecturas principales) ----------
+  // Para que Agus vea la distribución diaria — picos de tormenta vs llovizna
+  // sostenida. A diferencia de "Evolución mensual" (totales agregados), acá
+  // cada barra/punto es UN día. Si dos pluviómetros principales registraron
+  // el mismo día (raro), sumamos. Los días sin lluvia se incluyen con mm=0
+  // para que la curva no "salte" visualmente y se vea el ritmo real.
+  const porDia = useMemo(() => {
+    const mmPorDia = new Map<string, number>();
+    lecturasPrincipales.forEach(l => {
+      if (!l.fecha) return;
+      mmPorDia.set(l.fecha, (mmPorDia.get(l.fecha) ?? 0) + (l.milimetros || 0));
+    });
+    if (mmPorDia.size === 0) return [];
+    // Rellenar días sin lluvia para mostrar la distribución temporal real.
+    // Solo si el rango es <= 180 días, para no inflar la serie de gráfico.
+    const fechas = [...mmPorDia.keys()].sort();
+    const desde = new Date(fechas[0] + 'T00:00:00');
+    const hasta = new Date(fechas[fechas.length - 1] + 'T00:00:00');
+    const dias = Math.round((hasta.getTime() - desde.getTime()) / 86400000) + 1;
+    const out: Array<{ fecha: string; mm: number; label: string }> = [];
+    if (dias <= 365) {
+      for (let i = 0; i < dias; i++) {
+        const d = new Date(desde.getTime() + i * 86400000);
+        const key = d.toISOString().slice(0, 10);
+        out.push({
+          fecha: key,
+          mm: Math.round((mmPorDia.get(key) ?? 0) * 10) / 10,
+          // Label corto "DD/MM" para el eje X — la fecha completa va en el tooltip.
+          label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+        });
+      }
+    } else {
+      // Rango muy largo (>1 año) — mostramos solo los días con lluvia.
+      for (const f of fechas) {
+        const d = new Date(f + 'T00:00:00');
+        out.push({
+          fecha: f,
+          mm: Math.round((mmPorDia.get(f) ?? 0) * 10) / 10,
+          label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+        });
+      }
+    }
+    return out;
+  }, [lecturasPrincipales]);
+
   // ---------- Ranking por campo (sobre lecturas principales) ----------
   const porCampo = useMemo(() => {
     const mmPorCampo = new Map<string, number>();
@@ -226,6 +273,50 @@ export function LluviasPage({ lluvias, campos }: Props) {
           </ResponsiveContainer>
         </Card>
       </div>
+
+      {/* Distribución diaria — curva mm vs día.
+          Da granularidad fina: picos de tormenta, lluvias sostenidas,
+          rachas secas. El bar chart mensual oculta este detalle. */}
+      <Card
+        title="Distribución diaria"
+        subtitle={
+          porDia.length === 0
+            ? 'Sin lecturas en el período'
+            : porDia.length > 90
+              ? `${porDia.length} días — escaneá para ver la curva completa`
+              : `${porDia.length} días — cada barra es un día`
+        }
+      >
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={porDia} margin={{ top: 16, right: 16, left: -8, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" vertical={false} />
+            <XAxis
+              dataKey="label"
+              stroke="#6B7280"
+              fontSize={10}
+              // En rangos largos, mostrar 1 de cada N labels para que no se solapen
+              interval={porDia.length > 60 ? Math.floor(porDia.length / 12) : 'preserveStartEnd'}
+            />
+            <YAxis stroke="#6B7280" fontSize={12} unit=" mm" />
+            <Tooltip
+              formatter={(v: number) => [`${v} mm`, 'Lluvia']}
+              labelFormatter={(_, p) => {
+                const item = p?.[0]?.payload as { fecha?: string } | undefined;
+                return item?.fecha ?? '';
+              }}
+            />
+            <Area
+              type="monotone"
+              dataKey="mm"
+              stroke="#163349"
+              fill="#163349"
+              fillOpacity={0.35}
+              strokeWidth={2}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Card>
+
     </div>
   );
 }

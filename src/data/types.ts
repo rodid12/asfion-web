@@ -87,6 +87,13 @@ export interface Mortandad {
   caravanaColor?: CaravanaColor;
   caravanaNumero?: string;
   observaciones?: string;
+  // GPS — capturado por el form de la app móvil al registrar la muerte.
+  // Útil para mapear dónde están ocurriendo eventos (zonas de pozos,
+  // monte cerrado, agua estancada, etc). Opcional porque a veces el
+  // operario carga sin señal.
+  gpsLat?: number;
+  gpsLon?: number;
+  gpsAccuracyM?: number;
   createdAt: string;
 }
 

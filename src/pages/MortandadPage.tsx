@@ -5,6 +5,8 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -20,6 +22,7 @@ import {
 import { AlertTriangleIcon, MapPinIcon, SkullIcon, TagIcon } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Kpi } from '@/components/Kpi';
+import { MortandadMap } from '@/components/MortandadMap';
 import {
   SimpleFilterBar,
   SIMPLE_FILTROS_DEFAULT,
@@ -38,6 +41,44 @@ interface Props {
   campos: Campo[];
 }
 
+// Normaliza la causa de muerte para agrupar variantes que los operarios
+// cargan a mano (abreviaciones, typos, mayúsculas/minúsculas). Sin esto
+// el donut se infla con 30+ causas, muchas con 1-2 casos cada una, y
+// pierde valor analítico.
+//
+// Reglas (todas case-insensitive):
+//   "Neumo"           → "Neumonía"
+//   "Tristeza/Anaplas" → "Tristeza"
+//   "Desconose", "Desconocida", null, "" → "Sin identificar"
+//   "Parto distocico" → "Distocia"
+//   "Problema de parto" → "Distocia"
+//
+// Las causas concretas y bien escritas pasan tal cual.
+// Exportada porque el componente MortandadMap también la usa para
+// colorear los pins por causa de manera consistente con el donut.
+export function normalizarCausa(causa: string | null | undefined): string {
+  if (!causa) return 'Sin identificar';
+  const c = causa.trim();
+  if (!c) return 'Sin identificar';
+  const lower = c.toLowerCase();
+  // Variantes de "sin info" → mismo bucket
+  if (['sin identificar', 'sin especificar', 'desconose', 'desconocida', 'no se sabe', 'no identificada'].includes(lower)) {
+    return 'Sin identificar';
+  }
+  // Neumonía / Neumo
+  if (lower === 'neumo' || lower === 'neumonia' || lower === 'neumonía') return 'Neumonía';
+  // Tristeza (incluye variantes con Anaplas)
+  if (lower.startsWith('tristeza')) return 'Tristeza';
+  // Distocia (problemas de parto)
+  if (lower.includes('distocia') || lower.includes('distócico') || lower.includes('parto distoc') || lower === 'problema de parto') {
+    return 'Distocia';
+  }
+  // Respiratorio (Problema respiratorio + variantes)
+  if (lower.includes('respiratorio')) return 'Problema respiratorio';
+  // Normalizar capitalización para el resto: primera letra mayúscula
+  return c.charAt(0).toUpperCase() + c.slice(1).toLowerCase();
+}
+
 export function MortandadPage({ mortandad, campos }: Props) {
   const [filtros, setFiltros] = useState<SimpleFiltros>(SIMPLE_FILTROS_DEFAULT);
 
@@ -51,12 +92,13 @@ export function MortandadPage({ mortandad, campos }: Props) {
   }, [mortandad, filtros]);
 
   // ---------- KPIs + chart data ----------
-  const { porCampo, porCategoria, porActividad, porCausa, porMes, topCampo, topCategoria, topCausa, totalMuertesDistinct } = useMemo(() => {
+  const { porCampo, porCategoria, porActividad, porCausa, porMes, porDia, topCampo, topCategoria, topCausa, totalMuertesDistinct } = useMemo(() => {
     const byCampo = new Map<string, number>();
     const byCat = new Map<string, number>();
     const byAct = new Map<string, number>();
     const byCausa = new Map<string, number>();
     const byMes = new Map<string, number>();
+    const byDia = new Map<string, number>();
     // DISTINCTCOUNT(N° Caravana) — replica la fórmula DAX del Power BI.
     // Cada caravana distinta es 1 muerte, sin importar cuántas rows tenga
     // (a veces hay rows duplicadas por re-registro del síntoma vs causa).
@@ -70,10 +112,20 @@ export function MortandadPage({ mortandad, campos }: Props) {
       // actividad es texto libre del catálogo (Cria, Destete Precoz, Recria P, etc.).
       const act = m.actividad?.trim() || 'Sin actividad';
       byAct.set(act, (byAct.get(act) ?? 0) + 1);
-      const causa = m.causaTipo ?? 'Sin especificar';
+      // Normalizamos la causa para agrupar abreviaciones y typos comunes:
+      // los operarios cargan a mano y aparecen "Neumo" / "Neumonía" como dos
+      // causas distintas. También consolidamos las variantes de "sin info"
+      // bajo un único bucket "Sin identificar" — así el donut destaca las
+      // causas reales en vez de inflarse de ruido.
+      const causa = normalizarCausa(m.causaTipo);
       byCausa.set(causa, (byCausa.get(causa) ?? 0) + 1);
       const mes = m.fecha.slice(0, 7);
       byMes.set(mes, (byMes.get(mes) ?? 0) + 1);
+      // Time series por día — para que Agus vea qué día murió cada animal
+      // (picos de eventos = chequear qué pasó). El bar chart mensual oculta
+      // este detalle.
+      const dia = m.fecha.slice(0, 10);
+      byDia.set(dia, (byDia.get(dia) ?? 0) + 1);
       // Caravana única para el conteo total. Sin caravana → trackeamos por id.
       const key = m.caravanaNumero?.trim() || `__noid__:${m.id}`;
       caravanasUnicas.add(key);
@@ -103,8 +155,40 @@ export function MortandadPage({ mortandad, campos }: Props) {
         return { mes: `${MESES[idx]} ${(y ?? '').slice(2)}`, n };
       });
 
+    // Serie diaria — rellenamos los días sin muertes con n=0 para que la
+    // curva refleje la distribución temporal real (rachas de mortandad vs
+    // períodos calmos). Si el rango es muy largo (>1 año) mostramos solo
+    // los días con eventos para no inflar la serie.
+    const porDia: Array<{ fecha: string; label: string; n: number }> = [];
+    const diasConDato = [...byDia.keys()].sort();
+    if (diasConDato.length > 0) {
+      const desde = new Date(diasConDato[0] + 'T00:00:00');
+      const hasta = new Date(diasConDato[diasConDato.length - 1] + 'T00:00:00');
+      const dias = Math.round((hasta.getTime() - desde.getTime()) / 86400000) + 1;
+      if (dias <= 365) {
+        for (let i = 0; i < dias; i++) {
+          const d = new Date(desde.getTime() + i * 86400000);
+          const key = d.toISOString().slice(0, 10);
+          porDia.push({
+            fecha: key,
+            label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+            n: byDia.get(key) ?? 0,
+          });
+        }
+      } else {
+        for (const key of diasConDato) {
+          const d = new Date(key + 'T00:00:00');
+          porDia.push({
+            fecha: key,
+            label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+            n: byDia.get(key) ?? 0,
+          });
+        }
+      }
+    }
+
     return {
-      porCampo, porCategoria, porActividad, porCausa, porMes,
+      porCampo, porCategoria, porActividad, porCausa, porMes, porDia,
       topCampo: porCampo[0] ?? null,
       topCategoria: porCategoria[0] ?? null,
       topCausa: porCausa[0] ?? null,
@@ -191,6 +275,60 @@ export function MortandadPage({ mortandad, campos }: Props) {
           <CausaMuerteDonut data={porCausa} />
         </Card>
       </div>
+
+      {/* Distribución diaria — Agus pidió ver el día exacto de cada muerte
+          para investigar qué pasó ese día (manejo, sanidad, clima). El bar
+          chart mensual oculta este detalle. La curva rellena con n=0 los
+          días sin muertes para que se note el ritmo real (rachas vs calma). */}
+      <Card
+        title="Distribución diaria de muertes"
+        subtitle={
+          porDia.length === 0
+            ? 'Sin muertes en el período'
+            : `${porDia.length} días en el rango — cada barra es un día`
+        }
+      >
+        <ResponsiveContainer width="100%" height={280}>
+          <AreaChart data={porDia} margin={{ top: 16, right: 16, left: -8, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" vertical={false} />
+            <XAxis
+              dataKey="label"
+              stroke="#6B7280"
+              fontSize={10}
+              interval={porDia.length > 60 ? Math.floor(porDia.length / 12) : 'preserveStartEnd'}
+            />
+            <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
+            <Tooltip
+              formatter={(v: number) => [`${v} muertes`, 'Día']}
+              labelFormatter={(_, p) => {
+                const item = p?.[0]?.payload as { fecha?: string } | undefined;
+                return item?.fecha ?? '';
+              }}
+            />
+            <Area
+              type="monotone"
+              dataKey="n"
+              stroke="#C9423F"
+              fill="#C9423F"
+              fillOpacity={0.35}
+              strokeWidth={2}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Card>
+
+      {/* Mapa con GPS de cada muerte — pedido específico de Agus para ver
+          dónde ocurrieron los eventos y detectar patrones espaciales (zonas
+          de pozos, monte denso, agua estancada, picaduras). El componente
+          maneja internamente los 3 estados: sin data, sin GPS, con data.
+          Color por causa = consistente con el donut "Causa de muerte". */}
+      <Card title="Mapa de muertes" subtitle="Ubicación GPS capturada al cargar el evento — color por causa">
+        <MortandadMap
+          mortandad={filtradas}
+          campoNombre={(id) => campos.find(c => c.id === id)?.nombre ?? id}
+          normalizarCausa={normalizarCausa}
+        />
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card title="Por categoría" subtitle="Animales más afectados" className="lg:col-span-2">

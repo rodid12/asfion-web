@@ -25,22 +25,26 @@ export function Kpi({ label, value, delta, accent = 'navy', sublabel, icon }: Pr
     accent === 'danger'    ? 'text-asfion-danger' :
                              'text-asfion-navy';
 
-  // Tamaño de fuente del value según largo del string. Para evitar que
-  // números grandes ($2.014.760.100, 14+ chars) sobresalgan del card,
-  // bajamos el tamaño en proporción. La regla es empírica — probado contra
-  // los KPIs más grandes que generan los módulos del piloto.
+  // Tamaño de fuente del value según largo del string. Importante:
+  //   1. NUNCA partimos el número en líneas (whitespace-nowrap) — un
+  //      "$2.014.760.100" cortado en "$2.014.760.1" / "00" es ilegible.
+  //   2. Reducimos el font-size en escalones más agresivos para que el
+  //      número largo entre en 1 sola línea aunque el card sea angosto.
+  //   3. Si después de la reducción al mínimo (text-base) todavía no
+  //      entra, overflow-hidden recorta y el title tooltip muestra el
+  //      valor completo en hover.
   //
-  //   <  9 chars  →  4xl (default, "$235M" o "1.234")
-  //   9-12 chars  →  3xl ("12.345.678" o "$15.234.567")
-  //   13-15 chars →  2xl ("$2.014.760.100")
-  //   16+         →  xl  (caso patológico, no debería pasar)
+  //   <  8 chars   →  4xl (default, "$235M" o "1.234")
+  //   8-10 chars   →  2xl ("12.345.678", "1.769 cab")
+  //   11-13 chars  →  xl  ("$15.234.567")
+  //   14+ chars    →  base ("$2.014.760.100")
   const valueStr = String(value);
   const len = valueStr.length;
   const valueSize =
-    len <= 8  ? 'text-2xl sm:text-3xl lg:text-4xl' :
-    len <= 12 ? 'text-xl sm:text-2xl lg:text-3xl' :
-    len <= 15 ? 'text-lg sm:text-xl lg:text-2xl'  :
-                'text-base sm:text-lg lg:text-xl';
+    len <= 7   ? 'text-2xl sm:text-3xl lg:text-4xl' :
+    len <= 10  ? 'text-xl sm:text-2xl lg:text-3xl' :
+    len <= 13  ? 'text-lg sm:text-xl lg:text-2xl'  :
+                 'text-base sm:text-lg lg:text-xl';
 
   return (
     <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 sm:p-5 flex flex-col gap-2 min-w-0 overflow-hidden">
@@ -48,12 +52,14 @@ export function Kpi({ label, value, delta, accent = 'navy', sublabel, icon }: Pr
         <p className="text-[10px] sm:text-xs uppercase tracking-wider font-semibold text-asfion-muted truncate">{label}</p>
         {icon && <span className={cn('p-1.5 sm:p-2 rounded-lg flex-shrink-0', accentBg, accentFg)}>{icon}</span>}
       </div>
-      {/* break-words para fallback en navegadores muy viejos; min-w-0 sobre
-          el contenedor padre + overflow-hidden acá garantizan que el texto
-          no se escape del card aunque el font-size sea aún muy grande. */}
+      {/* whitespace-nowrap: el número va en una sola línea siempre.
+          overflow-hidden + text-ellipsis en el card padre garantizan que
+          si no entra ni siquiera al tamaño más chico, se trunque con
+          "..." en lugar de escaparse. title tooltip muestra el valor
+          completo en hover. */}
       <p
-        className={cn(valueSize, 'font-extrabold tabular-nums break-words leading-tight', accentFg)}
-        title={valueStr.length > 12 ? valueStr : undefined}
+        className={cn(valueSize, 'font-extrabold tabular-nums whitespace-nowrap overflow-hidden text-ellipsis leading-tight', accentFg)}
+        title={valueStr.length > 10 ? valueStr : undefined}
       >
         {value}
       </p>

@@ -167,3 +167,147 @@ export async function adminDeleteCampo(id: string): Promise<void> {
     throw new Error(`adminDeleteCampo: ${error.message}`);
   }
 }
+
+// =============================================================================
+// Usuarios
+// =============================================================================
+
+export type RolUsuario = 'administrador' | 'moderador' | 'operario';
+
+export interface UsuarioAdminRow {
+  email: string;
+  cliente_id: string;
+  nombre: string | null;
+  apellido: string | null;
+  rol: RolUsuario;
+  campo_asignado_id: string | null;
+  created_at: string;
+}
+
+/** Lista los usuarios de un cliente (super-admin only). */
+export async function adminListUsuarios(clienteId: string): Promise<UsuarioAdminRow[]> {
+  const { data, error } = await supabase
+    .from('usuarios')
+    .select('email, cliente_id, nombre, apellido, rol, campo_asignado_id, created_at')
+    .eq('cliente_id', clienteId)
+    .order('email');
+  if (error) throw new Error(`adminListUsuarios: ${error.message}`);
+  return (data ?? []) as UsuarioAdminRow[];
+}
+
+export interface InviteUsuarioInput {
+  email: string;
+  clienteId: string;
+  rol: RolUsuario;
+  nombre?: string;
+  apellido?: string;
+  /** Campo principal que se preselecciona en los forms de la app móvil.
+   *  Si es null, el operario tiene que elegir manualmente cada vez. */
+  campoAsignadoId?: string | null;
+  /** URL a la que el magic link redirige tras clickear (debería ser el
+   *  dominio del dashboard o de la app web, no de Vercel preview). */
+  redirectTo?: string;
+}
+
+/**
+ * Invita un usuario nuevo:
+ *   1. Manda magic link a su email (signInWithOtp con shouldCreateUser).
+ *      Esto crea el user en `auth.users` si no existe.
+ *   2. Inserta el row en `usuarios` con cliente_id, rol y campo asignado.
+ *
+ * Importante: signInWithOtp NO cambia la sesión actual del super-admin.
+ * El nuevo user solo entra cuando clickea el link en su email.
+ *
+ * Si el email YA existe en `usuarios` (mismo cliente o distinto), el
+ * INSERT falla con duplicate key — manejamos el error para mostrar
+ * mensaje claro.
+ */
+export async function adminInviteUsuario(input: InviteUsuarioInput): Promise<void> {
+  // Validación básica de email
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) {
+    throw new Error('Email inválido');
+  }
+  const emailNorm = input.email.trim().toLowerCase();
+
+  // PASO 1: insertar en tabla `usuarios` PRIMERO. Si esto falla (email
+  // duplicado, cliente_id inválido), no mandamos el magic link.
+  const { error: insertError } = await supabase.from('usuarios').insert({
+    email: emailNorm,
+    cliente_id: input.clienteId,
+    nombre: input.nombre?.trim() || null,
+    apellido: input.apellido?.trim() || null,
+    rol: input.rol,
+    campo_asignado_id: input.campoAsignadoId ?? null,
+  });
+  if (insertError) {
+    if (insertError.code === '23505') {
+      throw new Error(`El email ${emailNorm} ya está registrado en otro cliente o este mismo.`);
+    }
+    throw new Error(`adminInviteUsuario: ${insertError.message}`);
+  }
+
+  // PASO 2: mandar magic link. Si esto falla (email no enviable, SMTP
+  // no configurado), el row en `usuarios` queda — el super-admin puede
+  // mandar la invitación manualmente desde Supabase Console o re-intentar.
+  const { error: otpError } = await supabase.auth.signInWithOtp({
+    email: emailNorm,
+    options: {
+      shouldCreateUser: true,
+      emailRedirectTo: input.redirectTo ?? window.location.origin,
+    },
+  });
+  if (otpError) {
+    // No tiramos error grande — el row se creó OK. Solo loguear.
+    console.warn('[adminInviteUsuario] magic link no se envió:', otpError.message);
+    throw new Error(
+      `Usuario creado en la tabla, pero el link de invitación no se envió: ${otpError.message}. ` +
+      `Verificá la config de SMTP de Supabase o mandá la invitación desde Authentication → Users.`,
+    );
+  }
+}
+
+export interface UpdateUsuarioInput {
+  nombre?: string | null;
+  apellido?: string | null;
+  rol?: RolUsuario;
+  campoAsignadoId?: string | null;
+}
+
+export async function adminUpdateUsuario(email: string, input: UpdateUsuarioInput): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const patch: any = {};
+  if (input.nombre !== undefined)          patch.nombre = input.nombre?.trim() || null;
+  if (input.apellido !== undefined)        patch.apellido = input.apellido?.trim() || null;
+  if (input.rol !== undefined)             patch.rol = input.rol;
+  if (input.campoAsignadoId !== undefined) patch.campo_asignado_id = input.campoAsignadoId;
+  if (Object.keys(patch).length === 0) return;
+  const { error } = await supabase.from('usuarios').update(patch).eq('email', email);
+  if (error) throw new Error(`adminUpdateUsuario: ${error.message}`);
+}
+
+/**
+ * Borra un usuario de la tabla `usuarios`. NOTA: NO borra el row de
+ * `auth.users` (eso requiere service_role y no se puede hacer desde el
+ * frontend). El user queda en auth pero sin cliente_id asociado — al
+ * loguearse no va a poder entrar a ningún dashboard. Si querés hard
+ * delete, hay que borrarlo desde Supabase Console.
+ */
+export async function adminDeleteUsuario(email: string): Promise<void> {
+  const { error } = await supabase.from('usuarios').delete().eq('email', email);
+  if (error) throw new Error(`adminDeleteUsuario: ${error.message}`);
+}
+
+/**
+ * Re-envía el magic link a un usuario existente (útil si el primer link
+ * caducó o se perdió en spam).
+ */
+export async function adminReenviarMagicLink(email: string, redirectTo?: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithOtp({
+    email: email.trim().toLowerCase(),
+    options: {
+      shouldCreateUser: false, // ya existe, solo mandar el link
+      emailRedirectTo: redirectTo ?? window.location.origin,
+    },
+  });
+  if (error) throw new Error(`adminReenviarMagicLink: ${error.message}`);
+}

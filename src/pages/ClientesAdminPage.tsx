@@ -20,8 +20,14 @@ import {
   adminListCampos,
   adminCreateCampo,
   adminDeleteCampo,
+  adminListUsuarios,
+  adminInviteUsuario,
+  adminDeleteUsuario,
+  adminReenviarMagicLink,
   type ClienteAdminRow,
   type CampoAdminRow,
+  type UsuarioAdminRow,
+  type RolUsuario,
 } from '@/data/admin';
 
 // =============================================================================
@@ -459,16 +465,8 @@ function ClienteDetalle({ cliente, onVolver }: { cliente: ClienteAdminRow; onVol
         )}
       </Card>
 
-      {/* Usuarios — placeholder para la próxima iteración */}
-      <Card title="Usuarios" subtitle="Próximamente — invitar usuarios con magic link">
-        <div className="py-6 text-center text-sm text-asfion-muted">
-          <p>La gestión de usuarios (incluyendo magic link para que el cliente se setee la contraseña) viene en la próxima iteración.</p>
-          <p className="mt-2 text-xs">
-            Por ahora, después de crear el cliente, andá a <span className="font-mono">Supabase Console → Authentication → Users → Invite user</span>,
-            y agregá un row a la tabla <span className="font-mono">usuarios</span> con su email + cliente_id.
-          </p>
-        </div>
-      </Card>
+      {/* Usuarios — invite vía magic link */}
+      <UsuariosSection clienteId={cliente.id} campos={campos} />
 
       {modalCampo && (
         <CreateCampoModal
@@ -477,6 +475,309 @@ function ClienteDetalle({ cliente, onVolver }: { cliente: ClienteAdminRow; onVol
           onCreated={() => { setModalCampo(false); void reloadCampos(); }}
         />
       )}
+    </div>
+  );
+}
+
+// =============================================================================
+// Sección Usuarios — lista + invite + delete
+// =============================================================================
+
+function UsuariosSection({ clienteId, campos }: { clienteId: string; campos: CampoAdminRow[] }) {
+  const [usuarios, setUsuarios] = useState<UsuarioAdminRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [busyEmail, setBusyEmail] = useState<string | null>(null);
+
+  const reload = async () => {
+    try {
+      setLoading(true);
+      const rows = await adminListUsuarios(clienteId);
+      setUsuarios(rows);
+    } catch (e) {
+      console.error('adminListUsuarios', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void reload(); }, [clienteId]);
+
+  const onDelete = async (email: string) => {
+    if (!confirm(
+      `¿Quitar acceso a "${email}"?\n\n` +
+      `El usuario queda en auth pero sin cliente — no podrá entrar al dashboard.\n` +
+      `Hard-delete del auth.user requiere Supabase Console.`,
+    )) return;
+    try {
+      setBusyEmail(email);
+      await adminDeleteUsuario(email);
+      await reload();
+    } catch (e: any) {
+      alert(e?.message ?? 'Error al borrar usuario');
+    } finally {
+      setBusyEmail(null);
+    }
+  };
+
+  const onReenviar = async (email: string) => {
+    try {
+      setBusyEmail(email);
+      await adminReenviarMagicLink(email);
+      alert(`Magic link reenviado a ${email}. Revisá su casilla (puede caer en spam).`);
+    } catch (e: any) {
+      alert(e?.message ?? 'Error al reenviar el link');
+    } finally {
+      setBusyEmail(null);
+    }
+  };
+
+  const campoNombre = (id?: string | null) =>
+    id ? (campos.find(c => c.id === id)?.nombre ?? id) : '—';
+
+  return (
+    <Card
+      title="Usuarios"
+      subtitle={`${usuarios.length} usuarios con acceso a este cliente`}
+      actions={
+        <button
+          onClick={() => setModal(true)}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-asfion-orange text-white hover:opacity-90"
+        >
+          <PlusIcon size={12} /> Invitar usuario
+        </button>
+      }
+    >
+      {loading ? (
+        <p className="text-sm text-asfion-muted py-6 text-center italic">Cargando…</p>
+      ) : usuarios.length === 0 ? (
+        <p className="text-sm text-asfion-muted py-6 text-center italic">
+          Sin usuarios. Invitá al primero — recibe magic link por email para entrar.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase text-asfion-muted border-b border-asfion-borderSoft">
+                <th className="py-2 px-2 font-semibold">Email</th>
+                <th className="py-2 px-2 font-semibold">Nombre</th>
+                <th className="py-2 px-2 font-semibold">Rol</th>
+                <th className="py-2 px-2 font-semibold">Campo asignado</th>
+                <th className="py-2 px-2 font-semibold text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {usuarios.map(u => {
+                const nombreCompleto = [u.nombre, u.apellido].filter(Boolean).join(' ') || '—';
+                return (
+                  <tr key={u.email} className="border-b border-asfion-borderSoft/50">
+                    <td className="py-2 px-2 font-mono text-xs text-asfion-navyDeep">{u.email}</td>
+                    <td className="py-2 px-2 text-asfion-navy">{nombreCompleto}</td>
+                    <td className="py-2 px-2">
+                      <span className={
+                        'inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ' +
+                        (u.rol === 'administrador'
+                          ? 'bg-asfion-orange/20 text-asfion-navyDeep'
+                          : u.rol === 'moderador'
+                            ? 'bg-asfion-orangeSoft/40 text-asfion-navyDeep'
+                            : 'bg-asfion-borderSoft text-asfion-muted')
+                      }>
+                        {u.rol}
+                      </span>
+                    </td>
+                    <td className="py-2 px-2 text-asfion-muted">{campoNombre(u.campo_asignado_id)}</td>
+                    <td className="py-2 px-2 text-right">
+                      <button
+                        onClick={() => onReenviar(u.email)}
+                        disabled={busyEmail === u.email}
+                        className="text-xs text-asfion-orange hover:underline mr-3 disabled:opacity-40"
+                      >
+                        Reenviar link
+                      </button>
+                      <button
+                        onClick={() => onDelete(u.email)}
+                        disabled={busyEmail === u.email}
+                        className="text-xs text-asfion-danger hover:underline disabled:opacity-40"
+                      >
+                        Quitar
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modal && (
+        <InviteUsuarioModal
+          clienteId={clienteId}
+          campos={campos}
+          onClose={() => setModal(false)}
+          onCreated={() => { setModal(false); void reload(); }}
+        />
+      )}
+    </Card>
+  );
+}
+
+// =============================================================================
+// Modal: invitar usuario
+// =============================================================================
+
+function InviteUsuarioModal({
+  clienteId, campos, onClose, onCreated,
+}: {
+  clienteId: string;
+  campos: CampoAdminRow[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [apellido, setApellido] = useState('');
+  const [rol, setRol] = useState<RolUsuario>('operario');
+  const [campoAsignadoId, setCampoAsignadoId] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await adminInviteUsuario({
+        email,
+        clienteId,
+        rol,
+        nombre: nombre.trim() || undefined,
+        apellido: apellido.trim() || undefined,
+        campoAsignadoId: campoAsignadoId || null,
+      });
+      onCreated();
+    } catch (e: any) {
+      setError(e?.message ?? 'Error al invitar');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-asfion-navyDeep/60 flex items-center justify-center px-4 py-6 overflow-y-auto">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl my-auto max-h-full overflow-y-auto">
+        <div className="px-6 py-4 border-b border-asfion-borderSoft sticky top-0 bg-white z-10 flex items-center justify-between">
+          <h3 className="text-lg font-extrabold text-asfion-navyDeep">Invitar usuario</h3>
+          <button onClick={onClose} className="p-1 text-asfion-muted hover:text-asfion-navyDeep">
+            <XIcon size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <Field label="Email">
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="operario@ejemplo.com"
+              className={INPUT_CLS}
+              required
+              autoFocus
+            />
+            <p className="text-[11px] text-asfion-muted mt-1">
+              Recibe un link mágico por email para entrar — sin necesidad de password.
+            </p>
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Nombre">
+              <input
+                type="text"
+                value={nombre}
+                onChange={e => setNombre(e.target.value)}
+                placeholder="Juan"
+                className={INPUT_CLS}
+              />
+            </Field>
+            <Field label="Apellido">
+              <input
+                type="text"
+                value={apellido}
+                onChange={e => setApellido(e.target.value)}
+                placeholder="Pérez"
+                className={INPUT_CLS}
+              />
+            </Field>
+          </div>
+
+          <Field label="Rol">
+            <div className="grid grid-cols-3 gap-2">
+              {(['administrador', 'moderador', 'operario'] as const).map(r => (
+                <label
+                  key={r}
+                  className={
+                    'flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg border cursor-pointer transition text-xs font-semibold capitalize ' +
+                    (rol === r
+                      ? 'border-asfion-orange bg-asfion-orangeSoft/30 text-asfion-navyDeep'
+                      : 'border-asfion-borderSoft text-asfion-muted hover:bg-asfion-bg/60')
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="rol"
+                    checked={rol === r}
+                    onChange={() => setRol(r)}
+                    className="sr-only"
+                  />
+                  {r}
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-asfion-muted mt-1">
+              <strong>Operario</strong>: solo carga eventos. <strong>Moderador</strong>: ve todos los campos.
+              <strong> Administrador</strong>: edita todo.
+            </p>
+          </Field>
+
+          <Field label="Campo asignado (opcional)">
+            <select
+              value={campoAsignadoId}
+              onChange={e => setCampoAsignadoId(e.target.value)}
+              className={INPUT_CLS}
+            >
+              <option value="">— Ningún campo por default —</option>
+              {campos.map(c => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-asfion-muted mt-1">
+              Se preselecciona este campo cuando el operario carga eventos en la app.
+            </p>
+          </Field>
+
+          {error && (
+            <p className="text-sm text-asfion-danger flex items-center gap-2">
+              <AlertTriangleIcon size={14} /> {error}
+            </p>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-3 py-2 rounded-lg border border-asfion-borderSoft text-sm font-semibold text-asfion-muted"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !email}
+              className="flex-1 px-3 py-2 rounded-lg bg-asfion-orange text-white text-sm font-bold hover:opacity-90 disabled:opacity-50"
+            >
+              {submitting ? 'Enviando…' : 'Enviar invitación'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

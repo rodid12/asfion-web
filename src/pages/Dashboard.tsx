@@ -2,12 +2,13 @@
 // por módulo + contenido. La página activa se decide por el state local
 // `modulo`. No hay router — el dashboard es single-page por diseño.
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LogOutIcon, RefreshCwIcon, ShieldIcon } from 'lucide-react';
 import { useDashboardData, EMPTY_DATA } from '@/data/useData';
 import { useAuth } from '@/lib/auth';
 import { isSuperAdmin } from '@/lib/billing';
 import { ModuleTabs, type ModuleKey } from '@/components/ModuleTabs';
+import { parseCurrentPath, pushPath } from '@/lib/routing';
 import { ParicionesPage } from './ParicionesPage';
 import { LluviasPage } from './LluviasPage';
 import { MortandadPage } from './MortandadPage';
@@ -38,12 +39,32 @@ type View = 'modules' | 'billing';
 export function Dashboard() {
   const { user, signOut } = useAuth();
   const { data, loading, error, refresh, offline, cachedAt } = useDashboardData();
-  const [modulo, setModulo] = useState<ModuleKey>('pariciones');
-  // 'modules' = vista operativa normal (tabs + pages). 'billing' = panel de
-  // cobranzas, solo accesible para super-admin. Lo guardamos en state local
-  // (single-page, sin router) — al cerrar el browser se reinicia a 'modules'.
-  const [view, setView] = useState<View>('modules');
+  // Inicializamos el state leyendo la URL actual — así si el operario
+  // entra directo a /mortandad o refresca la pestaña, arranca en el
+  // módulo que estaba. Default: pariciones (también para "/").
+  const initial = parseCurrentPath();
+  const [modulo, setModulo] = useState<ModuleKey>(initial.modulo);
+  const [view, setView] = useState<View>(initial.view);
   const showAdmin = isSuperAdmin(user?.email);
+
+  // Sincroniza URL → state cuando el usuario usa back/forward del browser.
+  // Sin esto, click en "atrás" cambiaría la URL pero el state quedaría
+  // pegado en el módulo anterior.
+  useEffect(() => {
+    const onPopState = () => {
+      const r = parseCurrentPath();
+      setView(r.view);
+      setModulo(r.modulo);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  // Sincroniza state → URL cuando el usuario hace click en una tab.
+  // pushPath dedupea automáticamente si la URL ya está alineada.
+  useEffect(() => {
+    pushPath(view, modulo);
+  }, [view, modulo]);
 
   const d = data ?? EMPTY_DATA;
   const initials = (user?.email ?? '?').charAt(0).toUpperCase();

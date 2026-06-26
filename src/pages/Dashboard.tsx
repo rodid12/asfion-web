@@ -37,7 +37,7 @@ type View = 'modules' | 'billing';
 
 export function Dashboard() {
   const { user, signOut } = useAuth();
-  const { data, loading, error, refresh } = useDashboardData();
+  const { data, loading, error, refresh, offline, cachedAt } = useDashboardData();
   const [modulo, setModulo] = useState<ModuleKey>('pariciones');
   // 'modules' = vista operativa normal (tabs + pages). 'billing' = panel de
   // cobranzas, solo accesible para super-admin. Lo guardamos en state local
@@ -145,6 +145,27 @@ export function Dashboard() {
           </div>
         )}
 
+        {/* Banner "Sin conexión" — visible cuando estamos mostrando data
+            del cache offline. Cuando vuelve la red, refresh() la actualiza
+            y este banner desaparece. */}
+        {offline && cachedAt && (
+          <div className="rounded-xl border border-asfion-orange/40 bg-asfion-orangeSoft/40 px-4 py-3 text-sm text-asfion-navyDeep flex flex-wrap items-center gap-3">
+            <span className="text-base">📡</span>
+            <div className="flex-1 min-w-0">
+              <strong>Sin conexión</strong> — mostrando datos del{' '}
+              <span className="tabular-nums font-semibold">{formatCachedAt(cachedAt)}</span>.
+              <span className="text-asfion-muted hidden sm:inline"> Cuando vuelva la señal, refrescá para ver lo último.</span>
+            </div>
+            <button
+              onClick={refresh}
+              disabled={loading}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-asfion-orange text-white hover:opacity-90 transition disabled:opacity-50"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
         {/* Skeleton mientras carga la primera vez (solo en vista operativa) */}
         {view === 'modules' && loading && !data && <LoadingSkeleton />}
 
@@ -197,6 +218,25 @@ export function Dashboard() {
       </main>
     </div>
   );
+}
+
+// Formato amigable para el badge "Sin conexión — datos del DD/MM HH:MM".
+// Si fue hace menos de 1 hora, "hace X min" para sentir más cerca.
+function formatCachedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const now = new Date();
+  const diffMin = Math.round((now.getTime() - d.getTime()) / 60_000);
+  if (diffMin < 1) return 'recién';
+  if (diffMin < 60) return `hace ${diffMin} min`;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dd = pad(d.getDate());
+  const mm = pad(d.getMonth() + 1);
+  const hh = pad(d.getHours());
+  const mn = pad(d.getMinutes());
+  // Si fue HOY, solo la hora. Si fue otro día, DD/MM HH:MM.
+  const esHoy = d.toDateString() === now.toDateString();
+  return esHoy ? `hoy ${hh}:${mn}` : `${dd}/${mm} ${hh}:${mn}`;
 }
 
 function LoadingSkeleton() {

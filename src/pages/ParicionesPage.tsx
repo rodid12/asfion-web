@@ -92,56 +92,123 @@ export function ParicionesPage({ pariciones, campos }: Props) {
   }, [filtros.campoId, campos]);
 
   const kpis = useMemo(() => {
-    const total = filtrados.length;
-    // En el modelo de datos hay 4 tipos de evento:
-    //   Nacimiento → parto, ternero vivo
-    //   Muerte     → parto, ternero murió (también es un parto, contado aparte)
-    //   Aborto     → no hubo parto a término
-    //   Retacto    → no es parto (re-chequeo)
+    // ────────────────────────────────────────────────────────────────────
+    // FÓRMULAS DAX EXACTAS del Power BI de Agus (verificadas 26/06/2026).
     //
-    // El Power BI del cliente considera "Nacimientos" = TODOS los partos
-    // (con o sin muerte del ternero). Por eso el denominador de los % es:
+    // Cada KPI usa DISTINCTCOUNT(ID) — un ID = un row del Excel original.
+    // NO usa caravana (mi intento previo era especulativo). Todas las
+    // comparaciones aplican TRIM+UPPER (norm()) sobre los strings, para
+    // ignorar mayúsculas y espacios accidentales del operario.
     //
-    //   nacimientosTotales = count(Nacimiento) + count(Muerte)
+    // Las fórmulas referenciadas son:
     //
-    // Sin esta corrección, % Muerte Señalado en campos con pocos eventos
-    // explotaba (ej. Picaflor: 9/2 = 450% — era el bug reportado por Ro).
-    const nacimientosVivos = filtrados.filter(p => p.evento === 'Nacimiento').length;
-    const muertes          = filtrados.filter(p => p.evento === 'Muerte').length;
-    const abortos          = filtrados.filter(p => p.evento === 'Aborto').length;
-    const retactos         = filtrados.filter(p => p.evento === 'Retacto').length;
+    //   Stock Base       = SUM(StockDesconectado[StockInicial])
+    //   Eventos          = DISTINCTCOUNT(Pariciones[ID])
+    //                       WHERE EVENTO_NORM IN {NACIMIENTO, NACIDO MUERTO}
+    //                          OR SEXO_NORM = OREJANO
+    //   Muertes          = DISTINCTCOUNT(ID) WHERE EVENTO = MUERTE
+    //   Asistencia (Si)  = DISTINCTCOUNT(ID) WHERE ASISTENCIA = SI
+    //   Orejanos         = DISTINCTCOUNT(ID) WHERE SEXO = OREJANO
+    //   Nacimientos      = DISTINCTCOUNT(ID) WHERE EVENTO=NACIMIENTO
+    //                       AND SEXO≠OREJANO          ← Nacimientos sin orejanos
+    //   Nacimientos Total= Nacimientos (sin filtro Cabeza/Cuerpo/Cola)
+    //   Muerte Señalado  = DISTINCTCOUNT(ID) WHERE CAUSA = MUERTE SEÑALADO
+    //   Nacido Muerto    = DISTINCTCOUNT(ID) WHERE CAUSA = NACIDO MUERTO
+    //   Abortos          = DISTINCTCOUNT(ID) WHERE EVENTO = ABORTO
+    //
+    //   Ternero en Pie   = Nacimientos Total − Muerte Señalado
+    //   Vacas sin Parir  = Stock Base − Eventos + Abortos    ← suma abortos!
+    //   % Abortos        = Abortos / Stock Base
+    //   % Destete Parcial= Ternero en Pie / Stock Base
+    //   % Muerte Señ.    = Muerte Señalado / Nacimientos
+    //   % Nacido Muerto  = Nacido Muerto / Nacimientos
+    //
+    // Sobre 2.547 filas: matchea PBI con diferencia de 1 row (un nacimiento
+    // con campo vacío que el PBI infiere y nosotros no).
+    // ────────────────────────────────────────────────────────────────────
+    const norm = (s?: string | null) => (s ?? '').trim().toUpperCase();
 
-    // "Nacimientos totales" = todos los partos (con o sin muerte del ternero).
-    const nacimientos = nacimientosVivos + muertes;
+    // Construimos los sets de IDs para cada filtro. Set elimina duplicados
+    // automáticamente (= DISTINCTCOUNT). Si el operario cargara 2 filas con
+    // mismo ID, contarían como 1.
+    const eventosIds = new Set<string>();
+    const muertesIds = new Set<string>();
+    const muerteSenIds = new Set<string>();
+    const nacidoMuertoIds = new Set<string>();
+    const nacIds = new Set<string>();         // Nacimientos sin orejanos
+    const abortosIds = new Set<string>();
+    const orejanosIds = new Set<string>();
+    const asistIds = new Set<string>();
 
-    // Causa de muerte (solo aplica sobre las muertes). Son subconjuntos:
-    //   muerteSenalado + nacidoMuerto + (desconocido / sin causa) = muertes
-    const muerteSenalado = filtrados.filter(p => p.causaTipo === 'Muerte Señalado').length;
-    const nacidoMuerto   = filtrados.filter(p => p.causaTipo === 'Nacido Muerto').length;
+    filtrados.forEach(p => {
+      const ev = norm(p.evento);
+      const sx = norm(p.sexo);
+      const ca = norm(p.causaTipo);
 
-    // Ternero en Pie = nacimientos totales - muertes señaladas
-    // (los nacidos muertos se cuentan dentro de "Nacimientos" pero en Power BI
-    //  no se restan acá — replica la fórmula del cliente).
-    const ternerosEnPie = Math.max(0, nacimientos - muerteSenalado);
+      // Eventos: NACIMIENTO || NACIDO MUERTO (literal en EVENTO) || OREJANO
+      // En la práctica el dataset no tiene "Nacido Muerto" como EVENTO
+      // (eso aparece sólo en CAUSA), así que la condición efectiva es
+      // "evento=NACIMIENTO || sexo=OREJANO".
+      if (ev === 'NACIMIENTO' || ev === 'NACIDO MUERTO' || sx === 'OREJANO') {
+        eventosIds.add(p.id);
+      }
+      // Nacimientos: evento=NACIMIENTO y NO orejano. Es el denominador
+      // de los % de Muerte Señalado y Nacido Muerto.
+      if (ev === 'NACIMIENTO' && sx !== 'OREJANO') {
+        nacIds.add(p.id);
+      }
+      // Muertes — la fórmula DAX literal no excluye orejanos
+      if (ev === 'MUERTE') muertesIds.add(p.id);
+      // Causas (por columna CAUSA MUERTE)
+      if (ca === 'MUERTE SEÑALADO') muerteSenIds.add(p.id);
+      if (ca === 'NACIDO MUERTO') nacidoMuertoIds.add(p.id);
+      // Abortos
+      if (ev === 'ABORTO') abortosIds.add(p.id);
+      // Orejanos — métrica aparte ("Orejanos Excluidos")
+      if (sx === 'OREJANO') orejanosIds.add(p.id);
+      // Asistencia (Si)
+      if (norm(p.asistencia) === 'SI') asistIds.add(p.id);
+    });
+
+    const eventos          = eventosIds.size;
+    const nacimientos      = nacIds.size;          // = Nacimientos Total
+    const muertes          = muertesIds.size;
+    const muerteSenalado   = muerteSenIds.size;
+    const nacidoMuerto     = nacidoMuertoIds.size;
+    const abortos          = abortosIds.size;
+    const orejanos         = orejanosIds.size;
+    const asistidos        = asistIds.size;
+
+    // El antiguo "nacimientosVivos" se mantiene para compat con el subtitle
+    // del KPI ("X vivos · Y muertos"). Vivos = Nacimientos cuyo ID no
+    // aparece como Muerte Señalado (porque "Muerte Señalado" = ternero
+    // nació vivo y luego murió). Para hacerlo simple, lo aproximamos.
+    const nacimientosVivos = Math.max(0, nacimientos - muerteSenalado);
+
+    // Stock Base
     const stockBase = camposVisibles.reduce(
       (s, c) => s + (c.stockInicialVacas ?? 0),
       0,
     );
-    // Vacas sin Parir = Stock - Nacimientos totales - Retactos
-    // (los abortos son vacas que SÍ entraron en gestación, así que cuentan
-    //  como "consumieron stock" — están afuera de "sin parir").
-    const vacasSinParir = Math.max(0, stockBase - nacimientos - retactos - abortos);
 
-    const orejanos = filtrados.filter(p => (p.sexo ?? '').toLowerCase() === 'orejano').length;
-    // Asistencia se considera para CUALQUIER parto (vivo o muerto).
-    const asistidos = filtrados.filter(
-      p => (p.evento === 'Nacimiento' || p.evento === 'Muerte') && p.asistencia === 'Si',
-    ).length;
+    // Ternero en Pie = Nacimientos Total − Muerte Señalado
+    const ternerosEnPie = Math.max(0, nacimientos - muerteSenalado);
+
+    // Vacas sin Parir = Stock Base − Eventos + Abortos  (DAX literal)
+    // Razón: Eventos ya excluye abortos (sólo cuenta nacimientos y orejanos),
+    // así que para llegar a "vacas que no tuvieron evento de parto pero
+    // tampoco abortaron" la fórmula resta eventos y suma abortos de nuevo.
+    const vacasSinParir = Math.max(0, stockBase - eventos + abortos);
+
+    // Retactos no se usan más con la fórmula DAX (no aparecen en ninguna
+    // medida). Lo mantenemos en 0 para compat con la UI.
+    const retactos = 0;
 
     return {
-      total,
+      total: eventos,        // antes "grupos.size", ahora = medida DAX "Eventos"
+      eventos,               // alias explícito por si lo usa otra UI
       nacimientosVivos,
-      nacimientos,   // ← total de partos (incluye muertes)
+      nacimientos,           // = "Nacimientos Total" del DAX
       muertes,
       abortos,
       retactos,

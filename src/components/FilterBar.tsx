@@ -2,6 +2,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import type { Filtros, RangoFecha } from '@/data/filters';
 import type { Campo, EventoParicion } from '@/data/types';
+import { presetsCampaña } from './SimpleFilterBar';
 
 interface Props {
   filtros: Filtros;
@@ -34,9 +35,55 @@ export function FilterBar({ filtros, campos, onChange, añosDisponibles }: Props
   const años = añosDisponibles && añosDisponibles.length > 0
     ? [...añosDisponibles].sort((a, b) => b - a)
     : [añoActual, añoActual - 1, añoActual - 2, añoActual - 3, añoActual - 4];
+  const campañas = presetsCampaña(añosDisponibles);
 
-  // Cuando el año está seteado, los presets de rango quedan opacos.
-  const rangoDisabled = filtros.año != null;
+  const hayCustomRange = !!(filtros.desde && filtros.hasta);
+  const hayAño = filtros.año != null;
+  const rangoDisabled = hayCustomRange || hayAño;
+
+  // Mismo patrón unificado que SimpleFilterBar.
+  const periodoSeleccionado: string = (() => {
+    if (hayCustomRange) {
+      const m = campañas.find(c => c.desde === filtros.desde && c.hasta === filtros.hasta);
+      if (m) return `camp:${m.id}`;
+      return 'custom';
+    }
+    if (hayAño) return `año:${filtros.año}`;
+    return '';
+  })();
+
+  const onChangePeriodo = (val: string) => {
+    if (val === '') {
+      onChange({ ...filtros, año: undefined, desde: undefined, hasta: undefined });
+      return;
+    }
+    if (val.startsWith('año:')) {
+      const año = parseInt(val.slice(4), 10);
+      onChange({ ...filtros, año, desde: undefined, hasta: undefined });
+      return;
+    }
+    if (val.startsWith('camp:')) {
+      const id = val.slice(5);
+      const camp = campañas.find(c => c.id === id);
+      if (camp) onChange({ ...filtros, año: undefined, desde: camp.desde, hasta: camp.hasta });
+      return;
+    }
+    if (val === 'custom') {
+      if (!filtros.desde || !filtros.hasta) {
+        const hoy = new Date();
+        const hace12m = new Date(hoy);
+        hace12m.setMonth(hace12m.getMonth() - 12);
+        onChange({
+          ...filtros,
+          año: undefined,
+          desde: hace12m.toISOString().slice(0, 10),
+          hasta: hoy.toISOString().slice(0, 10),
+        });
+      } else {
+        onChange({ ...filtros, año: undefined });
+      }
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 flex flex-wrap items-center gap-3">
@@ -45,7 +92,7 @@ export function FilterBar({ filtros, campos, onChange, añosDisponibles }: Props
         {RANGOS.map(([val, label]) => (
           <button
             key={val}
-            onClick={() => onChange({ ...filtros, rango: val, año: undefined })}
+            onClick={() => onChange({ ...filtros, rango: val, año: undefined, desde: undefined, hasta: undefined })}
             className={cn(
               'px-3 py-1.5 rounded-lg text-sm font-semibold transition',
               filtros.rango === val && !rangoDisabled
@@ -61,19 +108,46 @@ export function FilterBar({ filtros, campos, onChange, añosDisponibles }: Props
       <div className="h-8 w-px bg-asfion-borderSoft" />
 
       <div className="flex items-center gap-2">
-        <span className="text-xs uppercase font-semibold text-asfion-muted">Año</span>
+        <span className="text-xs uppercase font-semibold text-asfion-muted">Período</span>
         <select
-          value={filtros.año ?? ''}
-          onChange={e => {
-            const v = e.target.value;
-            onChange({ ...filtros, año: v === '' ? undefined : parseInt(v, 10) });
-          }}
+          value={periodoSeleccionado}
+          onChange={e => onChangePeriodo(e.target.value)}
           className={SELECT_CLS}
         >
           <option value="">— Por rango —</option>
-          {años.map(a => <option key={a} value={a}>{a}</option>)}
+          {campañas.length > 0 && (
+            <optgroup label="Campaña ganadera">
+              {campañas.map(c => (
+                <option key={c.id} value={`camp:${c.id}`}>{c.label}</option>
+              ))}
+            </optgroup>
+          )}
+          <optgroup label="Año calendario">
+            {años.map(a => <option key={a} value={`año:${a}`}>{a}</option>)}
+          </optgroup>
+          <option value="custom">Custom (desde – hasta)…</option>
         </select>
       </div>
+
+      {hayCustomRange && (
+        <div className="flex items-center gap-2 bg-asfion-bg/60 rounded-lg px-2 py-1">
+          <input
+            type="date"
+            value={filtros.desde ?? ''}
+            onChange={e => onChange({ ...filtros, desde: e.target.value || undefined })}
+            className="bg-white border border-asfion-borderSoft rounded px-2 py-1 text-sm font-semibold text-asfion-navy focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange"
+            max={filtros.hasta}
+          />
+          <span className="text-xs text-asfion-muted">–</span>
+          <input
+            type="date"
+            value={filtros.hasta ?? ''}
+            onChange={e => onChange({ ...filtros, hasta: e.target.value || undefined })}
+            className="bg-white border border-asfion-borderSoft rounded px-2 py-1 text-sm font-semibold text-asfion-navy focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange"
+            min={filtros.desde}
+          />
+        </div>
+      )}
 
       <div className="h-8 w-px bg-asfion-borderSoft" />
 

@@ -12,6 +12,11 @@ export interface Filtros {
   /** Año específico (YYYY). Si está seteado, anula `rango` —
    *  filtra de Jan 1 a Dec 31 de ese año. Mismo patrón que SimpleFiltros. */
   año?: number;
+  /** Campaña ganadera o rango custom — desde/hasta en ISO (YYYY-MM-DD).
+   *  Si AMBOS están seteados, anulan `rango` y `año`. Mismo patrón que
+   *  SimpleFiltros. */
+  desde?: string;
+  hasta?: string;
 }
 
 export const FILTROS_DEFAULT: Filtros = {
@@ -21,7 +26,15 @@ export const FILTROS_DEFAULT: Filtros = {
 };
 
 export function aplicarFiltros(data: Paricion[], f: Filtros, today = new Date('2026-04-22')): Paricion[] {
-  // Si hay año específico seteado, filtramos Jan 1 → Dec 31 de ese año.
+  // Precedencia: custom range > año > rango preset.
+  if (f.desde && f.hasta) {
+    return data.filter(p => {
+      if (p.fecha < f.desde! || p.fecha > f.hasta!) return false;
+      if (f.campoId !== 'todos' && p.campoId !== f.campoId) return false;
+      if (f.evento !== 'todos' && p.evento !== f.evento) return false;
+      return true;
+    });
+  }
   if (f.año != null) {
     const a = String(f.año);
     const desde = `${a}-01-01`;

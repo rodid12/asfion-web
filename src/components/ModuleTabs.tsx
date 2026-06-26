@@ -6,7 +6,11 @@
 import React from 'react';
 import { clsx } from 'clsx';
 
-export type ModuleKey = 'pariciones' | 'lluvias' | 'mortandad' | 'pastoreo' | 'compras' | 'corrales' | 'prenez' | 'ndvi';
+// Corrales fue absorbido como sub-tab dentro de Pastoreo (junto con
+// "Entradas") — no aparece más como tab principal. Ventas es un módulo
+// nuevo separado de Compras (compras = entradas de hacienda al sistema,
+// ventas = salidas / cabezas vendidas a frigorífico u otro productor).
+export type ModuleKey = 'pariciones' | 'lluvias' | 'mortandad' | 'pastoreo' | 'compras' | 'ventas' | 'prenez' | 'ndvi';
 
 interface Props {
   active: ModuleKey;
@@ -18,22 +22,21 @@ interface Props {
 // Aparecen como un tab más con label opaco y chip "PRÓXIMAMENTE" — no son
 // clickeables. Cuando el módulo se implementa, quitar el flag y enchufar la
 // página correspondiente en Dashboard.tsx.
-const TABS: { key: ModuleKey | 'ventas'; label: string; disabled?: boolean }[] = [
+const TABS: { key: ModuleKey; label: string; disabled?: boolean }[] = [
   { key: 'pariciones', label: 'Pariciones' },
   { key: 'lluvias',    label: 'Lluvias'    },
   { key: 'mortandad',  label: 'Mortandad'  },
   { key: 'pastoreo',   label: 'Pastoreo'   },
   { key: 'ndvi',       label: 'NDVI / MS'  },
   { key: 'compras',    label: 'Compras'    },
-  { key: 'corrales',   label: 'Corrales'   },
+  { key: 'ventas',     label: 'Ventas'     },
   { key: 'prenez',     label: 'Preñez'     },
-  { key: 'ventas',     label: 'Ventas',    disabled: true },
 ];
 
 export function ModuleTabs({ active, onChange, counts }: Props) {
   return (
     <div className="border-b border-asfion-borderSoft bg-white">
-      <div className="max-w-7xl mx-auto px-6 flex gap-1 overflow-x-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
         {TABS.map(t => {
           const isActive = !t.disabled && t.key === active;
           const n = !t.disabled ? counts?.[t.key as ModuleKey] : undefined;

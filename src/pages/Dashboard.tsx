@@ -11,9 +11,9 @@ import { ModuleTabs, type ModuleKey } from '@/components/ModuleTabs';
 import { ParicionesPage } from './ParicionesPage';
 import { LluviasPage } from './LluviasPage';
 import { MortandadPage } from './MortandadPage';
-import { PastoreoPage } from './PastoreoPage';
+import { PastoreoModule } from './PastoreoModule';
 import { ComprasPage } from './ComprasPage';
-import { CorralesPage } from './CorralesPage';
+import { VentasPage } from './VentasPage';
 import { PrenezPage, type Tacto } from './PrenezPage';
 import { NdviPage } from './NdviPage';
 import { BillingAdminPage } from './BillingAdminPage';
@@ -54,7 +54,7 @@ export function Dashboard() {
           navy (variante onDark, "ASF" en blanco) y la jerarquía sea más
           prolija. Bottom border naranja muy fina como acento de brand. */}
       <header className="bg-asfion-navyDeep text-white border-b-2 border-asfion-orange/60">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3 sm:gap-6">
           {/* Brand */}
           <div className="flex items-center gap-4 min-w-0">
             <Logo height={40} variant="onDark" />
@@ -69,7 +69,7 @@ export function Dashboard() {
             {showAdmin && (
               <button
                 onClick={() => setView(v => (v === 'billing' ? 'modules' : 'billing'))}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition ${
+                className={`inline-flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-xs font-bold transition ${
                   view === 'billing'
                     ? 'bg-asfion-orange text-asfion-navyDeep'
                     : 'bg-white/5 text-asfion-orange hover:bg-asfion-orange/20 ring-1 ring-asfion-orange/30'
@@ -77,7 +77,9 @@ export function Dashboard() {
                 title={view === 'billing' ? 'Volver al tablero' : 'Panel de cobranzas'}
               >
                 <ShieldIcon size={13} />
-                {view === 'billing' ? 'Tablero' : 'Cobranzas'}
+                <span className="hidden sm:inline">
+                  {view === 'billing' ? 'Tablero' : 'Cobranzas'}
+                </span>
               </button>
             )}
             <button
@@ -132,7 +134,7 @@ export function Dashboard() {
         />
       )}
 
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         {/* Estado de error global */}
         {error && (
           <div className="rounded-xl border border-asfion-danger/30 bg-asfion-danger/10 px-4 py-3 text-sm text-asfion-danger">
@@ -160,15 +162,21 @@ export function Dashboard() {
           <MortandadPage mortandad={d.mortandad} campos={d.campos} />
         )}
         {view === 'modules' && data && modulo === 'pastoreo' && (
-          <PastoreoPage pastoreo={d.pastoreo} campos={d.campos} circuitos={d.circuitos} />
+          // PastoreoModule maneja internamente los 3 sub-tabs:
+          //   Pastoreo (vista actual) · Entradas · Cierre Corrales.
+          // Antes Corrales era tab top-level — se movió adentro porque
+          // conceptualmente es parte del ciclo de pastoreo (la última etapa
+          // antes de la venta).
+          <PastoreoModule pastoreo={d.pastoreo} campos={d.campos} circuitos={d.circuitos} />
         )}
         {view === 'modules' && data && modulo === 'compras' && (
+          // Compras = entradas de hacienda al sistema (proveedores).
           <ComprasPage compras={d.compras} campos={d.campos} />
         )}
-        {view === 'modules' && data && modulo === 'corrales' && (
-          // corrales=[] hasta que se conecte la fuente (Google Sheets o app móvil).
-          // La página maneja el empty state internamente.
-          <CorralesPage corrales={[]} />
+        {view === 'modules' && data && modulo === 'ventas' && (
+          // Ventas = salidas de hacienda (a frigorífico u otro productor).
+          // Por ahora con empty state hasta enchufar fuente.
+          <VentasPage ventas={[]} />
         )}
         {view === 'modules' && data && modulo === 'prenez' && (
           // Por ahora con snapshot del GVA (7 rodeos). Cuando el veterinario

@@ -40,7 +40,7 @@ export function PastoreoModule(props: Props) {
     <div className="space-y-6">
       {/* Barra de sub-tabs — visualmente más liviana que ModuleTabs, para
           marcar que es navegación secundaria. Pill-style en bg blanco. */}
-      <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-1.5 flex gap-1 overflow-x-auto">
+      <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-1.5 flex gap-1 overflow-x-auto overflow-y-hidden">
         {SUB_TABS.map(t => {
           const isActive = t.key === subTab;
           const n = t.count?.(props);

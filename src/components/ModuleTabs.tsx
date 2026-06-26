@@ -36,7 +36,11 @@ const TABS: { key: ModuleKey; label: string; disabled?: boolean }[] = [
 export function ModuleTabs({ active, onChange, counts }: Props) {
   return (
     <div className="border-b border-asfion-borderSoft bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
+      {/* overflow-x-auto + overflow-y-hidden: por spec CSS, setear
+          overflow-x: auto convierte overflow-y a auto también (= ambos
+          scrolls aparecen). Lo forzamos a y-hidden para que solo scrollee
+          horizontal cuando los tabs no entran en mobile. */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto overflow-y-hidden">
         {TABS.map(t => {
           const isActive = !t.disabled && t.key === active;
           const n = !t.disabled ? counts?.[t.key as ModuleKey] : undefined;

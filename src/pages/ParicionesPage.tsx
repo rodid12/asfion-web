@@ -71,6 +71,18 @@ export function ParicionesPage({ pariciones, campos }: Props) {
     [pariciones, filtros],
   );
 
+  // Años con data — para alimentar el dropdown del filtro.
+  const añosDisponibles = useMemo(() => {
+    const set = new Set<number>();
+    for (const p of pariciones) {
+      if (p.fecha && p.fecha.length >= 4) {
+        const y = parseInt(p.fecha.slice(0, 4), 10);
+        if (Number.isFinite(y) && y > 2000 && y < 2100) set.add(y);
+      }
+    }
+    return [...set].sort((a, b) => b - a);
+  }, [pariciones]);
+
   // Campos visibles según el filtro de campo (1 o todos).
   // El Stock Base se suma sobre los visibles para que cuando el cliente
   // filtre "Picaflor", el denominador sea solo el de Picaflor.
@@ -185,7 +197,7 @@ export function ParicionesPage({ pariciones, campos }: Props) {
         }
       />
 
-      <FilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
+      <FilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
 
       {/* KPIs principales — fila superior con los 4 más importantes */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

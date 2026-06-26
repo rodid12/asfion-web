@@ -42,7 +42,12 @@ import { Card } from '@/components/Card';
 import { Kpi } from '@/components/Kpi';
 import { PageHeader } from '@/components/PageHeader';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
-import { formatNumber } from '@/lib/utils';
+import {
+  enPeriodo,
+  añosEnData,
+  type SimpleFiltros,
+} from '@/components/SimpleFilterBar';
+import { cn, formatNumber } from '@/lib/utils';
 
 /**
  * Shape de una medición NDVI/MS por parcela.
@@ -76,11 +81,23 @@ interface Props {
 
 export function NdviPage({ mediciones = [], campos = [] }: Props) {
   const [campo, setCampo] = useState<string>('todos');
+  const [filtrosPeriodo, setFiltrosPeriodo] = useState<SimpleFiltros>({
+    rango: '12m',
+    campoId: 'todos',  // no se usa acá
+  });
+
+  const añosDisponibles = useMemo(
+    () => añosEnData(mediciones.map(m => m.fecha)),
+    [mediciones],
+  );
 
   const filtrados = useMemo(() => {
-    if (campo === 'todos') return mediciones;
-    return mediciones.filter(m => m.campo.toUpperCase() === campo.toUpperCase());
-  }, [mediciones, campo]);
+    return mediciones.filter(m => {
+      if (campo !== 'todos' && m.campo.toUpperCase() !== campo.toUpperCase()) return false;
+      if (m.fecha && !enPeriodo(m.fecha, filtrosPeriodo)) return false;
+      return true;
+    });
+  }, [mediciones, campo, filtrosPeriodo]);
 
   // KPIs principales — réplica del Power BI página 4
   const kpis = useMemo(() => {
@@ -169,8 +186,43 @@ export function NdviPage({ mediciones = [], campos = [] }: Props) {
         }
       />
 
-      {/* Filtro por campo */}
-      <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 flex flex-wrap items-center gap-4">
+      {/* Filtros — rango + año + campo. Mismo patrón que el resto del dashboard. */}
+      <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 flex flex-wrap items-center gap-3">
+        <div className={cn('flex items-center gap-1 flex-wrap', filtrosPeriodo.año != null && 'opacity-40')}>
+          <span className="text-xs uppercase font-semibold text-asfion-muted mr-2">Rango</span>
+          {([['7d', '7d'], ['30d', '30d'], ['90d', '90d'], ['12m', '12m'], ['todo', 'Todo']] as const).map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => setFiltrosPeriodo({ ...filtrosPeriodo, rango: val, año: undefined })}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-sm font-semibold transition',
+                filtrosPeriodo.rango === val && filtrosPeriodo.año == null
+                  ? 'bg-asfion-navy text-white'
+                  : 'bg-asfion-bg text-asfion-navy hover:bg-asfion-orangeSoft/25',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="h-8 w-px bg-asfion-borderSoft" />
+        <div className="flex items-center gap-2">
+          <span className="text-xs uppercase font-semibold text-asfion-muted">Año</span>
+          <select
+            value={filtrosPeriodo.año ?? ''}
+            onChange={e => {
+              const v = e.target.value;
+              setFiltrosPeriodo({ ...filtrosPeriodo, año: v === '' ? undefined : parseInt(v, 10) });
+            }}
+            className="bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange transition cursor-pointer"
+          >
+            <option value="">— Por rango —</option>
+            {(añosDisponibles.length > 0 ? añosDisponibles : [new Date().getFullYear()]).map(a => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+        <div className="h-8 w-px bg-asfion-borderSoft" />
         <div className="flex items-center gap-2">
           <span className="text-xs uppercase font-semibold text-asfion-muted">Campo</span>
           <select

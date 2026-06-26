@@ -54,6 +54,15 @@ interface Props {
   pastoreo: Pastoreo[];
   campos: Campo[];
   circuitos: Circuito[];
+  /**
+   * Modo embebido: oculta el PageHeader y la SimpleFilterBar propios.
+   * Se usa cuando esta vista se renderiza adentro de PastoreoPage como
+   * una sección más (no como sub-tab independiente). Los filtros vienen
+   * de fuera — los pasamos por prop `filtrosExternos`.
+   */
+  embedded?: boolean;
+  /** Filtros externos cuando embedded=true. */
+  filtrosExternos?: SimpleFiltros;
 }
 
 function isEntrada(evento?: string): boolean {
@@ -62,8 +71,12 @@ function isEntrada(evento?: string): boolean {
   return e === 'entrada' || e === 'rotacion' || e === 'rotación';
 }
 
-export function PastoreoEntradasView({ pastoreo, campos, circuitos }: Props) {
-  const [filtros, setFiltros] = useState<SimpleFiltros>(SIMPLE_FILTROS_DEFAULT);
+export function PastoreoEntradasView({ pastoreo, campos, circuitos, embedded = false, filtrosExternos }: Props) {
+  const [filtrosLocales, setFiltrosLocales] = useState<SimpleFiltros>(SIMPLE_FILTROS_DEFAULT);
+  // Cuando embedded, los filtros vienen del padre (PastoreoPage). Si no,
+  // usamos los locales como antes.
+  const filtros = embedded && filtrosExternos ? filtrosExternos : filtrosLocales;
+  const setFiltros = setFiltrosLocales;
 
   const circuitoMap = useMemo(
     () => new Map(circuitos.map(c => [c.id, c])),
@@ -147,21 +160,39 @@ export function PastoreoEntradasView({ pastoreo, campos, circuitos }: Props) {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Entradas"
-        subtitle="Movimientos de entrada y rotación al circuito — qué grupo, cuándo, cuánto pesaba."
-        count={{ value: filtrados.length, label: 'entradas' }}
-        lastDate={kpis.fechaUltima !== '—' ? kpis.fechaUltima : undefined}
-        actions={
-          <ExportCsvButton
-            onClick={() => exportEntradas(filtrados, campoMap, circuitoMap)}
-            disabled={filtrados.length === 0}
-            count={filtrados.length}
+      {!embedded && (
+        <>
+          <PageHeader
+            title="Entradas"
+            subtitle="Movimientos de entrada y rotación al circuito — qué grupo, cuándo, cuánto pesaba."
+            count={{ value: filtrados.length, label: 'entradas' }}
+            lastDate={kpis.fechaUltima !== '—' ? kpis.fechaUltima : undefined}
+            actions={
+              <ExportCsvButton
+                onClick={() => exportEntradas(filtrados, campoMap, circuitoMap)}
+                disabled={filtrados.length === 0}
+                count={filtrados.length}
+              />
+            }
           />
-        }
-      />
-
-      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
+          <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
+        </>
+      )}
+      {embedded && (
+        // En modo embebido, mostramos solo un header chico con título de
+        // sección — no es una página propia, es una sección de Pastoreo.
+        <div className="flex items-baseline justify-between gap-4 pt-4 border-t border-asfion-borderSoft">
+          <div>
+            <h3 className="text-xl font-extrabold text-asfion-navyDeep">Entradas</h3>
+            <p className="text-xs text-asfion-muted mt-1">
+              Movimientos tipo Entrada/Rotación — réplica de la página "Entradas" del Power BI
+            </p>
+          </div>
+          <div className="text-xs text-asfion-muted">
+            <span className="font-semibold text-asfion-navy">{filtrados.length}</span> entradas
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Kpi

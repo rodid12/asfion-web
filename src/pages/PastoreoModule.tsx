@@ -4,22 +4,21 @@
 // del pastoreo": cuando un grupo entra a una parcela, cuando se rota, y
 // finalmente cuando se cierra un corral de feedlot. Por eso agrupamos:
 //
-//   Pastoreo (general)  — vista global de stays / circuitos / KG
-//   Entradas            — eventos de entrada / rotación con detalle por movida
+//   Pastoreo (general)  — vista global + sección Entradas embebida abajo
 //   Cierre Corrales     — performance de tropas en feedlot
 //
-// El menú top-level (ModuleTabs) tiene solo "Pastoreo". Adentro, una barra
-// de sub-tabs deja saltar entre las 3 vistas sin perder el contexto del
-// módulo. State local — no usamos router porque el dashboard es single-page.
+// Las "Entradas" del Power BI se renderizan dentro de la vista Pastoreo
+// como una sección más (no una sub-tab) — Agus prefiere verlas juntas
+// con el resto de las métricas de pastoreo. Por eso PastoreoEntradasView
+// se monta adentro de PastoreoPage con embedded=true.
 
 import React, { useState } from 'react';
 import { clsx } from 'clsx';
 import type { Campo, Circuito, Pastoreo } from '@/data/types';
 import { PastoreoPage } from './PastoreoPage';
 import { CorralesPage } from './CorralesPage';
-import { PastoreoEntradasView } from './PastoreoEntradasView';
 
-type SubTab = 'pastoreo' | 'entradas' | 'corrales';
+type SubTab = 'pastoreo' | 'corrales';
 
 interface Props {
   pastoreo: Pastoreo[];
@@ -29,19 +28,10 @@ interface Props {
 
 const SUB_TABS: { key: SubTab; label: string; count?: (p: Props) => number }[] = [
   { key: 'pastoreo', label: 'Pastoreo',        count: p => p.pastoreo.length },
-  // Entradas filtra movimientos con evento "Entrada" o "Rotacion" sobre el
-  // mismo dataset de pastoreo — el count refleja eso.
-  { key: 'entradas', label: 'Entradas',        count: p => p.pastoreo.filter(x => isEntradaOrRotacion(x.evento)).length },
   // Corrales: por ahora el data viene vacío (la fuente todavía no está
   // conectada — Sheets / app móvil). Sin count.
   { key: 'corrales', label: 'Cierre Corrales' },
 ];
-
-function isEntradaOrRotacion(evento?: string): boolean {
-  if (!evento) return false;
-  const e = evento.toLowerCase();
-  return e === 'entrada' || e === 'rotacion' || e === 'rotación';
-}
 
 export function PastoreoModule(props: Props) {
   const [subTab, setSubTab] = useState<SubTab>('pastoreo');
@@ -83,12 +73,10 @@ export function PastoreoModule(props: Props) {
 
       {/* Vista activa — cada sub-componente renderea su propio PageHeader,
           filtros y contenido. Reutilizamos las pages existentes tal cual,
-          sin tocarles la estructura interna. */}
+          sin tocarles la estructura interna. La sección "Entradas" se
+          renderiza embebida dentro de PastoreoPage (no es sub-tab). */}
       {subTab === 'pastoreo' && (
         <PastoreoPage pastoreo={props.pastoreo} campos={props.campos} circuitos={props.circuitos} />
-      )}
-      {subTab === 'entradas' && (
-        <PastoreoEntradasView pastoreo={props.pastoreo} campos={props.campos} circuitos={props.circuitos} />
       )}
       {subTab === 'corrales' && (
         // corrales=[] hasta que se conecte la fuente — el empty state vive

@@ -47,6 +47,7 @@ import { EmptyModule } from '@/components/EmptyModule';
 import { formatNumber } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Circuito, Pastoreo } from '@/data/types';
+import { PastoreoEntradasView } from './PastoreoEntradasView';
 
 interface Props {
   pastoreo: Pastoreo[];
@@ -699,6 +700,18 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
       <Card title="Detalle de movimientos" subtitle="Últimos 50 — ordenados por fecha de entrada">
         <DetalleTabla rows={filtrados.slice(0, 50)} campos={campos} circuitos={circuitos} />
       </Card>
+
+      {/* Sección "Entradas" embebida — réplica de la página "Entradas" del
+          Power BI. Re-usamos PastoreoEntradasView con embedded=true para
+          que use los mismos filtros de Pastoreo en vez de su propio header
+          y SimpleFilterBar (que duplicaría UI). */}
+      <PastoreoEntradasView
+        pastoreo={pastoreo}
+        campos={campos}
+        circuitos={circuitos}
+        embedded
+        filtrosExternos={filtros}
+      />
     </div>
   );
 }

@@ -18,6 +18,7 @@ import type {
   EventoParicion,
   Lluvia,
   Mortandad,
+  NdviPastura,
   Paricion,
   Pastoreo,
   Sexo,
@@ -229,4 +230,45 @@ export async function fetchCircuitos(): Promise<Circuito[]> {
     .order('nombre');
   if (error) throw new Error(`fetchCircuitos: ${error.message}`);
   return (data ?? []).map(rowToCircuito);
+}
+
+// =============================================================================
+// NDVI / Materia Seca (migration 0009)
+// =============================================================================
+
+function rowToNdvi(r: any): NdviPastura {
+  return {
+    id: r.id,
+    fecha: r.fecha,
+    campo: r.campo,
+    circuito: r.circuito,
+    lote: r.lote ?? undefined,
+    parcelas:   r.parcelas    != null ? Number(r.parcelas)    : undefined,
+    hectareas:  r.hectareas   != null ? Number(r.hectareas)   : undefined,
+    ndvi:       r.ndvi        != null ? Number(r.ndvi)        : undefined,
+    msKgHa:     r.ms_kg_ha    != null ? Number(r.ms_kg_ha)    : undefined,
+    msTotalKg:  r.ms_total_kg != null ? Number(r.ms_total_kg) : undefined,
+    estado:     r.estado ?? undefined,
+    createdAt:  r.created_at,
+  };
+}
+
+export async function fetchNdvi(): Promise<NdviPastura[]> {
+  const { data, error } = await supabase
+    .from('ndvi_pasturas')
+    .select('*')
+    .order('fecha', { ascending: false });
+  // La tabla recién se crea en migration 0009. Si todavía no aplicó (por
+  // ejemplo en un entorno nuevo), devolvemos array vacío en lugar de
+  // tirar error — el módulo NDVI sigue funcionando con su empty state.
+  if (error) {
+    if (error.message?.toLowerCase().includes('does not exist') ||
+        error.message?.toLowerCase().includes('relation') ||
+        error.code === '42P01') {
+      console.warn('Tabla ndvi_pasturas no existe todavía — aplicá migration 0009');
+      return [];
+    }
+    throw new Error(`fetchNdvi: ${error.message}`);
+  }
+  return (data ?? []).map(rowToNdvi);
 }

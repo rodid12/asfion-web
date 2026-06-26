@@ -7,13 +7,14 @@
 // en hooks por módulo y cargamos on-demand.
 
 import { useEffect, useState } from 'react';
-import type { Campo, Circuito, Compra, Lluvia, Mortandad, Paricion, Pastoreo } from './types';
+import type { Campo, Circuito, Compra, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo } from './types';
 import {
   fetchCampos,
   fetchCircuitos,
   fetchCompras,
   fetchLluvias,
   fetchMortandad,
+  fetchNdvi,
   fetchPariciones,
   fetchPastoreo,
 } from './supabase';
@@ -26,6 +27,7 @@ export interface DashboardData {
   mortandad: Mortandad[];
   pastoreo: Pastoreo[];
   compras: Compra[];
+  ndvi: NdviPastura[];
 }
 
 export interface UseDataResult {
@@ -43,6 +45,7 @@ const EMPTY: DashboardData = {
   mortandad: [],
   pastoreo: [],
   compras: [],
+  ndvi: [],
 };
 
 export function useDashboardData(): UseDataResult {
@@ -58,7 +61,7 @@ export function useDashboardData(): UseDataResult {
 
     (async () => {
       try {
-        const [campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras] =
+        const [campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras, ndvi] =
           await Promise.all([
             fetchCampos(),
             fetchCircuitos(),
@@ -67,9 +70,10 @@ export function useDashboardData(): UseDataResult {
             fetchMortandad(),
             fetchPastoreo(),
             fetchCompras(),
+            fetchNdvi(),
           ]);
         if (!cancelled) {
-          setData({ campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras });
+          setData({ campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras, ndvi });
         }
       } catch (err: any) {
         if (!cancelled) setError(err?.message ?? 'Error desconocido cargando datos');

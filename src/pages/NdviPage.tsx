@@ -49,32 +49,17 @@ import {
 } from '@/components/SimpleFilterBar';
 import { cn, formatNumber } from '@/lib/utils';
 
-/**
- * Shape de una medición NDVI/MS por parcela.
- *
- * Estructura tomada del modelo del Power BI (`NDVI_Pasturas` table). Una
- * fila = un snapshot de una parcela en una fecha dada. Si el productor
- * mide la misma parcela varias veces, hay varias filas (las agregamos).
- *
- * Cuando se enchufe la fuente real, exportar esta interfaz desde
- * data/types.ts y reemplazar en la prop.
- */
-export interface MedicionNdvi {
-  id: string;
-  fecha: string;            // YYYY-MM-DD del paso del satélite o medición
-  campo: string;
-  circuito: string;
-  parcela: string;
-  hasParcela: number;       // hectáreas de la parcela
-  msKgPorHa: number;        // kg MS / ha (productividad estimada)
-  consumoMsKg?: number;     // consumo derivado de Pastoreo en ese período
-}
+// La interfaz NdviPastura vive en data/types.ts — refleja exactamente las
+// columnas de la tabla `ndvi_pasturas` en Supabase. Re-exportamos acá con
+// el alias `MedicionNdvi` para mantener compat con código que la importa.
+import type { NdviPastura } from '@/data/types';
+export type MedicionNdvi = NdviPastura;
 
 interface Props {
-  /** Mediciones NDVI cargadas. Por ahora siempre vacío; cuando enchufemos
-   *  la fuente (Auravant, planilla del agrónomo o sync satelital propio),
-   *  se llena desde el server. */
-  mediciones?: MedicionNdvi[];
+  /** Mediciones NDVI cargadas desde Supabase (tabla ndvi_pasturas).
+   *  Si la migración 0009 no aplicó todavía, llega vacío y la página
+   *  muestra el empty state. */
+  mediciones?: NdviPastura[];
   /** Campos para alimentar el slicer de filtro (mismo que otras páginas). */
   campos?: string[];
 }
@@ -99,18 +84,25 @@ export function NdviPage({ mediciones = [], campos = [] }: Props) {
     });
   }, [mediciones, campo, filtrosPeriodo]);
 
-  // KPIs principales — réplica del Power BI página 4
+  // KPIs principales — réplica del Power BI página 4.
+  // La tabla ndvi_pasturas trae msTotalKg pre-calculado (msKgHa × hectareas)
+  // así que sumamos directo. Para el promedio ponderado de kg/ha, divido
+  // el total por las hectáreas.
   const kpis = useMemo(() => {
     if (filtrados.length === 0) {
       return { msKgHaProm: 0, msTotal: 0, haNdvi: 0, consumoTotal: 0, remanente: 0 };
     }
-    let sumMS = 0;     // SUM(msKgPorHa × hasParcela) = MS Total
-    let sumHas = 0;    // SUM(hasParcela)
+    let sumMS = 0;     // SUM(msTotalKg)
+    let sumHas = 0;    // SUM(hectareas)
     let sumConsumo = 0;
     filtrados.forEach(m => {
-      sumMS  += (m.msKgPorHa || 0) * (m.hasParcela || 0);
-      sumHas += (m.hasParcela || 0);
-      sumConsumo += m.consumoMsKg ?? 0;
+      // Si vino msTotalKg precalculado lo usamos, sino lo armamos.
+      const msTotal = m.msTotalKg ?? ((m.msKgHa || 0) * (m.hectareas || 0));
+      sumMS  += msTotal;
+      sumHas += (m.hectareas || 0);
+      // Consumo MS: NO viene en la tabla NDVI — viene de Pastoreo. Hasta
+      // que conectemos las dos tablas, queda en 0.
+      sumConsumo += 0;
     });
     const msKgHaProm = sumHas > 0 ? sumMS / sumHas : 0;
     return {
@@ -128,9 +120,10 @@ export function NdviPage({ mediciones = [], campos = [] }: Props) {
     filtrados.forEach(m => {
       const key = m.circuito || '—';
       const cur = map.get(key) ?? { msTotal: 0, has: 0, consumo: 0 };
-      cur.msTotal += (m.msKgPorHa || 0) * (m.hasParcela || 0);
-      cur.has     += (m.hasParcela || 0);
-      cur.consumo += m.consumoMsKg ?? 0;
+      const msTotal = m.msTotalKg ?? ((m.msKgHa || 0) * (m.hectareas || 0));
+      cur.msTotal += msTotal;
+      cur.has     += (m.hectareas || 0);
+      // consumo viene de Pastoreo — pendiente de cross-join
       map.set(key, cur);
     });
     return Array.from(map.entries())
@@ -151,8 +144,8 @@ export function NdviPage({ mediciones = [], campos = [] }: Props) {
       const key = (m.fecha ?? '').slice(0, 7);
       if (!key) return;
       const cur = map.get(key) ?? { ms: 0, consumo: 0 };
-      cur.ms      += (m.msKgPorHa || 0) * (m.hasParcela || 0);
-      cur.consumo += m.consumoMsKg ?? 0;
+      const msTotal = m.msTotalKg ?? ((m.msKgHa || 0) * (m.hectareas || 0));
+      cur.ms += msTotal;
       map.set(key, cur);
     });
     const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];

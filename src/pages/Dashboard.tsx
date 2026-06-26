@@ -185,10 +185,10 @@ export function Dashboard() {
           <PrenezPage tactos={TACTOS_GVA} />
         )}
         {view === 'modules' && data && modulo === 'ndvi' && (
-          // NDVI/Materia Seca — empty state hasta que enchufemos una fuente
-          // satelital (Auravant/Sentinel) o sync de planilla del agrónomo.
-          // Pasamos los nombres de campos para alimentar el slicer de filtro.
-          <NdviPage mediciones={[]} campos={d.campos.map(c => c.nombre)} />
+          // NDVI/Materia Seca — data real desde Supabase tabla ndvi_pasturas.
+          // Si la migración 0009 todavía no se aplicó, viene array vacío y
+          // la página muestra el empty state.
+          <NdviPage mediciones={d.ndvi} campos={d.campos.map(c => c.nombre)} />
         )}
 
         <footer className="text-center text-xs text-asfion-muted py-6">

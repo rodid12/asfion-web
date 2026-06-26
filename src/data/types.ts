@@ -72,6 +72,33 @@ export interface Lluvia {
 }
 
 // -----------------------------------------------------------------------------
+// NDVI / Materia Seca
+// -----------------------------------------------------------------------------
+//
+// Cada row es una medición satelital de una parcela en una fecha dada.
+// Los datos vienen de imágenes Sentinel/Auravant procesadas que el cliente
+// nos pasa como Excel. La conversión NDVI → MS_kg_ha se hace según la
+// tabla de referencia del cliente:
+//   <0.30        → 2000 (rebrote/estrés)
+//   0.30 – 0.40  → 2750 (intermedio)
+//   0.40 – 0.60  → 5000 (buen crecimiento)
+//   >0.60        → 7500 (alta biomasa)
+export interface NdviPastura {
+  id: string;
+  fecha: string;
+  campo: string;        // nombre del campo (texto libre)
+  circuito: string;     // nombre del circuito (matchea con circuitos.nombre)
+  lote?: string;
+  parcelas?: number;    // cuántas parcelas se midieron en este registro
+  hectareas?: number;
+  ndvi?: number;        // 0-1
+  msKgHa?: number;
+  msTotalKg?: number;
+  estado?: string;      // Bajo / Intermedio / Bueno / Alto
+  createdAt: string;
+}
+
+// -----------------------------------------------------------------------------
 // Mortandad
 // -----------------------------------------------------------------------------
 export interface Mortandad {

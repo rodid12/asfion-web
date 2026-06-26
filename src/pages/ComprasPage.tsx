@@ -18,6 +18,17 @@
 // Mantenemos el export CSV con todos los campos del schema.
 
 import React, { useMemo, useState } from 'react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { CoinsIcon, PackageIcon, XIcon, ChevronRightIcon } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { Kpi } from '@/components/Kpi';
@@ -150,6 +161,63 @@ export function ComprasPage({ compras, campos }: Props) {
     };
   }, [filtradas]);
 
+  // Chart: cabezas compradas por consignado (ordenado descendente).
+  // Útil para responder "¿quién es nuestro proveedor principal?".
+  const porConsignado = useMemo(() => {
+    const map = new Map<string, { cabezas: number; ops: number; inversion: number }>();
+    filtradas.forEach(c => {
+      const key = c.consignado?.trim() || '(sin consignado)';
+      const tm = c.totalMachos ?? 0;
+      const th = c.totalHembras ?? 0;
+      const cabezasOp = (tm > 0 || th > 0) ? (tm + th) : parseCabezas(c.cantCabYCat);
+      const kg = Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
+      const inv = (c.precio != null && Number.isFinite(c.precio)) ? kg * c.precio : 0;
+      const cur = map.get(key) ?? { cabezas: 0, ops: 0, inversion: 0 };
+      cur.cabezas += cabezasOp;
+      cur.ops += 1;
+      cur.inversion += inv;
+      map.set(key, cur);
+    });
+    return [...map.entries()]
+      .map(([nombre, v]) => ({ nombre, ...v }))
+      .filter(r => r.cabezas > 0)
+      .sort((a, b) => b.cabezas - a.cabezas);
+  }, [filtradas]);
+
+  // Chart: inversión por mes (últimos 12 meses con data).
+  // Útil para detectar picos de gasto y estacionalidad de compras.
+  const porMes = useMemo(() => {
+    const map = new Map<string, { inversion: number; cabezas: number; ops: number }>();
+    filtradas.forEach(c => {
+      const key = c.fecha.slice(0, 7); // YYYY-MM
+      const tm = c.totalMachos ?? 0;
+      const th = c.totalHembras ?? 0;
+      const cabezasOp = (tm > 0 || th > 0) ? (tm + th) : parseCabezas(c.cantCabYCat);
+      const kg = Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
+      const inv = (c.precio != null && Number.isFinite(c.precio)) ? kg * c.precio : 0;
+      const cur = map.get(key) ?? { inversion: 0, cabezas: 0, ops: 0 };
+      cur.inversion += inv;
+      cur.cabezas += cabezasOp;
+      cur.ops += 1;
+      map.set(key, cur);
+    });
+    const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([key, v]) => {
+        const [y, m] = key.split('-');
+        const idx = Math.max(0, Math.min(11, parseInt(m ?? '1', 10) - 1));
+        return {
+          key,
+          mes: `${MESES[idx]} ${(y ?? '').slice(2)}`,
+          inversion: Math.round(v.inversion),
+          cabezas: v.cabezas,
+          ops: v.ops,
+        };
+      });
+  }, [filtradas]);
+
   if (compras.length === 0) {
     return <EmptyModule label="compras" />;
   }
@@ -269,6 +337,113 @@ export function ComprasPage({ compras, campos }: Props) {
           accent="orange"
           icon={<CoinsIcon size={18} />}
         />
+      </div>
+
+      {/* Charts: cabezas por consignado (proveedor principal) + inversión
+          por mes (estacionalidad / picos de gasto). Ambos respetan los
+          filtros activos arriba. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card
+          title="Cabezas por consignado"
+          subtitle="Ranking de proveedores por cabezas compradas"
+        >
+          {porConsignado.length === 0 ? (
+            <div className="h-[260px] flex items-center justify-center text-sm text-asfion-muted">
+              Sin operaciones que mostrar con los filtros actuales.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(240, porConsignado.length * 36)}>
+              <BarChart
+                data={porConsignado}
+                layout="vertical"
+                margin={{ top: 8, right: 60, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" horizontal={false} />
+                <XAxis type="number" stroke="#6B7280" fontSize={12} allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="nombre"
+                  stroke="#6B7280"
+                  fontSize={11}
+                  width={140}
+                />
+                <Tooltip
+                  formatter={(_v: number, _name: string, item: any) => {
+                    const r = item?.payload as { cabezas: number; ops: number; inversion: number };
+                    return [
+                      `${formatNumber(r.cabezas)} cabezas · ${r.ops} ops · $${formatNumber(Math.round(r.inversion))}`,
+                      '',
+                    ];
+                  }}
+                />
+                <Bar dataKey="cabezas" radius={[0, 4, 4, 0]}>
+                  {porConsignado.map((_, i) => (
+                    <Cell key={i} fill={i === 0 ? '#FF8409' : '#FBC79A'} />
+                  ))}
+                  <LabelList
+                    dataKey="cabezas"
+                    position="right"
+                    fontSize={11}
+                    fill="#163349"
+                    formatter={(v: number) => formatNumber(v)}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
+
+        <Card
+          title="Inversión por mes"
+          subtitle={
+            porMes.length === 0
+              ? 'Sin compras con precio cargado'
+              : `${porMes.length} meses con compras — pesos invertidos en hacienda`
+          }
+        >
+          {porMes.length === 0 || porMes.every(m => m.inversion === 0) ? (
+            <div className="h-[260px] flex items-center justify-center text-sm text-asfion-muted">
+              Sin precios cargados en el rango filtrado.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={porMes} margin={{ top: 24, right: 8, left: -8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" vertical={false} />
+                <XAxis dataKey="mes" stroke="#6B7280" fontSize={11} />
+                <YAxis
+                  stroke="#6B7280"
+                  fontSize={11}
+                  // Formatea en millones para que el eje no diga "1500000000"
+                  tickFormatter={(v: number) =>
+                    v >= 1_000_000 ? `${(v / 1_000_000).toFixed(0)}M` :
+                    v >= 1_000     ? `${(v / 1_000).toFixed(0)}k`     : String(v)
+                  }
+                />
+                <Tooltip
+                  formatter={(_v: number, _name: string, item: any) => {
+                    const r = item?.payload as { inversion: number; cabezas: number; ops: number };
+                    return [
+                      `$${formatNumber(r.inversion)} · ${r.ops} ops · ${formatNumber(r.cabezas)} cab`,
+                      '',
+                    ];
+                  }}
+                />
+                <Bar dataKey="inversion" fill="#163349" radius={[4, 4, 0, 0]}>
+                  <LabelList
+                    dataKey="inversion"
+                    position="top"
+                    fontSize={10}
+                    fill="#163349"
+                    formatter={(v: number) =>
+                      v >= 1_000_000 ? `${(v / 1_000_000).toFixed(0)}M` :
+                      v >= 1_000     ? `${(v / 1_000).toFixed(0)}k`     : String(v)
+                    }
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
       </div>
 
       {/* Master-detail: lista a la izquierda + detalle a la derecha. En

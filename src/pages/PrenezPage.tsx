@@ -28,6 +28,7 @@ import { Kpi } from '@/components/Kpi';
 import { PageHeader } from '@/components/PageHeader';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { formatNumber, formatPercent } from '@/lib/utils';
+import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 
 /**
  * Shape de un row de tacto. Un tacto = revisión veterinaria de un grupo
@@ -148,7 +149,7 @@ export function PrenezPage({ tactos = [] }: Props) {
         count={{ value: filtrados.length, label: 'tactos' }}
         actions={
           <ExportCsvButton
-            onClick={() => {/* TODO: enchufar cuando llegue la data */}}
+            onClick={() => exportPrenez(filtrados)}
             disabled={filtrados.length === 0}
             count={filtrados.length}
           />
@@ -270,30 +271,32 @@ function PorRodeoTabla({ rows }: { rows: RodeoRow[] }) {
     return <p className="text-sm text-asfion-muted py-6 text-center">Sin rodeos para mostrar.</p>;
   }
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-xs uppercase text-asfion-muted border-b border-asfion-borderSoft">
-          <th className="py-2 font-semibold">Rodeo</th>
-          <th className="py-2 font-semibold text-right">Origen</th>
-          <th className="py-2 font-semibold text-right">Preñ / Tact</th>
-          <th className="py-2 font-semibold text-right">% Preñez</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map(r => (
-          <tr key={r.rodeo} className="border-b border-asfion-borderSoft last:border-0">
-            <td className="py-2 font-semibold text-asfion-navy">{r.rodeo}</td>
-            <td className="py-2 text-right text-asfion-muted">{formatNumber(r.origen)}</td>
-            <td className="py-2 text-right text-asfion-muted">
-              {formatNumber(r.prenadas)} / {formatNumber(r.tactadas)}
-            </td>
-            <td className="py-2 text-right font-bold text-asfion-navy">
-              {r.tactadas > 0 ? formatPercent(r.pctPrenez) : '—'}
-            </td>
+    <div className="overflow-x-auto -mx-2 sm:mx-0">
+      <table className="w-full text-sm min-w-[420px]">
+        <thead>
+          <tr className="text-left text-xs uppercase text-asfion-muted border-b border-asfion-borderSoft">
+            <th className="py-2 px-2 font-semibold whitespace-nowrap">Rodeo</th>
+            <th className="py-2 px-2 font-semibold text-right whitespace-nowrap">Origen</th>
+            <th className="py-2 px-2 font-semibold text-right whitespace-nowrap">Preñ / Tact</th>
+            <th className="py-2 px-2 font-semibold text-right whitespace-nowrap">% Preñez</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.rodeo} className="border-b border-asfion-borderSoft last:border-0">
+              <td className="py-2 px-2 font-semibold text-asfion-navy whitespace-nowrap">{r.rodeo}</td>
+              <td className="py-2 px-2 text-right tabular-nums text-asfion-muted">{formatNumber(r.origen)}</td>
+              <td className="py-2 px-2 text-right tabular-nums text-asfion-muted whitespace-nowrap">
+                {formatNumber(r.prenadas)} / {formatNumber(r.tactadas)}
+              </td>
+              <td className="py-2 px-2 text-right tabular-nums font-bold text-asfion-navy">
+                {r.tactadas > 0 ? formatPercent(r.pctPrenez) : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -312,19 +315,39 @@ function SegmentacionDonut({ cabeza, cuerpo, cola }: { cabeza: number; cuerpo: n
     { label: 'Cola',   value: cola,   color: '#163349' }, // navy  — tercer tercio (peor)
   ];
   return (
-    <div className="grid grid-cols-3 gap-3 py-2">
+    <div className="grid grid-cols-3 gap-2 sm:gap-3 py-2">
       {segments.map(s => (
-        <div key={s.label} className="flex flex-col items-center gap-2">
+        <div key={s.label} className="flex flex-col items-center gap-2 min-w-0">
           <div
-            className="w-20 h-20 rounded-full grid place-items-center text-white font-extrabold text-sm shadow-card"
+            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full grid place-items-center text-white font-extrabold text-xs sm:text-sm shadow-card"
             style={{ background: s.color }}
           >
             {formatPercent(s.value / total)}
           </div>
-          <p className="text-xs uppercase font-bold text-asfion-muted">{s.label}</p>
-          <p className="text-xs text-asfion-navy">{formatNumber(s.value)} cab.</p>
+          <p className="text-[10px] sm:text-xs uppercase font-bold text-asfion-muted">{s.label}</p>
+          <p className="text-[10px] sm:text-xs text-asfion-navy">{formatNumber(s.value)} cab.</p>
         </div>
       ))}
     </div>
   );
+}
+
+// Export CSV de Preñez — un row por tacto filtrado por rodeo.
+function exportPrenez(rows: Tacto[]): void {
+  const cols: CsvColumn<Tacto>[] = [
+    { header: 'Rodeo',           value: r => r.rodeo },
+    { header: 'Campo',           value: r => r.campo ?? '' },
+    { header: 'Fecha',           value: r => r.fecha ?? '' },
+    { header: 'Origen Total',    value: r => r.origenTotal },
+    { header: 'Preñez Cabeza',   value: r => r.prenezCabeza },
+    { header: 'Preñez Cuerpo',   value: r => r.prenezCuerpo },
+    { header: 'Preñez Cola',     value: r => r.prenezCola },
+    { header: 'Total Preñadas',  value: r => r.prenezCabeza + r.prenezCuerpo + r.prenezCola },
+    { header: 'Vacías',          value: r => r.vacias },
+    { header: 'Perdón',          value: r => r.perdon },
+    { header: 'Descarte',        value: r => r.descarte },
+    { header: 'Feed Lot',        value: r => r.feedLot },
+  ];
+  const csv = rowsToCsv(rows, cols);
+  void downloadCsv(csv, csvFilename('prenez'));
 }

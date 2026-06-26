@@ -46,6 +46,7 @@ import {
   type SimpleFiltros,
 } from '@/components/SimpleFilterBar';
 import { cn, formatNumber } from '@/lib/utils';
+import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 
 /**
  * Shape de un row de venta. Cuando se enchufe la fuente real, exportar
@@ -151,7 +152,7 @@ export function VentasPage({ ventas = [] }: Props) {
         lastDate={kpis.fechaUltima !== '—' ? kpis.fechaUltima : undefined}
         actions={
           <ExportCsvButton
-            onClick={() => {/* TODO cuando llegue la data */}}
+            onClick={() => exportVentas(filtradas)}
             disabled={filtradas.length === 0}
             count={filtradas.length}
           />
@@ -349,4 +350,21 @@ function VentasTabla({ rows }: { rows: Venta[] }) {
       </table>
     </div>
   );
+}
+
+// Export CSV de Ventas — un row por venta filtrada (período + cliente).
+function exportVentas(rows: Venta[]): void {
+  const cols: CsvColumn<Venta>[] = [
+    { header: 'Fecha',         value: r => r.fecha },
+    { header: 'Cliente',       value: r => r.cliente },
+    { header: 'Campo',         value: r => r.campo ?? '' },
+    { header: 'Categoría',     value: r => r.categoria },
+    { header: 'Cabezas',       value: r => r.cabezas },
+    { header: 'Peso total',    value: r => r.pesoTotal },
+    { header: 'Precio $/kg',   value: r => r.precioPorKg },
+    { header: 'Monto',         value: r => r.monto },
+    { header: 'Observaciones', value: r => r.observaciones ?? '' },
+  ];
+  const csv = rowsToCsv(rows, cols);
+  void downloadCsv(csv, csvFilename('ventas'));
 }

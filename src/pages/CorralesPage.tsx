@@ -24,6 +24,7 @@ import { Kpi } from '@/components/Kpi';
 import { PageHeader } from '@/components/PageHeader';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { formatNumber } from '@/lib/utils';
+import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 
 /**
  * Shape de un row de cierre de corral. Cuando se enchufe la fuente real,
@@ -125,7 +126,7 @@ export function CorralesPage({ corrales = [] }: Props) {
         count={{ value: filtrados.length, label: 'tropas' }}
         actions={
           <ExportCsvButton
-            onClick={() => {/* TODO */}}
+            onClick={() => exportCorrales(filtrados)}
             disabled={filtrados.length === 0}
             count={filtrados.length}
           />
@@ -372,4 +373,26 @@ function PerformanceTabla({ rows }: { rows: Corral[] }) {
       </table>
     </div>
   );
+}
+
+// Export CSV de Cierre de Corrales — usa los rows filtrados por
+// etapa/categoría/tropa que el operario tiene aplicados.
+function exportCorrales(rows: Corral[]): void {
+  const cols: CsvColumn<Corral>[] = [
+    { header: 'Etapa',          value: r => r.etapa },
+    { header: 'Categoría',      value: r => r.categoria },
+    { header: 'Tropa',          value: r => r.tropa },
+    { header: 'Animales',       value: r => r.animales },
+    { header: 'Peso Inicial',   value: r => r.pesoInicial },
+    { header: 'Peso Final',     value: r => r.pesoFinal },
+    { header: 'Duración días',  value: r => r.duracionDias },
+    { header: 'EC kg/kg',       value: r => r.ecPromedio },
+    { header: 'CMS % PV',       value: r => r.cmsPctPv },
+    { header: 'CMS kg/an/día',  value: r => r.cmsKgPorDia },
+    { header: 'ADPV',           value: r => r.adpv },
+    { header: 'Alim $/kg prod', value: r => r.alimPesoProducido },
+    { header: 'Ración $/kg MS', value: r => r.racionPesoMs },
+  ];
+  const csv = rowsToCsv(rows, cols);
+  void downloadCsv(csv, csvFilename('corrales'));
 }

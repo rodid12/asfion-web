@@ -48,6 +48,7 @@ import {
   type SimpleFiltros,
 } from '@/components/SimpleFilterBar';
 import { cn, formatNumber } from '@/lib/utils';
+import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 
 // La interfaz NdviPastura vive en data/types.ts — refleja exactamente las
 // columnas de la tabla `ndvi_pasturas` en Supabase. Re-exportamos acá con
@@ -172,7 +173,7 @@ export function NdviPage({ mediciones = [], campos = [] }: Props) {
         count={{ value: filtrados.length, label: 'mediciones' }}
         actions={
           <ExportCsvButton
-            onClick={() => {/* TODO cuando llegue la data */}}
+            onClick={() => exportNdvi(filtrados)}
             disabled={filtrados.length === 0}
             count={filtrados.length}
           />
@@ -378,4 +379,23 @@ function DetalleTabla({ rows }: { rows: CircuitoRow[] }) {
       </table>
     </div>
   );
+}
+
+// Export CSV de NDVI / Materia Seca — un row por medición satelital
+// filtrada por campo + período.
+function exportNdvi(rows: NdviPastura[]): void {
+  const cols: CsvColumn<NdviPastura>[] = [
+    { header: 'Fecha',          value: r => r.fecha },
+    { header: 'Campo',          value: r => r.campo },
+    { header: 'Circuito',       value: r => r.circuito },
+    { header: 'Lote',           value: r => r.lote ?? '' },
+    { header: 'Parcelas',       value: r => r.parcelas ?? '' },
+    { header: 'Hectáreas',      value: r => r.hectareas ?? '' },
+    { header: 'NDVI',           value: r => r.ndvi ?? '' },
+    { header: 'MS kg/ha',       value: r => r.msKgHa ?? '' },
+    { header: 'MS Total kg',    value: r => r.msTotalKg ?? '' },
+    { header: 'Estado',         value: r => r.estado ?? '' },
+  ];
+  const csv = rowsToCsv(rows, cols);
+  void downloadCsv(csv, csvFilename('ndvi'));
 }

@@ -53,20 +53,69 @@ function csvField(s: string, delimiter: string): string {
 }
 
 /**
- * Dispara la descarga de un archivo CSV en el navegador.
- * Crea un blob, lo enchufa a un <a download>, lo clickea y lo limpia.
+ * Dispara la descarga (o "compartir" en mobile) de un archivo CSV.
+ *
+ * En desktop usamos el patrón clásico: <a download> + blob URL → el
+ * browser descarga el archivo al folder de Downloads.
+ *
+ * En mobile (iOS Safari sobre todo) <a download> con blob URL NO funciona:
+ * abre el CSV como texto plano en la misma pestaña y el operario no
+ * puede guardarlo. Detectamos eso y usamos `navigator.share()` con
+ * `files` — abre el sheet nativo de "Compartir" del SO y el operario
+ * elige: Mail, WhatsApp, Files, Drive, etc.
+ *
+ * Si nada de eso está disponible (browser muy viejo), fallback al
+ * <a download> tradicional.
  */
-export function downloadCsv(csv: string, filename: string): void {
+export async function downloadCsv(csv: string, filename: string): Promise<void> {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+
+  // Intentar Web Share API si:
+  //   1. Estamos en un browser que la soporta
+  //   2. El browser permite compartir archivos (no todas las versiones)
+  //   3. Estamos en un device tipo mobile/tablet (heurística por touch)
+  // En desktop, aunque navigator.share exista, mejor usar la descarga
+  // tradicional — abrir el sheet de compartir en desktop es UX rara.
+  const isMobile = typeof window !== 'undefined' && (
+    /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 0 && window.innerWidth < 1024)
+  );
+
+  if (isMobile && typeof navigator.share === 'function') {
+    try {
+      const file = new File([blob], filename, { type: 'text/csv' });
+      // canShare valida que el browser acepte ese tipo de archivo.
+      if (typeof navigator.canShare !== 'function' || navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: filename,
+          text: `Exportación ASFION — ${filename}`,
+        });
+        return;
+      }
+    } catch (err: any) {
+      // El usuario canceló el sheet de compartir, o el browser no soporta
+      // file share. AbortError es esperable — no caemos al fallback.
+      if (err?.name === 'AbortError') return;
+      // Otro error (raro) — caemos al fallback.
+      console.warn('[csv] navigator.share falló, usando <a download>:', err);
+    }
+  }
+
+  // Fallback: <a download> tradicional. Funciona perfecto en desktop y
+  // en Android Chrome. En iOS Safari abre el CSV en la pestaña pero
+  // ahí ya el operario puede hacer "Compartir → Guardar en archivos".
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  // En iOS algunos browsers ignoran download — abrimos en otra pestaña
+  // como mejora chica (sin reemplazar la actual).
+  a.target = '_blank';
+  a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  // Liberar la URL en el siguiente tick (algunos navegadores quieren que
-  // la URL viva al menos hasta que el browser empezó la descarga).
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 

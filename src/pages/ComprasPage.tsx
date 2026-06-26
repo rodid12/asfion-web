@@ -51,17 +51,36 @@ function parseCabezas(txt: string | undefined): number {
 export function ComprasPage({ compras, campos }: Props) {
   const [filtros, setFiltros] = useState<SimpleFiltros>(SIMPLE_FILTROS_DEFAULT);
   const [seleccionadaId, setSeleccionadaId] = useState<string | null>(null);
+  // Filtros propios del módulo Compras (no van en SimpleFilterBar)
+  const [consignado, setConsignado] = useState<string>('todos');
+  const [busquedaOp, setBusquedaOp] = useState<string>('');
 
   const añosDisponibles = useMemo(
     () => añosEnData(compras.map(c => c.fecha)),
     [compras],
   );
 
+  // Lista de consignados únicos del histórico, ordenados alfabéticamente.
+  // Sirve para alimentar el dropdown de filtro de consignado.
+  const consignadosUnicos = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of compras) {
+      if (c.consignado?.trim()) set.add(c.consignado.trim());
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [compras]);
+
   const filtradas = useMemo(() => {
+    const busqueda = busquedaOp.trim().toLowerCase();
     return compras
       .filter(c => {
         if (!enPeriodo(c.fecha, filtros)) return false;
         if (filtros.campoId !== 'todos' && c.campoId !== filtros.campoId) return false;
+        if (consignado !== 'todos' && c.consignado !== consignado) return false;
+        if (busqueda) {
+          const op = (c.numeroOperacion ?? '').toLowerCase();
+          if (!op.includes(busqueda)) return false;
+        }
         return true;
       })
       // Ordenamos desc por número de operación cuando hay (matchea el patrón
@@ -73,7 +92,7 @@ export function ComprasPage({ compras, campos }: Props) {
         if (aOp && bOp) return bOp.localeCompare(aOp);
         return b.fecha.localeCompare(a.fecha);
       });
-  }, [compras, filtros]);
+  }, [compras, filtros, consignado, busquedaOp]);
 
   // Agrupamos por campo para la lista — replica el patrón de AppSheet
   // que el cliente conoce. Si solo hay un campo, se ve igual.
@@ -94,20 +113,41 @@ export function ComprasPage({ compras, campos }: Props) {
   const seleccionada =
     filtradas.find(c => c.id === seleccionadaId) ?? filtradas[0] ?? null;
 
-  // KPIs rápidos arriba — solo 2 (total + inversión) para mantener el
-  // foco en la lista. El dashboard "completo" con KPIs ricos vive en
-  // otros módulos.
+  // KPIs principales — replican los del Power BI / lista de pedidos.
+  //
+  //   - Cabezas totales con relación machos/hembras (usa columnas
+  //     totalMachos/totalHembras del schema; si no están, parseamos el
+  //     texto libre cantCabYCat como fallback).
+  //   - Kg promedio por cabeza (kg destino / cabezas).
+  //   - Inversión total = SUM(kg_netos_destino × precio). Es lo que
+  //     "sacamos" en pesos para la operación.
+  //   - Total de operaciones (count).
   const kpis = useMemo(() => {
-    let cabezas = 0, inversion = 0, kgNetos = 0;
+    let cabezas = 0, machos = 0, hembras = 0;
+    let kgNetos = 0, inversion = 0;
+    let opsConDatos = 0;
     filtradas.forEach(c => {
-      cabezas += parseCabezas(c.cantCabYCat);
+      const tm = c.totalMachos ?? 0;
+      const th = c.totalHembras ?? 0;
+      // Si las columnas no están seteadas, fallback al parseo del texto.
+      const cabezasOp = (tm > 0 || th > 0) ? (tm + th) : parseCabezas(c.cantCabYCat);
+      cabezas += cabezasOp;
+      machos += tm;
+      hembras += th;
       const kg = Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
       kgNetos += kg;
-      if (c.precio != null && Number.isFinite(c.precio)) {
+      if (c.precio != null && Number.isFinite(c.precio) && kg > 0) {
         inversion += kg * c.precio;
+        opsConDatos++;
       }
     });
-    return { totalOps: filtradas.length, cabezas, kgNetos, inversion };
+    const kgPromedio = cabezas > 0 ? kgNetos / cabezas : 0;
+    return {
+      totalOps: filtradas.length,
+      cabezas, machos, hembras,
+      kgNetos, kgPromedio,
+      inversion, opsConDatos,
+    };
   }, [filtradas]);
 
   if (compras.length === 0) {
@@ -139,7 +179,58 @@ export function ComprasPage({ compras, campos }: Props) {
         añosDisponibles={añosDisponibles}
       />
 
-      {/* KPIs rápidos */}
+      {/* Filtros propios del módulo: consignado + búsqueda por nº operación.
+          Quedan en una barra aparte porque conceptualmente son filtros del
+          listado, no del período. */}
+      <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs uppercase font-semibold text-asfion-muted">Consignado</span>
+          <select
+            value={consignado}
+            onChange={e => setConsignado(e.target.value)}
+            className="bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange transition cursor-pointer"
+          >
+            <option value="todos">Todos</option>
+            {consignadosUnicos.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="h-8 w-px bg-asfion-borderSoft" />
+
+        <div className="flex items-center gap-2 flex-1 min-w-[180px]">
+          <span className="text-xs uppercase font-semibold text-asfion-muted">N° Operación</span>
+          <input
+            type="text"
+            value={busquedaOp}
+            onChange={e => setBusquedaOp(e.target.value)}
+            placeholder="10_26, 11..."
+            className="flex-1 max-w-[200px] bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy placeholder:text-asfion-muted/60 placeholder:font-normal hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange transition"
+          />
+          {busquedaOp && (
+            <button
+              onClick={() => setBusquedaOp('')}
+              className="text-xs text-asfion-muted hover:text-asfion-navy"
+              title="Limpiar búsqueda"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {(consignado !== 'todos' || busquedaOp) && (
+          <button
+            onClick={() => { setConsignado('todos'); setBusquedaOp(''); }}
+            className="text-xs text-asfion-orange font-bold hover:underline"
+          >
+            Limpiar filtros
+          </button>
+        )}
+      </div>
+
+      {/* KPIs principales — replican lo que pidió el cliente:
+          Cabezas (con desglose M/H), Kg promedio, Inversión total. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi
           label="Operaciones"
@@ -150,19 +241,31 @@ export function ComprasPage({ compras, campos }: Props) {
         <Kpi
           label="Cabezas"
           value={kpis.cabezas > 0 ? formatNumber(kpis.cabezas) : '—'}
-          sublabel="Estimado del texto libre"
+          sublabel={
+            kpis.machos > 0 || kpis.hembras > 0
+              ? `${formatNumber(kpis.machos)} ♂ · ${formatNumber(kpis.hembras)} ♀ (${
+                  kpis.cabezas > 0 ? Math.round((kpis.machos / kpis.cabezas) * 100) : 0
+                }% / ${
+                  kpis.cabezas > 0 ? Math.round((kpis.hembras / kpis.cabezas) * 100) : 0
+                }%)`
+              : 'Total compradas'
+          }
           accent="orange"
         />
         <Kpi
-          label="Kg netos"
-          value={kpis.kgNetos > 0 ? `${formatNumber(Math.round(kpis.kgNetos))} kg` : '—'}
-          sublabel="Sumados al destino"
+          label="Kg promedio"
+          value={kpis.kgPromedio > 0 ? `${formatNumber(Math.round(kpis.kgPromedio))} kg` : '—'}
+          sublabel={kpis.kgNetos > 0 ? `${formatNumber(Math.round(kpis.kgNetos))} kg netos total` : 'Por cabeza'}
           accent="navy"
         />
         <Kpi
           label="Inversión"
           value={kpis.inversion > 0 ? `$${formatNumber(Math.round(kpis.inversion))}` : '—'}
-          sublabel="Kg × precio"
+          sublabel={
+            kpis.opsConDatos < kpis.totalOps
+              ? `${kpis.opsConDatos} de ${kpis.totalOps} ops con precio`
+              : 'Kg × precio'
+          }
           accent="orange"
           icon={<CoinsIcon size={18} />}
         />
@@ -302,6 +405,8 @@ function DetalleOperacionBody({ compra, campoNombre }: { compra: Compra; campoNo
     ['Campo',               campoNombre],
     ['Actividad',           compra.actividad],
     ['Cant cab y cat',      compra.cantCabYCat],
+    ['Machos',              compra.totalMachos != null ? formatNumber(compra.totalMachos) : null],
+    ['Hembras',             compra.totalHembras != null ? formatNumber(compra.totalHembras) : null],
     ['KG Netos Origen',     compra.kgNetosOrigen != null ? formatNumber(compra.kgNetosOrigen) : null],
     ['KG Netos Destino',    compra.kgNetosDestino != null ? formatNumber(compra.kgNetosDestino) : null],
     ['Merma %',             compra.mermaPorcentaje != null ? `${compra.mermaPorcentaje.toFixed(2)}%` : null],
@@ -348,6 +453,8 @@ function exportCompras(rows: Compra[], campos: Campo[]): void {
     { header: 'Campo',            value: r => campoNombre(r.campoId) },
     { header: 'Actividad',        value: r => r.actividad ?? '' },
     { header: 'Cant cab y cat',   value: r => r.cantCabYCat ?? '' },
+    { header: 'Machos',           value: r => r.totalMachos  ?? '' },
+    { header: 'Hembras',          value: r => r.totalHembras ?? '' },
     { header: 'KG Netos Origen',  value: r => r.kgNetosOrigen ?? '' },
     { header: 'KG Netos Destino', value: r => r.kgNetosDestino ?? '' },
     { header: 'Merma %',          value: r => r.mermaPorcentaje ?? '' },

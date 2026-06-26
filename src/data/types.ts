@@ -186,6 +186,12 @@ export interface Compra {
   // Físico
   actividad?: string;            // Destete Precoz / Engorde / Invernada
   cantCabYCat?: string;          // "83 machos. 27 hembras"
+  // Total machos / hembras como columnas separadas (migration 0017).
+  // Antes solo existía cantCabYCat como TEXT, que requería parsing
+  // frágil para los KPIs de relación M/H. Si vienen vacíos, el dashboard
+  // hace fallback al parseo del texto libre.
+  totalMachos?: number;
+  totalHembras?: number;
   kgNetosOrigen: number;
   kgNetosDestino: number;
   mermaPorcentaje?: number;      // auto-calculado en form

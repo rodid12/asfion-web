@@ -228,6 +228,8 @@ function rowToCompra(r: any): Compra {
     usuarioEmail: r.usuario_email,
     actividad:       r.actividad ?? undefined,
     cantCabYCat:     r.cant_cab_y_cat ?? undefined,
+    totalMachos:     r.total_machos  != null ? Number(r.total_machos)  : undefined,
+    totalHembras:    r.total_hembras != null ? Number(r.total_hembras) : undefined,
     kgNetosOrigen:   Number(r.kg_netos_origen),
     kgNetosDestino:  Number(r.kg_netos_destino),
     mermaPorcentaje: r.merma_porcentaje != null ? Number(r.merma_porcentaje) : undefined,

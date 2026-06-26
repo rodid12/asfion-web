@@ -12,7 +12,7 @@
 // que el UI muestre el badge "Sin conexión — datos del DD/MM HH:MM".
 
 import { useEffect, useState } from 'react';
-import type { Campo, Circuito, Compra, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo } from './types';
+import type { Campo, Circuito, Compra, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, Tacto } from './types';
 import {
   fetchCampos,
   fetchCircuitos,
@@ -22,6 +22,7 @@ import {
   fetchNdvi,
   fetchPariciones,
   fetchPastoreo,
+  fetchTactos,
 } from './supabase';
 import { loadCache, saveCache } from './offlineCache';
 
@@ -34,6 +35,7 @@ export interface DashboardData {
   pastoreo: Pastoreo[];
   compras: Compra[];
   ndvi: NdviPastura[];
+  tactos: Tacto[];
 }
 
 export interface UseDataResult {
@@ -58,6 +60,7 @@ const EMPTY: DashboardData = {
   pastoreo: [],
   compras: [],
   ndvi: [],
+  tactos: [],
 };
 
 export function useDashboardData(): UseDataResult {
@@ -97,7 +100,7 @@ export function useDashboardData(): UseDataResult {
 
       // 2-4. Fetch online en paralelo (o secuencial si no había cache).
       try {
-        const [campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras, ndvi] =
+        const [campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras, ndvi, tactos] =
           await Promise.all([
             fetchCampos(),
             fetchCircuitos(),
@@ -107,9 +110,10 @@ export function useDashboardData(): UseDataResult {
             fetchPastoreo(),
             fetchCompras(),
             fetchNdvi(),
+            fetchTactos(),
           ]);
         if (cancelled) return;
-        const fresh: DashboardData = { campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras, ndvi };
+        const fresh: DashboardData = { campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras, ndvi, tactos };
         setData(fresh);
         setOffline(false);
         setCachedAt(null);

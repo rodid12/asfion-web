@@ -30,37 +30,11 @@ import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { formatNumber, formatPercent } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 
-/**
- * Shape de un row de tacto. Un tacto = revisión veterinaria de un grupo
- * de vacas/vaquillonas para confirmar si quedaron preñadas y, en las que
- * sí, en qué momento del servicio (Cabeza/Cuerpo/Cola).
- *
- * Estructura tomada del sheet "Prenez" del GVA (Excel del cliente). Las
- * 5 sub-categorías Cabeza/Cuerpo/Cola/Vacías/Perdón/Descarte/FeedLot son
- * mutuamente excluyentes y sumadas dan el "Total Tactadas".
- *
- *   Total Prenez   = Cabeza + Cuerpo + Cola
- *   Total Tactadas = Total Prenez + Vacías + Perdón + Descarte + Feed Lot
- *   % Preñez       = Total Prenez / Total Tactadas
- *   Faltan Tactar  = Origen − Total Tactadas
- *
- * Cuando se enchufe la fuente real, exportar esta interfaz desde
- * data/types.ts y reemplazar en la prop.
- */
-export interface Tacto {
-  id: string;
-  rodeo: string;              // ej: "VQ 27M Margarita", "Vaquillonas 15M Ag"
-  campo?: string;
-  fecha?: string;             // YYYY-MM-DD (opcional para snapshot del Excel)
-  origenTotal: number;        // animales del rodeo (cabezas totales)
-  prenezCabeza: number;       // preñadas en primer tercio del servicio
-  prenezCuerpo: number;       // preñadas en segundo tercio
-  prenezCola: number;         // preñadas en tercer tercio
-  vacias: number;             // confirmadas vacías
-  perdon: number;             // preñez perdida — la "perdonan" para que siga
-  descarte: number;           // se descartan (venta)
-  feedLot: number;            // van a feedlot
-}
+// El tipo Tacto vive en data/types.ts (lo movimos cuando hicimos el
+// fetch desde Supabase). Re-exportamos como alias para compat con
+// código existente que lo importaba desde acá.
+import type { Tacto } from '@/data/types';
+export type { Tacto };
 
 interface Props {
   /** Tactos cargados. Por ahora siempre vacío; cuando enchufemos

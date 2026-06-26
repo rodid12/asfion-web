@@ -35,12 +35,20 @@ const TABS: { key: ModuleKey; label: string; disabled?: boolean }[] = [
 
 export function ModuleTabs({ active, onChange, counts }: Props) {
   return (
-    <div className="border-b border-asfion-borderSoft bg-white">
+    <div className="border-b border-asfion-borderSoft bg-white relative">
       {/* overflow-x-auto + overflow-y-hidden: por spec CSS, setear
           overflow-x: auto convierte overflow-y a auto también (= ambos
           scrolls aparecen). Lo forzamos a y-hidden para que solo scrollee
-          horizontal cuando los tabs no entran en mobile. */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto overflow-y-hidden">
+          horizontal cuando los tabs no entran en mobile.
+          touch-action: pan-x deja claro al browser que esta zona acepta
+          swipe horizontal por touch — sin esto, swipes que arrancan
+          horizontal pero curvan a vertical generan ambigüedad en algunos
+          Android y bloquean el scroll.
+          [&::-webkit-scrollbar]:hidden + scrollbar-width:none ocultan
+          la scrollbar visualmente (queda funcional en touch). */}
+      <div
+        className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto overflow-y-hidden touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {TABS.map(t => {
           const isActive = !t.disabled && t.key === active;
           const n = !t.disabled ? counts?.[t.key as ModuleKey] : undefined;
@@ -83,6 +91,16 @@ export function ModuleTabs({ active, onChange, counts }: Props) {
           );
         })}
       </div>
+      {/* Fade gradient en el borde derecho — solo visible en mobile como
+          hint de "hay más tabs a la derecha". `pointer-events-none` para
+          que no interfiera con los clicks sobre los tabs cercanos. */}
+      <div
+        aria-hidden
+        className="sm:hidden absolute right-0 top-0 bottom-0 w-8 pointer-events-none"
+        style={{
+          background: 'linear-gradient(to left, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%)',
+        }}
+      />
     </div>
   );
 }

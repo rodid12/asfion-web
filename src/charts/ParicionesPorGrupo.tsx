@@ -89,14 +89,32 @@ export function ParicionesPorGrupo({ data, campos }: Props) {
         </BarChart>
       </ResponsiveContainer>
 
-      <div className="grid grid-cols-3 gap-2">
-        {serie.map(s => (
-          <div key={s.grupo} className="bg-asfion-bg rounded-lg px-3 py-2 text-center">
-            <p className="text-xs uppercase font-semibold text-asfion-muted">{s.grupo}</p>
-            <p className="text-xl font-extrabold text-asfion-navyDeep tabular-nums">{s.total}</p>
+      {/* KPIs por segmento: porcentaje de partos sobre el total del rango.
+          Conservamos el conteo absoluto como sublabel para que se pueda
+          chequear contra el chart (sumándolos da el total). Mostrar % es
+          lo que pidió Agus — es más útil para comparar temporadas y campos
+          que el valor absoluto (que cambia con el filtro de fecha). */}
+      {(() => {
+        const totalGeneral = serie.reduce((acc, s) => acc + s.total, 0);
+        return (
+          <div className="grid grid-cols-3 gap-2">
+            {serie.map(s => {
+              const pct = totalGeneral > 0 ? (s.total / totalGeneral) * 100 : 0;
+              return (
+                <div key={s.grupo} className="bg-asfion-bg rounded-lg px-3 py-2 text-center">
+                  <p className="text-xs uppercase font-semibold text-asfion-muted">{s.grupo}</p>
+                  <p className="text-xl font-extrabold text-asfion-navyDeep tabular-nums">
+                    {totalGeneral > 0 ? `${pct.toFixed(1)}%` : '—'}
+                  </p>
+                  <p className="text-[11px] text-asfion-muted tabular-nums mt-0.5">
+                    {s.total.toLocaleString('es-AR')} eventos
+                  </p>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
+        );
+      })()}
     </div>
   );
 }

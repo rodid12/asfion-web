@@ -25,7 +25,7 @@
 
 import type { ModuleKey } from '@/components/ModuleTabs';
 
-export type RouteView = 'modules' | 'billing';
+export type RouteView = 'modules' | 'billing' | 'admin';
 
 export interface ParsedRoute {
   view: RouteView;
@@ -60,6 +60,7 @@ export function parseCurrentPath(): ParsedRoute {
   if (typeof window === 'undefined') return { view: 'modules', modulo: 'pariciones' };
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
   if (path === '/billing') return { view: 'billing', modulo: 'pariciones' };
+  if (path === '/admin')   return { view: 'admin',   modulo: 'pariciones' };
   const modulo = PATH_TO_MODULE[path] ?? 'pariciones';
   return { view: 'modules', modulo };
 }
@@ -67,6 +68,7 @@ export function parseCurrentPath(): ParsedRoute {
 /** Devuelve el path para una vista/módulo dado. */
 export function pathFor(view: RouteView, modulo: ModuleKey): string {
   if (view === 'billing') return '/billing';
+  if (view === 'admin')   return '/admin';
   return MODULE_PATHS[modulo] ?? '/pariciones';
 }
 

@@ -72,6 +72,28 @@ export interface Lluvia {
 }
 
 // -----------------------------------------------------------------------------
+// Tactos — para el módulo Preñez
+// -----------------------------------------------------------------------------
+//
+// Un tacto = revisión veterinaria de un grupo (rodeo) para confirmar
+// preñez. La data viene del veterinario externo, hoy se carga vía SQL.
+// Cuando haya form en app móvil, se va a poder cargar desde allí.
+export interface Tacto {
+  id: string;
+  rodeo: string;
+  campo?: string;
+  fecha?: string;
+  origenTotal: number;
+  prenezCabeza: number;
+  prenezCuerpo: number;
+  prenezCola: number;
+  vacias: number;
+  perdon: number;
+  descarte: number;
+  feedLot: number;
+}
+
+// -----------------------------------------------------------------------------
 // NDVI / Materia Seca
 // -----------------------------------------------------------------------------
 //

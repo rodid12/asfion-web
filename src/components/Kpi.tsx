@@ -26,13 +26,13 @@ export function Kpi({ label, value, delta, accent = 'navy', sublabel, icon }: Pr
                              'text-asfion-navy';
 
   return (
-    <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-5 flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <p className="text-xs uppercase tracking-wider font-semibold text-asfion-muted">{label}</p>
-        {icon && <span className={cn('p-2 rounded-lg', accentBg, accentFg)}>{icon}</span>}
+    <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 sm:p-5 flex flex-col gap-2 min-w-0">
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <p className="text-[10px] sm:text-xs uppercase tracking-wider font-semibold text-asfion-muted truncate">{label}</p>
+        {icon && <span className={cn('p-1.5 sm:p-2 rounded-lg flex-shrink-0', accentBg, accentFg)}>{icon}</span>}
       </div>
-      <p className={cn('text-4xl font-extrabold tabular-nums', accentFg)}>{value}</p>
-      <div className="flex items-center gap-2 text-xs">
+      <p className={cn('text-2xl sm:text-3xl lg:text-4xl font-extrabold tabular-nums break-words', accentFg)}>{value}</p>
+      <div className="flex items-center gap-2 text-xs flex-wrap min-w-0">
         {delta !== undefined && (
           <span
             className={cn(
@@ -44,7 +44,7 @@ export function Kpi({ label, value, delta, accent = 'navy', sublabel, icon }: Pr
           </span>
         )}
         {(sublabel || delta?.label) && (
-          <span className="text-asfion-muted">{sublabel ?? delta?.label}</span>
+          <span className="text-asfion-muted text-[11px] sm:text-xs line-clamp-2">{sublabel ?? delta?.label}</span>
         )}
       </div>
     </div>

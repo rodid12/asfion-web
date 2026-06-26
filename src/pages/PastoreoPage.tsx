@@ -45,6 +45,7 @@ import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyModule } from '@/components/EmptyModule';
 import { formatNumber } from '@/lib/utils';
+import { dateAISO } from '@/lib/fechas';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Circuito, Pastoreo } from '@/data/types';
 import { PastoreoEntradasView } from './PastoreoEntradasView';
@@ -290,8 +291,10 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
     });
 
     const pesoPromedio = sumAnimales > 0 ? sumPesoXanimales / sumAnimales : 0;
+    // Fecha ponderada: el avg de timestamps puede caer 1 día atrás si usamos
+    // toISOString() (siempre UTC). Convertimos a local con dateAISO.
     const fechaPonderadaIso = sumAnimales > 0
-      ? new Date(sumPesoXdiaXanimales / sumAnimales).toISOString().slice(0, 10)
+      ? dateAISO(new Date(sumPesoXdiaXanimales / sumAnimales))
       : null;
     const categoriaModal = Object.entries(catCounts).sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
     const cargaPromedio = nCargaEntradas > 0 ? sumCargaPorEntrada / nCargaEntradas : 0;
@@ -387,7 +390,7 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
     return [...map.values()]
       .map(e => {
         const fechaPond = e.sumAnimales > 0
-          ? new Date(e.sumPesoXdia / e.sumAnimales).toISOString().slice(0, 10)
+          ? dateAISO(new Date(e.sumPesoXdia / e.sumAnimales))
           : '—';
         const categoriaDom = Object.entries(e.catCounts)
           .sort(([, a], [, b]) => b - a)[0]?.[0] ?? '—';

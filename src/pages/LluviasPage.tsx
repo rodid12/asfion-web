@@ -33,6 +33,7 @@ import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyModule } from '@/components/EmptyModule';
 import { formatNumber } from '@/lib/utils';
+import { fechaISOaLocal, dateAISO } from '@/lib/fechas';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Lluvia } from '@/data/types';
 
@@ -151,15 +152,18 @@ export function LluviasPage({ lluvias, campos }: Props) {
     if (mmPorDia.size === 0) return [];
     // Rellenar días sin lluvia para mostrar la distribución temporal real.
     // Solo si el rango es <= 180 días, para no inflar la serie de gráfico.
+    // Toda la aritmética de fechas en LOCAL timezone — usar dateAISO
+    // en vez de toISOString().slice(0,10) para evitar que eventos cargados
+    // cerca de medianoche caigan al día siguiente en UTC. Ver lib/fechas.ts
     const fechas = [...mmPorDia.keys()].sort();
-    const desde = new Date(fechas[0] + 'T00:00:00');
-    const hasta = new Date(fechas[fechas.length - 1] + 'T00:00:00');
+    const desde = fechaISOaLocal(fechas[0]);
+    const hasta = fechaISOaLocal(fechas[fechas.length - 1]);
     const dias = Math.round((hasta.getTime() - desde.getTime()) / 86400000) + 1;
     const out: Array<{ fecha: string; mm: number; label: string }> = [];
     if (dias <= 365) {
       for (let i = 0; i < dias; i++) {
         const d = new Date(desde.getTime() + i * 86400000);
-        const key = d.toISOString().slice(0, 10);
+        const key = dateAISO(d);
         out.push({
           fecha: key,
           mm: Math.round((mmPorDia.get(key) ?? 0) * 10) / 10,
@@ -170,7 +174,7 @@ export function LluviasPage({ lluvias, campos }: Props) {
     } else {
       // Rango muy largo (>1 año) — mostramos solo los días con lluvia.
       for (const f of fechas) {
-        const d = new Date(f + 'T00:00:00');
+        const d = fechaISOaLocal(f);
         out.push({
           fecha: f,
           mm: Math.round((mmPorDia.get(f) ?? 0) * 10) / 10,

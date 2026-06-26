@@ -15,26 +15,19 @@ import { MortandadPage } from './MortandadPage';
 import { PastoreoModule } from './PastoreoModule';
 import { ComprasPage } from './ComprasPage';
 import { VentasPage } from './VentasPage';
-import { PrenezPage, type Tacto } from './PrenezPage';
+import { PrenezPage } from './PrenezPage';
 import { NdviPage } from './NdviPage';
 import { BillingAdminPage } from './BillingAdminPage';
 
-// Snapshot de los 7 rodeos tactados — tomado del sheet "Prenez" del GVA
-// (Excel del cliente, version GVA_F(7).xlsx). Hardcodeado hasta que el
-// veterinario tenga form de carga propio en la app móvil o se haga sync
-// periódico de la planilla. Mismo enfoque que usamos con Stock Inicial.
-const TACTOS_GVA: Tacto[] = [
-  { id: 'p1', rodeo: 'VQ 27M Margarita',     origenTotal: 254, prenezCabeza: 123, prenezCuerpo:  86, prenezCola: 26, vacias: 19, perdon: 0, descarte: 0, feedLot: 0 },
-  { id: 'p2', rodeo: 'Vaquillas 15M Ag',     origenTotal: 529, prenezCabeza: 336, prenezCuerpo:  96, prenezCola: 31, vacias: 65, perdon: 0, descarte: 0, feedLot: 0 },
-  { id: 'p3', rodeo: 'Vaquillas 2° Serv C',  origenTotal: 540, prenezCabeza:   0, prenezCuerpo:   0, prenezCola:  0, vacias:  0, perdon: 0, descarte: 0, feedLot: 0 },
-  { id: 'p4', rodeo: 'Vacas Carolina',       origenTotal: 416, prenezCabeza: 141, prenezCuerpo: 140, prenezCola: 86, vacias: 48, perdon: 0, descarte: 0, feedLot: 0 },
-  { id: 'p5', rodeo: 'Vacas Progreso',       origenTotal: 418, prenezCabeza: 192, prenezCuerpo: 138, prenezCola: 58, vacias: 30, perdon: 0, descarte: 0, feedLot: 0 },
-  { id: 'p6', rodeo: 'Vacas Picaflor IATF',  origenTotal: 557, prenezCabeza:   0, prenezCuerpo:   0, prenezCola:  0, vacias:  0, perdon: 0, descarte: 0, feedLot: 0 },
-  { id: 'p7', rodeo: 'Vacas Picaflor Toro',  origenTotal: 358, prenezCabeza:   0, prenezCuerpo:   0, prenezCola:  0, vacias:  0, perdon: 0, descarte: 0, feedLot: 0 },
-];
+// (Antes había acá un array literal TACTOS_GVA con 7 rodeos de Ganaderas
+//  hardcodeado. Fue movido a la tabla `tactos` de Supabase via migration
+//  0012 con RLS por cliente_id, para que cada tenant vea solo los suyos
+//  y no haya leak cross-tenant.)
 import { Logo } from '@/components/Logo';
+import { ClientesAdminPage } from './ClientesAdminPage';
+import { UsersIcon } from 'lucide-react';
 
-type View = 'modules' | 'billing';
+type View = 'modules' | 'billing' | 'admin';
 
 export function Dashboard() {
   const { user, signOut } = useAuth();
@@ -88,20 +81,36 @@ export function Dashboard() {
           {/* Acciones + sesión */}
           <div className="flex items-center gap-3">
             {showAdmin && (
-              <button
-                onClick={() => setView(v => (v === 'billing' ? 'modules' : 'billing'))}
-                className={`inline-flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-xs font-bold transition ${
-                  view === 'billing'
-                    ? 'bg-asfion-orange text-asfion-navyDeep'
-                    : 'bg-white/5 text-asfion-orange hover:bg-asfion-orange/20 ring-1 ring-asfion-orange/30'
-                }`}
-                title={view === 'billing' ? 'Volver al tablero' : 'Panel de cobranzas'}
-              >
-                <ShieldIcon size={13} />
-                <span className="hidden sm:inline">
-                  {view === 'billing' ? 'Tablero' : 'Cobranzas'}
-                </span>
-              </button>
+              <>
+                <button
+                  onClick={() => setView(v => (v === 'admin' ? 'modules' : 'admin'))}
+                  className={`inline-flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-xs font-bold transition ${
+                    view === 'admin'
+                      ? 'bg-asfion-orange text-asfion-navyDeep'
+                      : 'bg-white/5 text-asfion-orange hover:bg-asfion-orange/20 ring-1 ring-asfion-orange/30'
+                  }`}
+                  title={view === 'admin' ? 'Volver al tablero' : 'Gestión de clientes'}
+                >
+                  <UsersIcon size={13} />
+                  <span className="hidden sm:inline">
+                    {view === 'admin' ? 'Tablero' : 'Clientes'}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setView(v => (v === 'billing' ? 'modules' : 'billing'))}
+                  className={`inline-flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-xs font-bold transition ${
+                    view === 'billing'
+                      ? 'bg-asfion-orange text-asfion-navyDeep'
+                      : 'bg-white/5 text-asfion-orange hover:bg-asfion-orange/20 ring-1 ring-asfion-orange/30'
+                  }`}
+                  title={view === 'billing' ? 'Volver al tablero' : 'Panel de cobranzas'}
+                >
+                  <ShieldIcon size={13} />
+                  <span className="hidden sm:inline">
+                    {view === 'billing' ? 'Tablero' : 'Cobranzas'}
+                  </span>
+                </button>
+              </>
             )}
             <button
               onClick={refresh}
@@ -192,6 +201,7 @@ export function Dashboard() {
 
         {/* Vista de cobranzas (solo super-admin) */}
         {view === 'billing' && showAdmin && <BillingAdminPage />}
+        {view === 'admin'   && showAdmin && <ClientesAdminPage />}
 
         {/* Vista operativa: página activa según tab */}
         {view === 'modules' && data && modulo === 'pariciones' && (
@@ -221,10 +231,11 @@ export function Dashboard() {
           <VentasPage ventas={[]} />
         )}
         {view === 'modules' && data && modulo === 'prenez' && (
-          // Por ahora con snapshot del GVA (7 rodeos). Cuando el veterinario
-          // tenga form en app móvil o sync periódico de su planilla, esto
-          // pasa a venir de Supabase como los demás módulos.
-          <PrenezPage tactos={TACTOS_GVA} />
+          // Tactos vienen de Supabase (tabla `tactos`, migration 0012).
+          // RLS por cliente_id garantiza que cada tenant vea solo los
+          // suyos. Si la tabla no existe todavía, fetchTactos devuelve
+          // [] y PrenezPage muestra su empty state.
+          <PrenezPage tactos={d.tactos} />
         )}
         {view === 'modules' && data && modulo === 'ndvi' && (
           // NDVI/Materia Seca — data real desde Supabase tabla ndvi_pasturas.

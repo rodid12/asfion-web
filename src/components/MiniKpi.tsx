@@ -23,9 +23,9 @@ export function MiniKpi({ label, value, accent = 'navy' }: Props) {
     accent === 'danger'    ? 'text-asfion-danger' :
                              'text-asfion-navyDeep';
   return (
-    <div className="bg-white rounded-xl border border-asfion-borderSoft px-4 py-3 flex flex-col gap-1">
-      <p className={cn('text-2xl font-extrabold tabular-nums leading-tight', accentFg)}>{value}</p>
-      <p className="text-xs uppercase tracking-wide font-semibold text-asfion-muted leading-tight">
+    <div className="bg-white rounded-xl border border-asfion-borderSoft px-3 sm:px-4 py-3 flex flex-col gap-1 min-w-0">
+      <p className={cn('text-xl sm:text-2xl font-extrabold tabular-nums leading-tight', accentFg)}>{value}</p>
+      <p className="text-[10px] sm:text-xs uppercase tracking-wide font-semibold text-asfion-muted leading-tight">
         {label}
       </p>
     </div>

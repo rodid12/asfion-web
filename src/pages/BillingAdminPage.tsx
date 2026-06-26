@@ -136,7 +136,7 @@ export function BillingAdminPage() {
                     <td className="py-3 px-2 text-right">
                       <button
                         onClick={() => setPaymentTarget(r)}
-                        className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-asfion-orange text-white hover:opacity-90 transition"
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold bg-asfion-orange text-white hover:opacity-90 transition whitespace-nowrap"
                       >
                         Registrar pago
                       </button>
@@ -248,9 +248,9 @@ function RegistrarPagoModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-asfion-navyDeep/60 flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl">
-        <div className="px-6 py-4 border-b border-asfion-borderSoft">
+    <div className="fixed inset-0 z-50 bg-asfion-navyDeep/60 flex items-center justify-center px-4 py-6 overflow-y-auto">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl my-auto max-h-full overflow-y-auto">
+        <div className="px-6 py-4 border-b border-asfion-borderSoft sticky top-0 bg-white z-10">
           <h3 className="text-lg font-extrabold text-asfion-navyDeep">Registrar pago</h3>
           <p className="text-sm text-asfion-muted mt-1">
             Cliente: <span className="font-semibold text-asfion-navy">{cliente.nombre}</span>

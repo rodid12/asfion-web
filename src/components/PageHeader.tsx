@@ -27,19 +27,19 @@ interface Props {
 export function PageHeader({ title, subtitle, count, lastDate, actions }: Props) {
   const hasMeta = count !== undefined || lastDate !== undefined;
   return (
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div className="min-w-0">
-        <h2 className="text-3xl font-extrabold text-asfion-navyDeep leading-tight">
+    <div className="flex flex-wrap items-start sm:items-end justify-between gap-3 sm:gap-4">
+      <div className="min-w-0 flex-1">
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-asfion-navyDeep leading-tight break-words">
           {title}
         </h2>
         {subtitle && (
-          <p className="text-sm text-asfion-muted mt-1">{subtitle}</p>
+          <p className="text-xs sm:text-sm text-asfion-muted mt-1">{subtitle}</p>
         )}
       </div>
       {(hasMeta || actions) && (
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
           {hasMeta && (
-            <div className="text-sm text-asfion-muted">
+            <div className="text-xs sm:text-sm text-asfion-muted">
               {count && (
                 <>
                   <span className="font-semibold text-asfion-navy">
@@ -48,12 +48,12 @@ export function PageHeader({ title, subtitle, count, lastDate, actions }: Props)
                   {count.label}
                 </>
               )}
-              {count && lastDate && <span className="mx-2">·</span>}
+              {count && lastDate && <span className="mx-2 hidden sm:inline">·</span>}
               {lastDate && (
-                <>
-                  últimos datos:{' '}
+                <span className="block sm:inline">
+                  <span className="hidden sm:inline">últimos datos: </span>
                   <span className="tabular-nums text-asfion-navy">{lastDate}</span>
-                </>
+                </span>
               )}
             </div>
           )}

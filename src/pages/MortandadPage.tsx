@@ -34,6 +34,7 @@ import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyModule } from '@/components/EmptyModule';
 import { formatNumber } from '@/lib/utils';
+import { fechaISOaLocal, dateAISO } from '@/lib/fechas';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Mortandad } from '@/data/types';
 
@@ -190,14 +191,17 @@ export function MortandadPage({ mortandad, campos }: Props) {
     // los días con eventos para no inflar la serie.
     const porDia: Array<{ fecha: string; label: string; n: number }> = [];
     const diasConDato = [...byDia.keys()].sort();
+    // Importante: hacemos toda la aritmética de fechas en LOCAL timezone
+    // para evitar el bug clásico de toISOString()/UTC que corre los
+    // eventos cargados cerca de medianoche un día atrás (ver lib/fechas.ts).
     if (diasConDato.length > 0) {
-      const desde = new Date(diasConDato[0] + 'T00:00:00');
-      const hasta = new Date(diasConDato[diasConDato.length - 1] + 'T00:00:00');
+      const desde = fechaISOaLocal(diasConDato[0]);
+      const hasta = fechaISOaLocal(diasConDato[diasConDato.length - 1]);
       const dias = Math.round((hasta.getTime() - desde.getTime()) / 86400000) + 1;
       if (dias <= 365) {
         for (let i = 0; i < dias; i++) {
           const d = new Date(desde.getTime() + i * 86400000);
-          const key = d.toISOString().slice(0, 10);
+          const key = dateAISO(d);
           porDia.push({
             fecha: key,
             label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
@@ -206,7 +210,7 @@ export function MortandadPage({ mortandad, campos }: Props) {
         }
       } else {
         for (const key of diasConDato) {
-          const d = new Date(key + 'T00:00:00');
+          const d = fechaISOaLocal(key);
           porDia.push({
             fecha: key,
             label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,

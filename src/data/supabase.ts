@@ -23,6 +23,7 @@ import type {
   Pastoreo,
   Sexo,
   SiNo,
+  Tacto,
   VacasGrupo,
 } from './types';
 
@@ -294,6 +295,45 @@ function rowToNdvi(r: any): NdviPastura {
     estado:     r.estado ?? undefined,
     createdAt:  r.created_at,
   };
+}
+
+// =============================================================================
+// Tactos (Preñez) — migration 0012
+// =============================================================================
+
+function rowToTacto(r: any): Tacto {
+  return {
+    id: r.id,
+    rodeo: r.rodeo,
+    campo: r.campo ?? undefined,
+    fecha: r.fecha ?? undefined,
+    origenTotal:    Number(r.origen_total ?? 0),
+    prenezCabeza:   Number(r.prenez_cabeza ?? 0),
+    prenezCuerpo:   Number(r.prenez_cuerpo ?? 0),
+    prenezCola:     Number(r.prenez_cola ?? 0),
+    vacias:         Number(r.vacias ?? 0),
+    perdon:         Number(r.perdon ?? 0),
+    descarte:       Number(r.descarte ?? 0),
+    feedLot:        Number(r.feed_lot ?? 0),
+  };
+}
+
+export async function fetchTactos(): Promise<Tacto[]> {
+  try {
+    const rows = await fetchAllPaginated<any>('tactos',
+      q => q.order('rodeo', { ascending: true }) as QueryBuilder);
+    return rows.map(rowToTacto);
+  } catch (err: any) {
+    // La tabla se crea en migration 0012. Si todavía no aplicó, devolvemos
+    // array vacío para que el módulo Preñez muestre su empty state sin
+    // romper el dashboard.
+    const msg = String(err?.message ?? err).toLowerCase();
+    if (msg.includes('does not exist') || msg.includes('relation') || err?.code === '42P01') {
+      console.warn('Tabla tactos no existe todavía — aplicá migration 0012');
+      return [];
+    }
+    throw new Error(`fetchTactos: ${err?.message ?? err}`);
+  }
 }
 
 export async function fetchNdvi(): Promise<NdviPastura[]> {

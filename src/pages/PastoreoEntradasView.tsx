@@ -40,7 +40,8 @@ import { Kpi } from '@/components/Kpi';
 import {
   SimpleFilterBar,
   SIMPLE_FILTROS_DEFAULT,
-  rangoDesde,
+  enPeriodo,
+  añosEnData,
   type SimpleFiltros,
 } from '@/components/SimpleFilterBar';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
@@ -75,14 +76,18 @@ export function PastoreoEntradasView({ pastoreo, campos, circuitos }: Props) {
 
   // Filtramos por: rango + campo (filtros estándar) + tipo de evento.
   const filtrados = useMemo(() => {
-    const desde = rangoDesde(filtros.rango);
     return pastoreo.filter(p => {
       if (!isEntrada(p.evento)) return false;
-      if (desde && p.fecha < desde) return false;
+      if (!enPeriodo(p.fecha, filtros)) return false;
       if (filtros.campoId !== 'todos' && p.campoId !== filtros.campoId) return false;
       return true;
     });
   }, [pastoreo, filtros]);
+
+  const añosDisponibles = useMemo(
+    () => añosEnData(pastoreo.filter(p => isEntrada(p.evento)).map(p => p.fecha)),
+    [pastoreo],
+  );
 
   const kpis = useMemo(() => {
     let animales = 0;
@@ -156,7 +161,7 @@ export function PastoreoEntradasView({ pastoreo, campos, circuitos }: Props) {
         }
       />
 
-      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
+      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Kpi

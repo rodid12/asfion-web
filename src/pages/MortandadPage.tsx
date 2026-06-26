@@ -26,7 +26,8 @@ import { MortandadMap } from '@/components/MortandadMap';
 import {
   SimpleFilterBar,
   SIMPLE_FILTROS_DEFAULT,
-  rangoDesde,
+  enPeriodo,
+  añosEnData,
   type SimpleFiltros,
 } from '@/components/SimpleFilterBar';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
@@ -59,22 +60,39 @@ interface Props {
 export function normalizarCausa(causa: string | null | undefined): string {
   if (!causa) return 'Sin identificar';
   const c = causa.trim();
-  if (!c) return 'Sin identificar';
+  // Strings basura (puntos solos, comas, texto muy corto sin letras) van
+  // todas al bucket "Sin identificar" — no aportan info.
+  if (!c || c.length < 3 || !/[a-záéíóúñ]/i.test(c)) return 'Sin identificar';
   const lower = c.toLowerCase();
-  // Variantes de "sin info" → mismo bucket
-  if (['sin identificar', 'sin especificar', 'desconose', 'desconocida', 'no se sabe', 'no identificada'].includes(lower)) {
+  // Variantes de "sin info" → mismo bucket. Incluye typos comunes que
+  // el operario carga sin tilde o trunca.
+  if (
+    ['sin identificar', 'sin especificar', 'desconose', 'desconocida',
+     'desconocido', 'desconocid', 'no se sabe', 'no identificada',
+     'no sabe', 's/d', 'nd'].includes(lower)
+  ) {
     return 'Sin identificar';
   }
-  // Neumonía / Neumo
-  if (lower === 'neumo' || lower === 'neumonia' || lower === 'neumonía') return 'Neumonía';
-  // Tristeza (incluye variantes con Anaplas)
+  // Neumonía / Neumo / Neumonía y X (la diarrea es secundaria → cuenta como neumonía)
+  if (lower === 'neumo' || lower === 'neumonia' || lower === 'neumonía' || lower.startsWith('neumonía')) {
+    return 'Neumonía';
+  }
+  // Tristeza (incluye variantes con Anaplas, garrapata, etc.)
   if (lower.startsWith('tristeza')) return 'Tristeza';
   // Distocia (problemas de parto)
   if (lower.includes('distocia') || lower.includes('distócico') || lower.includes('parto distoc') || lower === 'problema de parto') {
     return 'Distocia';
   }
-  // Respiratorio (Problema respiratorio + variantes)
-  if (lower.includes('respiratorio')) return 'Problema respiratorio';
+  // Respiratorio (Problema respiratorio + "Dificultad respiratoria" + variantes)
+  if (lower.includes('respiratori')) return 'Problema respiratorio';
+  // Vieja/Viejo/Vejez → Vejez (animal viejo flaco que muere)
+  if (lower === 'vieja' || lower === 'viejo' || lower.startsWith('vaca vieja') || lower.startsWith('viejo flaco')) {
+    return 'Vejez';
+  }
+  // Reacción a vacuna/desparasitante (typo común "despracitante")
+  if (lower.includes('reacción') || lower.includes('reaccion') || lower.includes('despracitante') || lower.includes('desparacitante')) {
+    return 'Reacción a vacuna/desparasitante';
+  }
   // Normalizar capitalización para el resto: primera letra mayúscula
   return c.charAt(0).toUpperCase() + c.slice(1).toLowerCase();
 }
@@ -83,13 +101,18 @@ export function MortandadPage({ mortandad, campos }: Props) {
   const [filtros, setFiltros] = useState<SimpleFiltros>(SIMPLE_FILTROS_DEFAULT);
 
   const filtradas = useMemo(() => {
-    const desde = rangoDesde(filtros.rango);
     return mortandad.filter(m => {
-      if (desde && m.fecha < desde) return false;
+      if (!enPeriodo(m.fecha, filtros)) return false;
       if (filtros.campoId !== 'todos' && m.campoId !== filtros.campoId) return false;
       return true;
     });
   }, [mortandad, filtros]);
+
+  // Años con data — para alimentar el dropdown del filtro.
+  const añosDisponibles = useMemo(
+    () => añosEnData(mortandad.map(m => m.fecha)),
+    [mortandad],
+  );
 
   // ---------- KPIs + chart data ----------
   const { porCampo, porCategoria, porActividad, porCausa, porMes, porDia, topCampo, topCategoria, topCausa, totalMuertesDistinct } = useMemo(() => {
@@ -117,7 +140,13 @@ export function MortandadPage({ mortandad, campos }: Props) {
       // causas distintas. También consolidamos las variantes de "sin info"
       // bajo un único bucket "Sin identificar" — así el donut destaca las
       // causas reales en vez de inflarse de ruido.
-      const causa = normalizarCausa(m.causaTipo);
+      //
+      // Fuente: el sheet del cliente carga las causas reales (Tristeza,
+      // Neumonía, Distocia, etc.) en `causa_detalle` (texto libre).
+      // `causa_tipo` quedó como enum chico ('Muerte Señalado' / 'Nacido
+      // Muerto' / 'Desconocido') que casi nunca se usa. Probamos detalle
+      // primero, después tipo, y por último "Sin identificar".
+      const causa = normalizarCausa(m.causaDetalle ?? m.causaTipo);
       byCausa.set(causa, (byCausa.get(causa) ?? 0) + 1);
       const mes = m.fecha.slice(0, 7);
       byMes.set(mes, (byMes.get(mes) ?? 0) + 1);
@@ -216,7 +245,7 @@ export function MortandadPage({ mortandad, campos }: Props) {
         }
       />
 
-      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
+      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi

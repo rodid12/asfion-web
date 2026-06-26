@@ -25,7 +25,8 @@ import { Kpi } from '@/components/Kpi';
 import {
   SimpleFilterBar,
   SIMPLE_FILTROS_DEFAULT,
-  rangoDesde,
+  enPeriodo,
+  añosEnData,
   type SimpleFiltros,
 } from '@/components/SimpleFilterBar';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
@@ -44,13 +45,17 @@ export function LluviasPage({ lluvias, campos }: Props) {
   const [filtros, setFiltros] = useState<SimpleFiltros>(SIMPLE_FILTROS_DEFAULT);
 
   const filtradas = useMemo(() => {
-    const desde = rangoDesde(filtros.rango);
     return lluvias.filter(l => {
-      if (desde && l.fecha < desde) return false;
+      if (!enPeriodo(l.fecha, filtros)) return false;
       if (filtros.campoId !== 'todos' && l.campoId !== filtros.campoId) return false;
       return true;
     });
   }, [lluvias, filtros]);
+
+  const añosDisponibles = useMemo(
+    () => añosEnData(lluvias.map(l => l.fecha)),
+    [lluvias],
+  );
 
   // Filtro adicional para KPIs/charts agregados: solo lecturas del pluviómetro
   // "principal" de cada campo, según el mapeo que pasó Agus. Los pluviómetros
@@ -206,7 +211,7 @@ export function LluviasPage({ lluvias, campos }: Props) {
         }
       />
 
-      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
+      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi

@@ -37,7 +37,8 @@ import { EmptyModule } from '@/components/EmptyModule';
 import {
   SimpleFilterBar,
   SIMPLE_FILTROS_DEFAULT,
-  rangoDesde,
+  enPeriodo,
+  añosEnData,
   type SimpleFiltros,
 } from '@/components/SimpleFilterBar';
 import { formatNumber } from '@/lib/utils';
@@ -61,10 +62,14 @@ function parseCabezas(txt: string | undefined): number {
 export function ComprasPage({ compras, campos }: Props) {
   const [filtros, setFiltros] = useState<SimpleFiltros>(SIMPLE_FILTROS_DEFAULT);
 
+  const añosDisponibles = useMemo(
+    () => añosEnData(compras.map(c => c.fecha)),
+    [compras],
+  );
+
   const filtradas = useMemo(() => {
-    const desde = rangoDesde(filtros.rango);
     return compras.filter(c => {
-      if (desde && c.fecha < desde) return false;
+      if (!enPeriodo(c.fecha, filtros)) return false;
       if (filtros.campoId !== 'todos' && c.campoId !== filtros.campoId) return false;
       return true;
     });
@@ -173,7 +178,7 @@ export function ComprasPage({ compras, campos }: Props) {
         }
       />
 
-      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
+      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">

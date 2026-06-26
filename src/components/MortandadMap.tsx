@@ -112,9 +112,11 @@ export function MortandadMap({ mortandad, campoNombre, normalizarCausa }: Props)
         conGps.forEach(m => {
           const lat = m.gpsLat as number;
           const lon = m.gpsLon as number;
+          // El cliente carga las causas reales en causaDetalle (Tristeza,
+          // Neumonía, etc.) — probamos detalle primero, después tipo.
           const causa = normalizarCausa
-            ? normalizarCausa(m.causaTipo ?? m.causaDetalle)
-            : (m.causaTipo ?? 'Sin identificar');
+            ? normalizarCausa(m.causaDetalle ?? m.causaTipo)
+            : (m.causaDetalle ?? m.causaTipo ?? 'Sin identificar');
           const color = COLOR_CAUSA[causa] ?? COLOR_DEFAULT;
           const campo = campoNombre ? campoNombre(m.campoId) : m.campoId;
           const popupHtml = `

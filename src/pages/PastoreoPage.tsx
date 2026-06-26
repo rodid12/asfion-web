@@ -37,7 +37,8 @@ import { Kpi } from '@/components/Kpi';
 import {
   SimpleFilterBar,
   SIMPLE_FILTROS_DEFAULT,
-  rangoDesde,
+  enPeriodo,
+  añosEnData,
   type SimpleFiltros,
 } from '@/components/SimpleFilterBar';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
@@ -63,13 +64,17 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
   );
 
   const filtrados = useMemo(() => {
-    const desde = rangoDesde(filtros.rango);
     return pastoreo.filter(p => {
-      if (desde && p.fecha < desde) return false;
+      if (!enPeriodo(p.fecha, filtros)) return false;
       if (filtros.campoId !== 'todos' && p.campoId !== filtros.campoId) return false;
       return true;
     });
   }, [pastoreo, filtros]);
+
+  const añosDisponibles = useMemo(
+    () => añosEnData(pastoreo.map(p => p.fecha)),
+    [pastoreo],
+  );
 
   // ---------- KPIs ----------
   //
@@ -431,7 +436,7 @@ export function PastoreoPage({ pastoreo, campos, circuitos }: Props) {
         }
       />
 
-      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} />
+      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
 
       {/* KPIs productivos — fila Power BI estilo */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -795,7 +800,7 @@ function MateriaSecaSection({ data }: { data: MateriaSecaData }) {
 
   return (
     <>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Kpi label="MS kg/ha Prom" value={formatNumber(data.msKgPorHa)} accent="navy" />
         <Kpi label="MS Total"      value={formatNumber(data.msTotal)}   accent="orange" />
         <Kpi label="Hectáreas"     value={formatNumber(data.hectareas)} accent="navy" />

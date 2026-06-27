@@ -12,7 +12,7 @@
 // que el UI muestre el badge "Sin conexión — datos del DD/MM HH:MM".
 
 import { useEffect, useState } from 'react';
-import type { Campo, Circuito, Compra, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, Tacto } from './types';
+import type { Campo, Circuito, Compra, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto } from './types';
 import {
   fetchCampos,
   fetchCircuitos,
@@ -22,6 +22,8 @@ import {
   fetchNdvi,
   fetchPariciones,
   fetchPastoreo,
+  fetchPastoreoCiclos,
+  fetchResumenServicio,
   fetchTactos,
 } from './supabase';
 import { loadCache, saveCache } from './offlineCache';
@@ -33,6 +35,8 @@ export interface DashboardData {
   lluvias: Lluvia[];
   mortandad: Mortandad[];
   pastoreo: Pastoreo[];
+  pastoreoCiclos: PastoreoCiclo[];
+  resumenServicio: ResumenServicio[];
   compras: Compra[];
   ndvi: NdviPastura[];
   tactos: Tacto[];
@@ -58,6 +62,8 @@ const EMPTY: DashboardData = {
   lluvias: [],
   mortandad: [],
   pastoreo: [],
+  pastoreoCiclos: [],
+  resumenServicio: [],
   compras: [],
   ndvi: [],
   tactos: [],
@@ -100,7 +106,7 @@ export function useDashboardData(): UseDataResult {
 
       // 2-4. Fetch online en paralelo (o secuencial si no había cache).
       try {
-        const [campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras, ndvi, tactos] =
+        const [campos, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos] =
           await Promise.all([
             fetchCampos(),
             fetchCircuitos(),
@@ -108,12 +114,14 @@ export function useDashboardData(): UseDataResult {
             fetchLluvias(),
             fetchMortandad(),
             fetchPastoreo(),
+            fetchPastoreoCiclos(),
+            fetchResumenServicio(),
             fetchCompras(),
             fetchNdvi(),
             fetchTactos(),
           ]);
         if (cancelled) return;
-        const fresh: DashboardData = { campos, circuitos, pariciones, lluvias, mortandad, pastoreo, compras, ndvi, tactos };
+        const fresh: DashboardData = { campos, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos };
         setData(fresh);
         setOffline(false);
         setCachedAt(null);

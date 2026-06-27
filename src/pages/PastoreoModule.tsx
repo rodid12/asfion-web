@@ -14,7 +14,7 @@
 
 import React, { useState } from 'react';
 import { clsx } from 'clsx';
-import type { Campo, Circuito, Pastoreo } from '@/data/types';
+import type { Campo, Circuito, Pastoreo, PastoreoCiclo } from '@/data/types';
 import { PastoreoPage } from './PastoreoPage';
 import { CorralesPage } from './CorralesPage';
 
@@ -22,12 +22,15 @@ type SubTab = 'pastoreo' | 'corrales';
 
 interface Props {
   pastoreo: Pastoreo[];
+  pastoreoCiclos: PastoreoCiclo[];
   campos: Campo[];
   circuitos: Circuito[];
 }
 
 const SUB_TABS: { key: SubTab; label: string; count?: (p: Props) => number }[] = [
-  { key: 'pastoreo', label: 'Pastoreo',        count: p => p.pastoreo.length },
+  // Count = ciclos cargados (tabla nueva pastoreo_ciclos). Si todavía no se
+  // aplicó la migración 0018, cae a stays viejos para no mostrar 0.
+  { key: 'pastoreo', label: 'Pastoreo',        count: p => p.pastoreoCiclos.length || p.pastoreo.length },
   // Corrales: por ahora el data viene vacío (la fuente todavía no está
   // conectada — Sheets / app móvil). Sin count.
   { key: 'corrales', label: 'Cierre Corrales' },
@@ -76,7 +79,12 @@ export function PastoreoModule(props: Props) {
           sin tocarles la estructura interna. La sección "Entradas" se
           renderiza embebida dentro de PastoreoPage (no es sub-tab). */}
       {subTab === 'pastoreo' && (
-        <PastoreoPage pastoreo={props.pastoreo} campos={props.campos} circuitos={props.circuitos} />
+        <PastoreoPage
+          pastoreoCiclos={props.pastoreoCiclos}
+          pastoreo={props.pastoreo}
+          campos={props.campos}
+          circuitos={props.circuitos}
+        />
       )}
       {subTab === 'corrales' && (
         // corrales=[] hasta que se conecte la fuente — el empty state vive

@@ -56,14 +56,18 @@ import { EmptyModule } from '@/components/EmptyModule';
 import { aplicarFiltros, FILTROS_DEFAULT, type Filtros } from '@/data/filters';
 import { formatNumber, formatPercent } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
-import type { Campo, Paricion } from '@/data/types';
+import type { Campo, Paricion, ResumenServicio } from '@/data/types';
+import { ResumenServicioTable } from '@/components/ResumenServicioTable';
 
 interface Props {
   pariciones: Paricion[];
   campos: Campo[];
+  /** Resumen mermas servicio por tropa (Excel Hoja 3). Opcional — se
+   *  renderea solo si hay rows. */
+  resumenServicio?: ResumenServicio[];
 }
 
-export function ParicionesPage({ pariciones, campos }: Props) {
+export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Props) {
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_DEFAULT);
 
   const filtrados = useMemo(
@@ -401,6 +405,14 @@ export function ParicionesPage({ pariciones, campos }: Props) {
       >
         <ParicionesTable data={filtrados} campos={campos} />
       </Card>
+
+      {/* Resumen Mermas Servicio — el agregado anual por tropa que arma
+          el cliente al cierre de cada temporada. La columna "Terneros
+          Vivos" sale destacada en verde (es la métrica más importante
+          según pedido explícito del cliente). */}
+      {resumenServicio.length > 0 && (
+        <ResumenServicioTable rows={resumenServicio} />
+      )}
     </div>
   );
 }

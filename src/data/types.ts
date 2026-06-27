@@ -172,6 +172,97 @@ export interface Pastoreo {
 }
 
 // -----------------------------------------------------------------------------
+// Resumen Mermas Servicio (migration 0020) — agregación anual por tropa
+// -----------------------------------------------------------------------------
+//
+// Tabla DISTINTA a `pariciones` (eventos individuales): este es el resumen
+// que arma Agus al cierre de cada temporada, con 1 row por tropa. La
+// métrica clave es `ternerosVivos` (en verde en el Excel del cliente —
+// es el ÚNICO número que importa para % destete real).
+export interface ResumenServicio {
+  id: string;
+  servicioAnio: number;
+  campo: string;
+  tropa: string;
+  prenadas?: number;
+  vaciasRetacto?: number;
+  prenadasRetacto?: number;
+  nptAbortosRetacto?: number;
+  // Vientres muertos DURANTE servicio (no son terneros — corregido vs antes)
+  mortandadVientres?: number;
+  ternerosSenalados?: number;
+  ternerosSinSenalar?: number;
+  recuentoSalidaTerneros?: number;
+  vacasDuranteServicio?: number;
+  ternerosNacidos?: number;
+  /** Métrica clave — terneros vivos al destete (verde en el Excel). */
+  ternerosVivos?: number;
+  // Mermas
+  mermaTrParicion?: number;
+  mermaTrDestete?: number;
+  pctAbortosNpt?: number;
+  pctMortVientres?: number;
+  pctMortTernSenalados?: number;
+  pctMortTernSinSenal?: number;
+  pctDesteteSobrePrenado?: number;
+  observaciones?: string;
+  createdAt: string;
+}
+
+// -----------------------------------------------------------------------------
+// Pastoreo Ciclo (migration 0018) — modelo con 3 etapas: Largada, Control, Final
+// -----------------------------------------------------------------------------
+//
+// 1 row = 1 grupo de animales que recorre un circuito durante una temporada.
+// Cada etapa es opcional: típicamente todos tienen Largada, ~30% tienen
+// Control intermedio, ~85% tienen Cierre/Final cargado.
+//
+// El dashboard usa este tipo para los "globitos" (KPIs) del Power BI y
+// para filtrar por Campo, Circuito, Categoría y Etapa.
+export interface PastoreoCiclo {
+  id: string;
+  campoId?: string;
+  campoNombre: string;
+  circuitoNombre: string;
+  categoria: string; // novillito / Vaquillas / Vaq 15M / Vaq a 27 Meses
+
+  hasCircuito?: number;
+  cantAnimales?: number;
+  cargaCaHa?: number;
+
+  // LARGADA
+  fechaIngreso?: string;
+  pesoPromIngresoSinDesbaste?: number;
+  kgNetoIngresoDesbaste?: number;
+  kgTotalesCarneIngreso?: number;
+  cargaKgCarneHaReal?: number;
+
+  // CONTROL (opcional)
+  fechaControl?: string;
+  cantControl?: number;
+  kgNetoControl?: number;
+  kgTotalesCarneControl?: number;
+  kgCarneProducidosAnimalControl?: number;
+  diasPastoreoControl?: number;
+  gdpvControl?: number;
+  kgCarneProducidosHaControl?: number;
+
+  // FINAL / Cierre
+  fechaEncierre?: string;
+  cantFinal?: number;
+  kgNetoFinal?: number;
+  kgTotalesCarneFinal?: number;
+  kgCarneProducidosAnimalFinal?: number;
+  diasPastoreoFinal?: number;
+  gdpvFinal?: number;
+  kgCarneProducidosHaFinal?: number;
+
+  observaciones?: string;
+  creadoPorEmail?: string;
+  createdAt: string;
+}
+
+// -----------------------------------------------------------------------------
 // Compra (migration 0004)
 // -----------------------------------------------------------------------------
 //

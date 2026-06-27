@@ -21,6 +21,8 @@ import type {
   NdviPastura,
   Paricion,
   Pastoreo,
+  PastoreoCiclo,
+  ResumenServicio,
   Sexo,
   SiNo,
   Tacto,
@@ -213,6 +215,118 @@ export async function fetchPastoreo(): Promise<Pastoreo[]> {
     return rows.map(rowToPastoreo);
   } catch (err: any) {
     throw new Error(`fetchPastoreo: ${err?.message ?? err}`);
+  }
+}
+
+// =============================================================================
+// Pastoreo Ciclos (migration 0018) — Largada / Control / Final
+// =============================================================================
+
+function num(v: any): number | undefined {
+  return v != null ? Number(v) : undefined;
+}
+
+function rowToPastoreoCiclo(r: any): PastoreoCiclo {
+  return {
+    id: r.id,
+    campoId: r.campo_id ?? undefined,
+    campoNombre: r.campo_nombre,
+    circuitoNombre: r.circuito_nombre,
+    categoria: r.categoria,
+    hasCircuito:                       num(r.has_circuito),
+    cantAnimales:                      num(r.cant_animales),
+    cargaCaHa:                         num(r.carga_ca_ha),
+    // Largada
+    fechaIngreso:                      r.fecha_ingreso ?? undefined,
+    pesoPromIngresoSinDesbaste:        num(r.peso_prom_ingreso_sin_desbaste),
+    kgNetoIngresoDesbaste:             num(r.kg_neto_ingreso_desbaste),
+    kgTotalesCarneIngreso:             num(r.kg_totales_carne_ingreso),
+    cargaKgCarneHaReal:                num(r.carga_kg_carne_ha_real),
+    // Control
+    fechaControl:                      r.fecha_control ?? undefined,
+    cantControl:                       num(r.cant_control),
+    kgNetoControl:                     num(r.kg_neto_control),
+    kgTotalesCarneControl:             num(r.kg_totales_carne_control),
+    kgCarneProducidosAnimalControl:    num(r.kg_carne_producidos_animal_control),
+    diasPastoreoControl:               num(r.dias_pastoreo_control),
+    gdpvControl:                       num(r.gdpv_control),
+    kgCarneProducidosHaControl:        num(r.kg_carne_producidos_ha_control),
+    // Final
+    fechaEncierre:                     r.fecha_encierre ?? undefined,
+    cantFinal:                         num(r.cant_final),
+    kgNetoFinal:                       num(r.kg_neto_final),
+    kgTotalesCarneFinal:               num(r.kg_totales_carne_final),
+    kgCarneProducidosAnimalFinal:      num(r.kg_carne_producidos_animal_final),
+    diasPastoreoFinal:                 num(r.dias_pastoreo_final),
+    gdpvFinal:                         num(r.gdpv_final),
+    kgCarneProducidosHaFinal:          num(r.kg_carne_producidos_ha_final),
+    observaciones:                     r.observaciones ?? undefined,
+    creadoPorEmail:                    r.creado_por_email ?? undefined,
+    createdAt:                         r.created_at,
+  };
+}
+
+// =============================================================================
+// Resumen Mermas Servicio (migration 0020)
+// =============================================================================
+
+function rowToResumenServicio(r: any): ResumenServicio {
+  return {
+    id: r.id,
+    servicioAnio: r.servicio_anio,
+    campo: r.campo,
+    tropa: r.tropa,
+    prenadas:                num(r.prenadas),
+    vaciasRetacto:           num(r.vacias_retacto),
+    prenadasRetacto:         num(r.prenadas_retacto),
+    nptAbortosRetacto:       num(r.npt_abortos_retacto),
+    mortandadVientres:       num(r.mortandad_vientres),
+    ternerosSenalados:       num(r.terneros_senalados),
+    ternerosSinSenalar:      num(r.terneros_sin_senalar),
+    recuentoSalidaTerneros:  num(r.recuento_salida_terneros),
+    vacasDuranteServicio:    num(r.vacas_durante_servicio),
+    ternerosNacidos:         num(r.terneros_nacidos),
+    ternerosVivos:           num(r.terneros_vivos),
+    mermaTrParicion:         num(r.merma_tr_paricion),
+    mermaTrDestete:          num(r.merma_tr_destete),
+    pctAbortosNpt:           num(r.pct_abortos_npt),
+    pctMortVientres:         num(r.pct_mort_vientres),
+    pctMortTernSenalados:    num(r.pct_mort_tern_senalados),
+    pctMortTernSinSenal:     num(r.pct_mort_tern_sin_senal),
+    pctDesteteSobrePrenado:  num(r.pct_destete_sobre_prenado),
+    observaciones:           r.observaciones ?? undefined,
+    createdAt:               r.created_at,
+  };
+}
+
+export async function fetchResumenServicio(): Promise<ResumenServicio[]> {
+  try {
+    const rows = await fetchAllPaginated<any>('pariciones_resumen_servicio',
+      q => q.order('servicio_anio', { ascending: false }) as QueryBuilder);
+    return rows.map(rowToResumenServicio);
+  } catch (err: any) {
+    if (/relation "pariciones_resumen_servicio" does not exist/i.test(err?.message ?? '')) {
+      console.warn('fetchResumenServicio: tabla aún no creada — corré migration 0020');
+      return [];
+    }
+    throw new Error(`fetchResumenServicio: ${err?.message ?? err}`);
+  }
+}
+
+export async function fetchPastoreoCiclos(): Promise<PastoreoCiclo[]> {
+  try {
+    const rows = await fetchAllPaginated<any>('pastoreo_ciclos',
+      q => q.order('fecha_ingreso', { ascending: false }) as QueryBuilder);
+    return rows.map(rowToPastoreoCiclo);
+  } catch (err: any) {
+    // Fallback graceful si la tabla todavía no existe en la DB del cliente
+    // (migración 0018 no aplicada): devolvemos array vacío para que el
+    // dashboard renderee el EmptyModule en lugar de explotar.
+    if (/relation "pastoreo_ciclos" does not exist/i.test(err?.message ?? '')) {
+      console.warn('fetchPastoreoCiclos: tabla pastoreo_ciclos aún no creada — corré migration 0018');
+      return [];
+    }
+    throw new Error(`fetchPastoreoCiclos: ${err?.message ?? err}`);
   }
 }
 

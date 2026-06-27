@@ -205,7 +205,11 @@ export function Dashboard() {
 
         {/* Vista operativa: página activa según tab */}
         {view === 'modules' && data && modulo === 'pariciones' && (
-          <ParicionesPage pariciones={d.pariciones} campos={d.campos} />
+          <ParicionesPage
+            pariciones={d.pariciones}
+            campos={d.campos}
+            resumenServicio={d.resumenServicio}
+          />
         )}
         {view === 'modules' && data && modulo === 'lluvias' && (
           <LluviasPage lluvias={d.lluvias} campos={d.campos} />
@@ -219,7 +223,12 @@ export function Dashboard() {
           // Antes Corrales era tab top-level — se movió adentro porque
           // conceptualmente es parte del ciclo de pastoreo (la última etapa
           // antes de la venta).
-          <PastoreoModule pastoreo={d.pastoreo} campos={d.campos} circuitos={d.circuitos} />
+          <PastoreoModule
+            pastoreo={d.pastoreo}
+            pastoreoCiclos={d.pastoreoCiclos}
+            campos={d.campos}
+            circuitos={d.circuitos}
+          />
         )}
         {view === 'modules' && data && modulo === 'compras' && (
           // Compras = entradas de hacienda al sistema (proveedores).

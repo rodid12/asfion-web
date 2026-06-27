@@ -6,7 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { LogOutIcon, RefreshCwIcon, ShieldIcon } from 'lucide-react';
 import { useDashboardData, EMPTY_DATA } from '@/data/useData';
 import { useAuth } from '@/lib/auth';
-import { isSuperAdmin } from '@/lib/billing';
+import { useIsSuperAdmin } from '@/lib/billing';
 import { ModuleTabs, type ModuleKey } from '@/components/ModuleTabs';
 import { parseCurrentPath, pushPath } from '@/lib/routing';
 import { ParicionesPage } from './ParicionesPage';
@@ -38,7 +38,7 @@ export function Dashboard() {
   const initial = parseCurrentPath();
   const [modulo, setModulo] = useState<ModuleKey>(initial.modulo);
   const [view, setView] = useState<View>(initial.view);
-  const showAdmin = isSuperAdmin(user?.email);
+  const showAdmin = useIsSuperAdmin(user?.email);
 
   // Sincroniza URL → state cuando el usuario usa back/forward del browser.
   // Sin esto, click en "atrás" cambiaría la URL pero el state quedaría

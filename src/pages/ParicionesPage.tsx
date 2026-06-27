@@ -58,6 +58,7 @@ import { formatNumber, formatPercent } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Paricion, ResumenServicio } from '@/data/types';
 import { ResumenServicioTable } from '@/components/ResumenServicioTable';
+import { campoNombreFn } from '@/lib/campoMap';
 
 interface Props {
   pariciones: Paricion[];
@@ -421,7 +422,9 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
 // espera en su Excel: fecha humana primero, identificación del animal
 // (campo, lote, caravana) en el medio, datos del evento al final.
 function exportPariciones(rows: Paricion[], campos: Campo[]): void {
-  const campoNombre = (id: string) => campos.find(c => c.id === id)?.nombre ?? id;
+  // Map precomputado — antes O(N×M) en cada click de export
+  // (audit 27-jun-2026, item 11).
+  const campoNombre = campoNombreFn(campos);
   const cols: CsvColumn<Paricion>[] = [
     { header: 'Fecha',           value: r => r.fecha },
     { header: 'Campo',           value: r => campoNombre(r.campoId) },

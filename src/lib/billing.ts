@@ -1,23 +1,79 @@
 // Helpers para el panel de admin de cobranzas.
 //
-// La whitelist de super-admin emails está duplicada en SQL (función
-// is_super_admin() en migración 0005) — si sumás alguien al equipo de
-// ASFION para que pueda marcar pagos, hay que tocar ambos lugares.
+// Post-migración 0021 la whitelist vive en la tabla `super_admins` de
+// Supabase (una sola fuente de verdad). Antes estaba duplicada en SQL +
+// JS, lo que daba drift cada vez que sumábamos a alguien.
+//
+// El frontend consulta /rest/v1/super_admins con el email del JWT y
+// la RLS filtra al propio email (no expone la lista entera).
 
+import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 
-// === Whitelist ===
-//
-// Editar acá + en supabase/migrations/0005_subscriptions.sql para sumar
-// a alguien al panel de admin.
-const SUPER_ADMINS = new Set<string>([
-  'rosariodidziulis8@gmail.com',
-  'agusufi20@gmail.com',
-]);
+/**
+ * Cache de "soy super admin?" para el email de la sesión actual.
+ * Se setea en el primer await isSuperAdmin() y se reinvalida con
+ * clearSuperAdminCache() cuando hay login/logout.
+ */
+let superAdminCache: { email: string; isAdmin: boolean } | null = null;
 
-export function isSuperAdmin(email: string | undefined | null): boolean {
+export function clearSuperAdminCache(): void {
+  superAdminCache = null;
+}
+
+/**
+ * Versión async — consulta la tabla `super_admins`. Cachea por sesión
+ * para no hacer 1 round-trip cada vez que un componente la llama.
+ *
+ * Devuelve `false` si no hay email o si el row no existe (RLS filtra).
+ */
+export async function isSuperAdmin(email: string | undefined | null): Promise<boolean> {
   if (!email) return false;
-  return SUPER_ADMINS.has(email.toLowerCase().trim());
+  const e = email.toLowerCase().trim();
+  if (superAdminCache?.email === e) return superAdminCache.isAdmin;
+
+  const { data, error } = await supabase
+    .from('super_admins')
+    .select('email')
+    .eq('email', e)
+    .maybeSingle();
+
+  // Error o RLS-filtered → asumir NO (fail closed).
+  const isAdmin = !error && data != null;
+  superAdminCache = { email: e, isAdmin };
+  return isAdmin;
+}
+
+/**
+ * Versión sync — útil cuando el caller ya garantiza que se hizo el await
+ * antes (típicamente en componentes que recibieron `isSuperAdmin` como
+ * prop). Lee del cache; si no está poblado, devuelve false (fail closed).
+ */
+export function isSuperAdminCached(email: string | undefined | null): boolean {
+  if (!email) return false;
+  const e = email.toLowerCase().trim();
+  return superAdminCache?.email === e && superAdminCache.isAdmin;
+}
+
+/**
+ * Hook React-friendly. Devuelve `false` mientras todavía no resolvió
+ * el round-trip (fail closed — no flashea UI de admin para usuarios
+ * normales). Cachea, así si varios componentes lo llaman con el mismo
+ * email, comparten resultado.
+ */
+export function useIsSuperAdmin(email: string | undefined | null): boolean {
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => isSuperAdminCached(email));
+
+  useEffect(() => {
+    let cancelado = false;
+    if (!email) { setIsAdmin(false); return; }
+    isSuperAdmin(email).then(r => {
+      if (!cancelado) setIsAdmin(r);
+    });
+    return () => { cancelado = true; };
+  }, [email]);
+
+  return isAdmin;
 }
 
 // === Tipos ===

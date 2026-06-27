@@ -2,6 +2,7 @@
 // estado; cada chart lee la data YA filtrada que le pasan por props.
 
 import type { EventoParicion, Paricion } from './types';
+import { dateAISO } from '@/lib/fechas';
 
 export type RangoFecha = '7d' | '30d' | '90d' | '12m' | 'todo';
 
@@ -54,7 +55,9 @@ export function aplicarFiltros(data: Paricion[], f: Filtros, today = new Date('2
   else if (f.rango === '12m') desde.setMonth(desde.getMonth() - 12);
   else desde.setFullYear(2000);
 
-  const desdeISO = desde.toISOString().slice(0, 10);
+  // dateAISO usa zona local. Antes el "30d" abierto de noche en ART
+  // dejaba afuera el día más antiguo de la ventana (audit 27-jun-2026).
+  const desdeISO = dateAISO(desde);
   return data.filter(p => {
     if (p.fecha < desdeISO) return false;
     if (f.campoId !== 'todos' && p.campoId !== f.campoId) return false;

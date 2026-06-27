@@ -47,7 +47,8 @@ function csvField(s: string, delimiter: string): string {
     s.includes('"') ||
     s.includes('\n') ||
     s.includes('\r') ||
-    /^[=+\-@]/.test(s); // CSV injection guard
+    s.includes('\t') ||      // Q8 audit: Excel también interpreta \t como separador
+    /^[=+\-@]/.test(s);      // CSV injection guard (=cmd, +cmd, -cmd, @cmd)
   if (!needsQuote) return s;
   return `"${s.replace(/"/g, '""')}"`;
 }

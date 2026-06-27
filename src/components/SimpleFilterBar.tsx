@@ -8,6 +8,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import type { Campo } from '@/data/types';
 import type { RangoFecha } from '@/data/filters';
+import { dateAISO } from '@/lib/fechas';
 
 export interface SimpleFiltros {
   rango: RangoFecha;
@@ -110,8 +111,10 @@ export function SimpleFilterBar({ filtros, campos, onChange, rangos, añosDispon
         onChange({
           ...filtros,
           año: undefined,
-          desde: hace12m.toISOString().slice(0, 10),
-          hasta: hoy.toISOString().slice(0, 10),
+          // dateAISO usa zona local — antes toISOString() corría el rango
+          // de noche en ART (audit 27-jun-2026, TZ).
+          desde: dateAISO(hace12m),
+          hasta: dateAISO(hoy),
         });
       } else {
         // Ya tenía un rango custom — lo mantengo.
@@ -225,7 +228,7 @@ export function rangoDesde(r: RangoFecha, today = new Date()): string | null {
   else if (r === '30d') d.setDate(d.getDate() - 30);
   else if (r === '90d') d.setDate(d.getDate() - 90);
   else if (r === '12m') d.setMonth(d.getMonth() - 12);
-  return d.toISOString().slice(0, 10);
+  return dateAISO(d);
 }
 
 /**

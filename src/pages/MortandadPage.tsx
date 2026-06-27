@@ -37,6 +37,7 @@ import { formatNumber } from '@/lib/utils';
 import { fechaISOaLocal, dateAISO } from '@/lib/fechas';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Mortandad } from '@/data/types';
+import { useCampoNombre, campoNombreFn } from '@/lib/campoMap';
 
 interface Props {
   mortandad: Mortandad[];
@@ -100,6 +101,9 @@ export function normalizarCausa(causa: string | null | undefined): string {
 
 export function MortandadPage({ mortandad, campos }: Props) {
   const [filtros, setFiltros] = useState<SimpleFiltros>(SIMPLE_FILTROS_DEFAULT);
+  // Map precomputado para resolver campoId → nombre en O(1). Usado por la
+  // tabla, el mapa GPS y el panel detail (audit 27-jun-2026, item 11).
+  const campoNombreLookup = useCampoNombre(campos);
 
   const filtradas = useMemo(() => {
     return mortandad.filter(m => {
@@ -358,7 +362,7 @@ export function MortandadPage({ mortandad, campos }: Props) {
       <Card title="Mapa de muertes" subtitle="Ubicación GPS capturada al cargar el evento — color por causa">
         <MortandadMap
           mortandad={filtradas}
-          campoNombre={(id) => campos.find(c => c.id === id)?.nombre ?? id}
+          campoNombre={campoNombreLookup}
           normalizarCausa={normalizarCausa}
         />
       </Card>
@@ -423,7 +427,7 @@ export function MortandadPage({ mortandad, campos }: Props) {
 
 // Export CSV de mortandad — una fila por evento.
 function exportMortandad(rows: Mortandad[], campos: Campo[]): void {
-  const campoNombre = (id: string) => campos.find(c => c.id === id)?.nombre ?? id;
+  const campoNombre = campoNombreFn(campos);
   const cols: CsvColumn<Mortandad>[] = [
     { header: 'Fecha',           value: r => r.fecha },
     { header: 'Campo',           value: r => campoNombre(r.campoId) },

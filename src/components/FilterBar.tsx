@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import type { Filtros, RangoFecha } from '@/data/filters';
 import type { Campo, EventoParicion } from '@/data/types';
 import { presetsCampaña } from './SimpleFilterBar';
+import { dateAISO } from '@/lib/fechas';
 
 interface Props {
   filtros: Filtros;
@@ -76,8 +77,10 @@ export function FilterBar({ filtros, campos, onChange, añosDisponibles }: Props
         onChange({
           ...filtros,
           año: undefined,
-          desde: hace12m.toISOString().slice(0, 10),
-          hasta: hoy.toISOString().slice(0, 10),
+          // dateAISO: zona local. Antes el rango se corría un día de noche
+          // en ART (audit 27-jun-2026, TZ).
+          desde: dateAISO(hace12m),
+          hasta: dateAISO(hoy),
         });
       } else {
         onChange({ ...filtros, año: undefined });

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { Campo, Paricion, SyncState } from '@/data/types';
+import { useCampoNombre } from '@/lib/campoMap';
 
 interface Props {
   data: Paricion[];
@@ -19,7 +20,9 @@ const SYNC_COPY: Record<SyncState, { label: string; cls: string }> = {
 
 export function ParicionesTable({ data, campos, pageSize = 20 }: Props) {
   const [page, setPage] = useState(0);
-  const campoNom = (id: string) => campos.find(c => c.id === id)?.nombre ?? id;
+  // useCampoNombre = Map precomputado, lookup O(1). Antes .find() era
+  // O(N×M) en el render de cada slice (audit 27-jun-2026, item 11).
+  const campoNom = useCampoNombre(campos);
 
   const pages = Math.max(1, Math.ceil(data.length / pageSize));
   const slice = data.slice(page * pageSize, (page + 1) * pageSize);

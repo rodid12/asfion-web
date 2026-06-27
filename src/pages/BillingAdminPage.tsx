@@ -10,6 +10,7 @@ import { CheckCircle2Icon, ClockIcon, RefreshCwIcon, XCircleIcon } from 'lucide-
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { kpiValueClass, KPI_VALUE_BASE, kpiTitleAttr } from '@/lib/kpiSize';
+import { dateAISO } from '@/lib/fechas';
 import { useAuth } from '@/lib/auth';
 import {
   computeDaysOverdue,
@@ -213,13 +214,16 @@ function RegistrarPagoModal({
 }) {
   // Defaults razonables: pago hoy, cubre 30 días después del period_end_date
   // anterior (o desde hoy si no había). El admin puede sobreescribir.
-  const today = new Date().toISOString().slice(0, 10);
+  //
+  // dateAISO (zona local): antes toISOString() corría fechaPago un día
+  // si el admin registraba después de las 21:00 ART (audit 27-jun-2026).
+  const today = dateAISO(new Date());
   const baseDate = cliente.periodEndDate
-    ? new Date(cliente.periodEndDate)
+    ? new Date(cliente.periodEndDate + 'T00:00:00')
     : new Date();
   const defaultCubreHasta = new Date(baseDate);
   defaultCubreHasta.setDate(defaultCubreHasta.getDate() + 30);
-  const defaultCubreHastaStr = defaultCubreHasta.toISOString().slice(0, 10);
+  const defaultCubreHastaStr = dateAISO(defaultCubreHasta);
 
   const [fechaPago, setFechaPago] = useState(today);
   const [monto, setMonto] = useState('');

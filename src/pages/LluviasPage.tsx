@@ -36,6 +36,7 @@ import { formatNumber } from '@/lib/utils';
 import { fechaISOaLocal, dateAISO } from '@/lib/fechas';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Lluvia } from '@/data/types';
+import { campoNombreFn } from '@/lib/campoMap';
 
 interface Props {
   lluvias: Lluvia[];
@@ -332,7 +333,8 @@ export function LluviasPage({ lluvias, campos }: Props) {
 
 // Export CSV de lluvias — una fila por lectura de pluviómetro.
 function exportLluvias(rows: Lluvia[], campos: Campo[]): void {
-  const campoNombre = (id: string) => campos.find(c => c.id === id)?.nombre ?? id;
+  // Map precomputado — antes O(N×M) en cada click (audit 27-jun-2026).
+  const campoNombre = campoNombreFn(campos);
   const cols: CsvColumn<Lluvia>[] = [
     { header: 'Fecha',          value: r => r.fecha },
     { header: 'Campo',          value: r => campoNombre(r.campoId) },

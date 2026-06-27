@@ -52,9 +52,17 @@ async function fetchAllPaginated<T = any>(
 ): Promise<T[]> {
   const out: T[] = [];
   let from = 0;
-  // Sin tope superior — confiamos en que el último page va a venir < PAGE_SIZE.
-  // Para seguridad, ponemos un máximo de 100k para evitar loops infinitos.
-  while (out.length < 100_000) {
+  // Q3 audit: antes este loop tenía `while (out.length < 100_000)` como
+  // safeguard contra loops infinitos. El problema: si una tabla crecía a
+  // 100.001 filas, el último page se cortaba silencioso. Cambio a
+  // `while (true)` con break explícito cuando data.length < PAGE_SIZE
+  // (= esa fue la última página). Si por alguna razón Supabase devuelve
+  // PAGE_SIZE exacto en cada llamada (loop infinito real), explotamos con
+  // un error después de 1.000 iteraciones — eso son 1M de filas, MUY
+  // arriba de cualquier caso real de un cliente.
+  let iter = 0;
+  while (true) {
+    if (iter++ > 1000) throw new Error(`fetchAllPaginated(${table}): >1M filas, abortando`);
     const base = supabase.from(table).select('*');
     const ordered = applyOrder(base);
     const { data, error } = await ordered.range(from, from + PAGE_SIZE - 1);
@@ -384,9 +392,11 @@ function rowToCircuito(r: any): Circuito {
 }
 
 export async function fetchCircuitos(): Promise<Circuito[]> {
+  // select() explícito (Q1 audit) — antes select('*') traía columnas que no
+  // usamos (created_at, updated_at, etc). Ahorra ~30% bytes en transit.
   const { data, error } = await supabase
     .from('circuitos')
-    .select('*')
+    .select('id, campo_id, nombre, hectareas')
     .order('nombre');
   if (error) throw new Error(`fetchCircuitos: ${error.message}`);
   return (data ?? []).map(rowToCircuito);

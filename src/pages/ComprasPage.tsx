@@ -45,6 +45,7 @@ import {
 import { formatNumber } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Compra } from '@/data/types';
+import { useCampoNombre, campoNombreFn } from '@/lib/campoMap';
 
 interface Props {
   compras: Compra[];
@@ -108,7 +109,9 @@ export function ComprasPage({ compras, campos }: Props) {
   // Agrupamos por campo para la lista — replica el patrón de AppSheet
   // que el cliente conoce. Si solo hay un campo, se ve igual.
   const agrupadas = useMemo(() => {
-    const campoNombre = (id: string) => campos.find(c => c.id === id)?.nombre ?? id;
+    // Map precomputado dentro del useMemo para no re-recorrer campos en cada
+    // iteración (audit 27-jun-2026, item 11).
+    const campoNombre = campoNombreFn(campos);
     const groups = new Map<string, Compra[]>();
     filtradas.forEach(c => {
       const k = campoNombre(c.campoId);
@@ -222,7 +225,7 @@ export function ComprasPage({ compras, campos }: Props) {
     return <EmptyModule label="compras" />;
   }
 
-  const campoNombre = (id: string) => campos.find(c => c.id === id)?.nombre ?? id;
+  const campoNombre = useCampoNombre(campos);
 
   return (
     <div className="space-y-6">
@@ -621,7 +624,9 @@ function DetalleOperacionBody({ compra, campoNombre }: { compra: Compra; campoNo
 // Export CSV de compras — una fila por operación, con TODAS las columnas
 // del schema. Lo dejamos como estaba: útil para el contador del cliente.
 function exportCompras(rows: Compra[], campos: Campo[]): void {
-  const campoNombre = (id: string) => campos.find(c => c.id === id)?.nombre ?? id;
+  // Function helper (no es hook porque exportCompras se llama fuera del
+  // componente). Map precomputado — antes era O(N×M) en cada export.
+  const campoNombre = campoNombreFn(campos);
   const cols: CsvColumn<Compra>[] = [
     { header: 'Número operación', value: r => r.numeroOperacion ?? '' },
     { header: 'Fecha',            value: r => r.fecha },

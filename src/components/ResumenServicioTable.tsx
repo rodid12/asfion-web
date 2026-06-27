@@ -16,6 +16,7 @@ import React, { useMemo } from 'react';
 import { Card } from '@/components/Card';
 import { Kpi } from '@/components/Kpi';
 import { formatNumber, formatPercent } from '@/lib/utils';
+import { kpiValueClass, KPI_VALUE_BASE, kpiTitleAttr } from '@/lib/kpiSize';
 import type { ResumenServicio } from '@/data/types';
 
 interface Props {
@@ -80,12 +81,18 @@ export function ResumenServicioTable({ rows }: Props) {
           value={formatNumber(totales.ternerosNacidos)}
           accent="navy"
         />
-        {/* Verde explícito — métrica clave según el cliente */}
+        {/* Verde explícito — métrica clave según el cliente.
+            Usa kpiValueClass adaptivo como el resto de los tiles del
+            dashboard, así si el número de terneros vivos crece a 5 dígitos
+            o más, se reduce gracefully sin partir en 2 líneas. */}
         <div className="bg-emerald-50 rounded-2xl border border-emerald-200 shadow-card p-4 sm:p-5 flex flex-col gap-2 min-w-0 overflow-hidden">
           <p className="text-[10px] sm:text-xs uppercase tracking-wider font-semibold text-emerald-700 truncate">
             Terneros vivos
           </p>
-          <p className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tabular-nums whitespace-nowrap overflow-hidden text-ellipsis leading-tight text-emerald-700">
+          <p
+            className={`${kpiValueClass(formatNumber(totales.ternerosVivos), 'kpi')} ${KPI_VALUE_BASE} text-emerald-700`}
+            title={kpiTitleAttr(formatNumber(totales.ternerosVivos))}
+          >
             {formatNumber(totales.ternerosVivos)}
           </p>
           <p className="text-asfion-muted text-[11px] sm:text-xs">

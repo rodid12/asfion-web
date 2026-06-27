@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { Paricion } from '@/data/types';
+import { kpiValueClass, KPI_VALUE_BASE } from '@/lib/kpiSize';
 
 interface Props { data: Paricion[]; }
 
@@ -53,12 +54,23 @@ export function SexoYAsistencia({ data }: Props) {
         )}
       </div>
 
-      <div className="pt-3 border-t border-asfion-borderSoft">
+      <div className="pt-3 border-t border-asfion-borderSoft min-w-0">
         <p className="text-xs uppercase font-semibold text-asfion-muted mb-2">Asistencia en nacimientos</p>
-        <p className="text-3xl font-extrabold text-asfion-navy tabular-nums">
-          {total ? (pctAsistencia * 100).toFixed(1) : '0'}%
-          <span className="ml-2 text-sm font-semibold text-asfion-muted">({asistencia.Si} de {total})</span>
-        </p>
+        {/* min-w-0 en el wrapper + flex para que el ratio "(X de Y)" no
+            empuje el % fuera de la card si los conteos crecen mucho. */}
+        <div className="flex items-baseline gap-2 flex-wrap min-w-0">
+          {(() => {
+            const pctTxt = `${total ? (pctAsistencia * 100).toFixed(1) : '0'}%`;
+            return (
+              <p className={`${kpiValueClass(pctTxt, 'kpi')} ${KPI_VALUE_BASE} text-asfion-navy`}>
+                {pctTxt}
+              </p>
+            );
+          })()}
+          <span className="text-sm font-semibold text-asfion-muted">
+            ({asistencia.Si} de {total})
+          </span>
+        </div>
       </div>
     </div>
   );

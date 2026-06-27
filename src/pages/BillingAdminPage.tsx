@@ -9,6 +9,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2Icon, ClockIcon, RefreshCwIcon, XCircleIcon } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
+import { kpiValueClass, KPI_VALUE_BASE, kpiTitleAttr } from '@/lib/kpiSize';
 import { useAuth } from '@/lib/auth';
 import {
   computeDaysOverdue,
@@ -184,9 +185,17 @@ function StatusTile({
     accent === 'terracota' ? 'text-asfion-terracota' :
     accent === 'danger'    ? 'text-asfion-danger' :
                              'text-asfion-muted';
+  // Tamaño adaptativo del número — comparte regla con Kpi/MiniKpi para
+  // que un total como "$15.234.567" no rompa el tile.
+  const valueStr = String(n);
   return (
-    <div className="bg-white rounded-xl border border-asfion-borderSoft px-4 py-3">
-      <p className={`text-2xl font-extrabold tabular-nums leading-tight ${cls}`}>{n}</p>
+    <div className="bg-white rounded-xl border border-asfion-borderSoft px-4 py-3 min-w-0 overflow-hidden">
+      <p
+        className={`${kpiValueClass(valueStr, 'mini')} ${KPI_VALUE_BASE} ${cls}`}
+        title={kpiTitleAttr(valueStr)}
+      >
+        {n}
+      </p>
       <p className="text-xs uppercase tracking-wide font-semibold text-asfion-muted leading-tight">{label}</p>
     </div>
   );

@@ -239,6 +239,40 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
     };
   }, [filtrados, camposVisibles]);
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Terneros Vivos — fuente preferida: pariciones_resumen_servicio (Hoja 3
+  // del Excel del cliente). Si hay rows del año más reciente, usamos ese
+  // total (matchea exacto el Excel: 2.214). El cálculo desde eventos
+  // individuales (`kpis.ternerosEnPie`) queda solo como fallback cuando
+  // todavía no se cargó el resumen del cierre anual.
+  //
+  // Por qué: la fórmula del Excel es
+  //    Vivos = Nacidos − Mort. Señalada − Recuento Salida
+  // y el dashboard sobre eventos solo hace Nacidos − Mort. Señalada (no
+  // existe el evento "Recuento Salida" en la tabla pariciones). Para
+  // matchear hacer doble cuenta sería sobreingeniería — el resumen ya trae
+  // los totales calculados al cierre y es la fuente de verdad del cliente.
+  // ─────────────────────────────────────────────────────────────────────────
+  const ternerosVivosDesdeResumen = useMemo(() => {
+    if (!resumenServicio || resumenServicio.length === 0) return null;
+    const aniosValidos = resumenServicio.map(r => r.servicioAnio).filter((x): x is number => Number.isFinite(x));
+    if (aniosValidos.length === 0) return null;
+    const ultimoAnio = Math.max(...aniosValidos);
+    const rows = resumenServicio.filter(r => r.servicioAnio === ultimoAnio);
+    const totalVivos    = rows.reduce((s, r) => s + (r.ternerosVivos       ?? 0), 0);
+    const totalNacidos  = rows.reduce((s, r) => s + (r.ternerosNacidos     ?? 0), 0);
+    const totalMortSen  = rows.reduce((s, r) => s + (r.ternerosSenalados   ?? 0), 0);
+    const totalRecuento = rows.reduce((s, r) => s + (r.recuentoSalidaTerneros ?? 0), 0);
+    return {
+      total:    totalVivos,
+      anio:     ultimoAnio,
+      tropas:   rows.length,
+      nacidos:  totalNacidos,
+      mortSen:  totalMortSen,
+      recuento: totalRecuento,
+    };
+  }, [resumenServicio]);
+
   // Texto del título: si hay un campo seleccionado, lo nombramos (estilo
   // "Pariciones Picaflor" del Power BI). Sino, queda genérico.
   const tituloCampo = filtros.campoId === 'todos'
@@ -312,13 +346,33 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
           accent="navy"
           icon={<ShieldOffIcon size={18} />}
         />
-        <Kpi
-          label="Ternero en Pie"
-          value={formatNumber(kpis.ternerosEnPie)}
-          sublabel="Nacimientos − Muerte Señalado"
-          accent="orange"
-          icon={<UsersIcon size={18} />}
-        />
+        {/* Terneros Vivos / Ternero en Pie — preferimos el valor del Excel
+            (pariciones_resumen_servicio) que YA contempla la "Recuento
+            Salida Terneros" en su fórmula. Si todavía no se cargó el
+            resumen del cierre, caemos al cálculo histórico desde eventos
+            individuales para no dejar el tile en blanco. */}
+        {ternerosVivosDesdeResumen ? (
+          <Kpi
+            label="Terneros Vivos"
+            value={formatNumber(ternerosVivosDesdeResumen.total)}
+            sublabel={
+              `Servicio ${ternerosVivosDesdeResumen.anio} · ` +
+              `${formatNumber(ternerosVivosDesdeResumen.nacidos)} nacidos − ` +
+              `${formatNumber(ternerosVivosDesdeResumen.mortSen)} señalados − ` +
+              `${formatNumber(ternerosVivosDesdeResumen.recuento)} recuento salida`
+            }
+            accent="orange"
+            icon={<UsersIcon size={18} />}
+          />
+        ) : (
+          <Kpi
+            label="Ternero en Pie"
+            value={formatNumber(kpis.ternerosEnPie)}
+            sublabel="Nacimientos − Muerte Señalado · (sin resumen del cierre)"
+            accent="orange"
+            icon={<UsersIcon size={18} />}
+          />
+        )}
         <Kpi
           label="Asistencia (Si)"
           value={formatNumber(kpis.asistidos)}

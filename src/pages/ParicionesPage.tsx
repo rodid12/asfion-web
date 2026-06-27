@@ -240,36 +240,65 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
   }, [filtrados, camposVisibles]);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Terneros Vivos — fuente preferida: pariciones_resumen_servicio (Hoja 3
-  // del Excel del cliente). Si hay rows del año más reciente, usamos ese
-  // total (matchea exacto el Excel: 2.214). El cálculo desde eventos
-  // individuales (`kpis.ternerosEnPie`) queda solo como fallback cuando
-  // todavía no se cargó el resumen del cierre anual.
+  // Totales desde pariciones_resumen_servicio (Hoja 3 del Excel del cliente).
   //
-  // Por qué: la fórmula del Excel es
-  //    Vivos = Nacidos − Mort. Señalada − Recuento Salida
-  // y el dashboard sobre eventos solo hace Nacidos − Mort. Señalada (no
-  // existe el evento "Recuento Salida" en la tabla pariciones). Para
-  // matchear hacer doble cuenta sería sobreingeniería — el resumen ya trae
-  // los totales calculados al cierre y es la fuente de verdad del cliente.
+  // Cuando hay rows del año más reciente, TODOS los KPIs principales y los %
+  // de eficiencia se calculan desde acá, matcheando exacto el Excel.
+  // Si no hay resumen cargado, los componentes caen al cálculo histórico
+  // desde eventos individuales (Power BI legacy).
+  //
+  // Fórmulas exactas del Excel (replicadas literal):
+  //   Vivos              = Nacidos − Mort.Señalados − Recuento Salida
+  //   VacasDuranteServ.  = Preñadas − Mort.Vientres
+  //   MermaTrParicion    = (Preñadas − Nacidos) / Preñadas
+  //   MermaTrDestete     = (Preñadas − Vivos) / Preñadas
+  //   %AbortosNpt        = NPT+Abortos / Preñadas
+  //   %MortVientres      = Mort.Vientres / Preñadas
+  //   %MortTernSeñalados = Mort.Señalados / Nacidos
+  //   %MortTernSinSeñal  = Mort.SinSeñalar / Nacidos
+  //   %DesteteSobrePreñ  = Vivos / Preñadas
   // ─────────────────────────────────────────────────────────────────────────
-  const ternerosVivosDesdeResumen = useMemo(() => {
+  const resumenTotales = useMemo(() => {
     if (!resumenServicio || resumenServicio.length === 0) return null;
     const aniosValidos = resumenServicio.map(r => r.servicioAnio).filter((x): x is number => Number.isFinite(x));
     if (aniosValidos.length === 0) return null;
     const ultimoAnio = Math.max(...aniosValidos);
     const rows = resumenServicio.filter(r => r.servicioAnio === ultimoAnio);
-    const totalVivos    = rows.reduce((s, r) => s + (r.ternerosVivos       ?? 0), 0);
-    const totalNacidos  = rows.reduce((s, r) => s + (r.ternerosNacidos     ?? 0), 0);
-    const totalMortSen  = rows.reduce((s, r) => s + (r.ternerosSenalados   ?? 0), 0);
-    const totalRecuento = rows.reduce((s, r) => s + (r.recuentoSalidaTerneros ?? 0), 0);
+    const sum = (pick: (r: typeof rows[0]) => number | undefined) =>
+      rows.reduce<number>((s, r) => s + (pick(r) ?? 0), 0);
+
+    const prenadas         = sum(r => r.prenadas);
+    const nptAbortos       = sum(r => r.nptAbortosRetacto);
+    const mortVientres     = sum(r => r.mortandadVientres);
+    const mortTernSenal    = sum(r => r.ternerosSenalados);
+    const mortTernSinSen   = sum(r => r.ternerosSinSenalar);
+    const recuentoSalida   = sum(r => r.recuentoSalidaTerneros);
+    const vacasDuranteServ = sum(r => r.vacasDuranteServicio);
+    const nacidos          = sum(r => r.ternerosNacidos);
+    const vivos            = sum(r => r.ternerosVivos);
+
+    // Porcentajes — divisiones devuelven 0 si denom = 0 para que la UI no
+    // muestre "NaN%" mientras hay tropas con datos parciales.
+    const den = (d: number) => (d > 0 ? d : 1);
     return {
-      total:    totalVivos,
-      anio:     ultimoAnio,
-      tropas:   rows.length,
-      nacidos:  totalNacidos,
-      mortSen:  totalMortSen,
-      recuento: totalRecuento,
+      anio: ultimoAnio,
+      tropas: rows.length,
+
+      // KPIs principales
+      prenadas, vacasDuranteServ, nacidos, vivos,
+      mortVientres, mortTernSenal, mortTernSinSen, recuentoSalida,
+      nptAbortos,
+
+      // Mermas (acumuladas — parición y destete)
+      mermaTrParicion: prenadas > 0 ? (prenadas - nacidos) / den(prenadas) : 0,
+      mermaTrDestete:  prenadas > 0 ? (prenadas - vivos)   / den(prenadas) : 0,
+
+      // % eficiencia (matchean fórmulas del Excel literal)
+      pctAbortosNpt:       nptAbortos     / den(prenadas),
+      pctMortVientres:     mortVientres   / den(prenadas),
+      pctMortTernSenal:    mortTernSenal  / den(nacidos),
+      pctMortTernSinSen:   mortTernSinSen / den(nacidos),
+      pctDesteteSobrePren: vivos          / den(prenadas),
     };
   }, [resumenServicio]);
 
@@ -305,116 +334,205 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
 
       <FilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
 
-      {/* KPIs principales — fila superior con los 4 más importantes */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Kpi
-          label="Stock Base"
-          value={kpis.stockBase > 0 ? formatNumber(kpis.stockBase) : '—'}
-          sublabel={kpis.stockBase === 0 ? 'Sin stock cargado' : 'Vacas preñadas al inicio'}
-          accent="navy"
-          icon={<WarehouseIcon size={18} />}
-        />
-        <Kpi
-          label="Eventos"
-          value={formatNumber(kpis.total)}
-          sublabel={`${formatNumber(kpis.retactos)} retactos · ${formatNumber(kpis.abortos)} abortos`}
-          accent="navy"
-          icon={<TrendingUpIcon size={18} />}
-        />
-        <Kpi
-          label="Nacimientos"
-          value={formatNumber(kpis.nacimientos)}
-          sublabel={`${formatNumber(kpis.nacimientosVivos)} vivos · ${formatNumber(kpis.muertes)} muertos`}
-          accent="orange"
-          icon={<BabyIcon size={18} />}
-        />
-        <Kpi
-          label="Muertes"
-          value={formatNumber(kpis.muertes)}
-          sublabel={`${formatNumber(kpis.muerteSenalado)} señaladas · ${formatNumber(kpis.nacidoMuerto)} nac. muertos`}
-          accent="terracota"
-          icon={<SkullIcon size={18} />}
-        />
-      </div>
+      {/* ─────────────────────────────────────────────────────────────────
+          KPIs principales. Dos modos:
+            • Cuando hay resumen del servicio (pariciones_resumen_servicio)
+              cargado → tiles + % matchean EXACTO el Excel del cliente.
+            • Cuando NO hay → caen al cálculo histórico desde eventos
+              individuales (Power BI legacy) para no dejar la página vacía
+              en clientes que aún no cerraron temporada.
+          ───────────────────────────────────────────────────────────── */}
+      {resumenTotales ? (
+        <>
+          {/* Fila A — 4 KPIs grandes con el cierre del servicio del Excel */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Kpi
+              label="Preñadas"
+              value={formatNumber(resumenTotales.prenadas)}
+              sublabel={`Servicio ${resumenTotales.anio} · ${resumenTotales.tropas} tropas`}
+              accent="navy"
+              icon={<WarehouseIcon size={18} />}
+            />
+            <Kpi
+              label="Vacas durante servicio"
+              value={formatNumber(resumenTotales.vacasDuranteServ)}
+              sublabel={`Preñadas − ${formatNumber(resumenTotales.mortVientres)} mort. vientres`}
+              accent="navy"
+              icon={<ShieldOffIcon size={18} />}
+            />
+            <Kpi
+              label="Terneros nacidos"
+              value={formatNumber(resumenTotales.nacidos)}
+              sublabel={`Merma TR-parición: ${formatPercent(resumenTotales.mermaTrParicion)}`}
+              accent="orange"
+              icon={<BabyIcon size={18} />}
+            />
+            <Kpi
+              label="Terneros vivos"
+              value={formatNumber(resumenTotales.vivos)}
+              sublabel={
+                `${formatNumber(resumenTotales.nacidos)} nacidos − ` +
+                `${formatNumber(resumenTotales.mortTernSenal)} señalados − ` +
+                `${formatNumber(resumenTotales.recuentoSalida)} recuento`
+              }
+              accent="orange"
+              icon={<UsersIcon size={18} />}
+            />
+          </div>
 
-      {/* KPIs derivados — fila inferior */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Kpi
-          label="Vacas sin Parir"
-          value={kpis.stockBase > 0 ? formatNumber(kpis.vacasSinParir) : '—'}
-          sublabel="Stock − Partos − Retactos − Abortos"
-          accent="navy"
-          icon={<ShieldOffIcon size={18} />}
-        />
-        {/* Terneros Vivos / Ternero en Pie — preferimos el valor del Excel
-            (pariciones_resumen_servicio) que YA contempla la "Recuento
-            Salida Terneros" en su fórmula. Si todavía no se cargó el
-            resumen del cierre, caemos al cálculo histórico desde eventos
-            individuales para no dejar el tile en blanco. */}
-        {ternerosVivosDesdeResumen ? (
-          <Kpi
-            label="Terneros Vivos"
-            value={formatNumber(ternerosVivosDesdeResumen.total)}
-            sublabel={
-              `Servicio ${ternerosVivosDesdeResumen.anio} · ` +
-              `${formatNumber(ternerosVivosDesdeResumen.nacidos)} nacidos − ` +
-              `${formatNumber(ternerosVivosDesdeResumen.mortSen)} señalados − ` +
-              `${formatNumber(ternerosVivosDesdeResumen.recuento)} recuento salida`
-            }
-            accent="orange"
-            icon={<UsersIcon size={18} />}
-          />
-        ) : (
-          <Kpi
-            label="Ternero en Pie"
-            value={formatNumber(kpis.ternerosEnPie)}
-            sublabel="Nacimientos − Muerte Señalado · (sin resumen del cierre)"
-            accent="orange"
-            icon={<UsersIcon size={18} />}
-          />
-        )}
-        <Kpi
-          label="Asistencia (Si)"
-          value={formatNumber(kpis.asistidos)}
-          sublabel={kpis.nacimientos ? `${formatPercent(kpis.asistidos / kpis.nacimientos)} de partos` : ''}
-          accent="navy"
-          icon={<HeartCrackIcon size={18} />}
-        />
-      </div>
+          {/* Fila B — Mortandades desglosadas como en el Excel */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Kpi
+              label="Mortandad vientres"
+              value={formatNumber(resumenTotales.mortVientres)}
+              sublabel="Vacas muertas durante servicio"
+              accent="terracota"
+              icon={<SkullIcon size={18} />}
+            />
+            <Kpi
+              label="NPT y abortos"
+              value={formatNumber(resumenTotales.nptAbortos)}
+              sublabel="Diagnosticados al retacto"
+              accent="terracota"
+              icon={<SkullIcon size={18} />}
+            />
+            <Kpi
+              label="Mort. tern. señalados"
+              value={formatNumber(resumenTotales.mortTernSenal)}
+              sublabel="Terneros señalados muertos"
+              accent="terracota"
+              icon={<SkullIcon size={18} />}
+            />
+            <Kpi
+              label="Mort. tern. sin señalar"
+              value={formatNumber(resumenTotales.mortTernSinSen)}
+              sublabel={`+ ${formatNumber(resumenTotales.recuentoSalida)} faltantes al recuento`}
+              accent="terracota"
+              icon={<SkullIcon size={18} />}
+            />
+          </div>
 
-      {/* Fila de % eficiencia — mini-tiles compactos */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <MiniKpi
-          label="% Parición"
-          value={kpis.stockBase ? formatPercent(kpis.pctParicion) : '—'}
-          accent="orange"
-        />
-        <MiniKpi
-          label="% Destete Parcial"
-          value={kpis.stockBase ? formatPercent(kpis.pctDestete) : '—'}
-          accent="orange"
-        />
-        <MiniKpi
-          label="% Abortos"
-          value={kpis.stockBase ? formatPercent(kpis.pctAbortos) : '—'}
-          accent="terracota"
-        />
-        <MiniKpi
-          label="% Muerte Señalado"
-          value={kpis.nacimientos ? formatPercent(kpis.pctMuerteSenal) : '—'}
-          accent="terracota"
-        />
-        <MiniKpi
-          label="% Nacido Muerto"
-          value={kpis.nacimientos ? formatPercent(kpis.pctNacidoMuerto) : '—'}
-          accent="danger"
-        />
-        <MiniKpi
-          label="Orejanos Excluidos"
-          value={formatNumber(kpis.orejanos)}
-          accent="navy"
-        />
-      </div>
+          {/* Fila C — % de eficiencia, fórmulas del Excel literal */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <MiniKpi
+              label="% Destete sobre Preñ."
+              value={formatPercent(resumenTotales.pctDesteteSobrePren)}
+              accent="orange"
+            />
+            <MiniKpi
+              label="% Abortos y NPT"
+              value={formatPercent(resumenTotales.pctAbortosNpt)}
+              accent="terracota"
+            />
+            <MiniKpi
+              label="% Mort. vientres"
+              value={formatPercent(resumenTotales.pctMortVientres)}
+              accent="terracota"
+            />
+            <MiniKpi
+              label="% Mort. señalados"
+              value={formatPercent(resumenTotales.pctMortTernSenal)}
+              accent="terracota"
+            />
+            <MiniKpi
+              label="% Mort. sin señalar"
+              value={formatPercent(resumenTotales.pctMortTernSinSen)}
+              accent="danger"
+            />
+          </div>
+        </>
+      ) : (
+        /* ─── Fallback: sin resumen → cálculo desde eventos individuales ─ */
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Kpi
+              label="Stock Base"
+              value={kpis.stockBase > 0 ? formatNumber(kpis.stockBase) : '—'}
+              sublabel={kpis.stockBase === 0 ? 'Sin stock cargado' : 'Vacas preñadas al inicio'}
+              accent="navy"
+              icon={<WarehouseIcon size={18} />}
+            />
+            <Kpi
+              label="Eventos"
+              value={formatNumber(kpis.total)}
+              sublabel={`${formatNumber(kpis.retactos)} retactos · ${formatNumber(kpis.abortos)} abortos`}
+              accent="navy"
+              icon={<TrendingUpIcon size={18} />}
+            />
+            <Kpi
+              label="Nacimientos"
+              value={formatNumber(kpis.nacimientos)}
+              sublabel={`${formatNumber(kpis.nacimientosVivos)} vivos · ${formatNumber(kpis.muertes)} muertos`}
+              accent="orange"
+              icon={<BabyIcon size={18} />}
+            />
+            <Kpi
+              label="Muertes"
+              value={formatNumber(kpis.muertes)}
+              sublabel={`${formatNumber(kpis.muerteSenalado)} señaladas · ${formatNumber(kpis.nacidoMuerto)} nac. muertos`}
+              accent="terracota"
+              icon={<SkullIcon size={18} />}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <Kpi
+              label="Vacas sin Parir"
+              value={kpis.stockBase > 0 ? formatNumber(kpis.vacasSinParir) : '—'}
+              sublabel="Stock − Partos − Retactos − Abortos"
+              accent="navy"
+              icon={<ShieldOffIcon size={18} />}
+            />
+            <Kpi
+              label="Ternero en Pie"
+              value={formatNumber(kpis.ternerosEnPie)}
+              sublabel="Nacimientos − Muerte Señalado · (sin resumen del cierre)"
+              accent="orange"
+              icon={<UsersIcon size={18} />}
+            />
+            <Kpi
+              label="Asistencia (Si)"
+              value={formatNumber(kpis.asistidos)}
+              sublabel={kpis.nacimientos ? `${formatPercent(kpis.asistidos / kpis.nacimientos)} de partos` : ''}
+              accent="navy"
+              icon={<HeartCrackIcon size={18} />}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <MiniKpi
+              label="% Parición"
+              value={kpis.stockBase ? formatPercent(kpis.pctParicion) : '—'}
+              accent="orange"
+            />
+            <MiniKpi
+              label="% Destete Parcial"
+              value={kpis.stockBase ? formatPercent(kpis.pctDestete) : '—'}
+              accent="orange"
+            />
+            <MiniKpi
+              label="% Abortos"
+              value={kpis.stockBase ? formatPercent(kpis.pctAbortos) : '—'}
+              accent="terracota"
+            />
+            <MiniKpi
+              label="% Muerte Señalado"
+              value={kpis.nacimientos ? formatPercent(kpis.pctMuerteSenal) : '—'}
+              accent="terracota"
+            />
+            <MiniKpi
+              label="% Nacido Muerto"
+              value={kpis.nacimientos ? formatPercent(kpis.pctNacidoMuerto) : '—'}
+              accent="danger"
+            />
+            <MiniKpi
+              label="Orejanos Excluidos"
+              value={formatNumber(kpis.orejanos)}
+              accent="navy"
+            />
+          </div>
+        </>
+      )}
 
       {/* Charts row A: 2 donuts (eventos + nacimientos segmentados) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

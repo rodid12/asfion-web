@@ -23,6 +23,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { ActivityIcon, HeartIcon, TrendingUpIcon, UsersIcon } from 'lucide-react';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { Card } from '@/components/Card';
 import { Kpi } from '@/components/Kpi';
 import { PageHeader } from '@/components/PageHeader';
@@ -283,25 +284,71 @@ function SegmentacionDonut({ cabeza, cuerpo, cola }: { cabeza: number; cuerpo: n
       </p>
     );
   }
+  // Mismo orden y paleta que antes — Cabeza orange (mejor), Cola navy (peor).
+  // Ahora es un donut REAL proporcional (no 3 círculos planos del mismo tamaño),
+  // con total centrado y leyenda a la derecha con conteo + %.
   const segments = [
-    { label: 'Cabeza', value: cabeza, color: '#FF8409' }, // orange — primer tercio de servicio (mejor)
-    { label: 'Cuerpo', value: cuerpo, color: '#FBC79A' }, // peach — segundo tercio
-    { label: 'Cola',   value: cola,   color: '#163349' }, // navy  — tercer tercio (peor)
+    { label: 'Cabeza', value: cabeza, color: '#FF8409' },
+    { label: 'Cuerpo', value: cuerpo, color: '#FBC79A' },
+    { label: 'Cola',   value: cola,   color: '#163349' },
   ];
+
   return (
-    <div className="grid grid-cols-3 gap-2 sm:gap-3 py-2">
-      {segments.map(s => (
-        <div key={s.label} className="flex flex-col items-center gap-2 min-w-0">
-          <div
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full grid place-items-center text-white font-extrabold text-xs sm:text-sm shadow-card"
-            style={{ background: s.color }}
-          >
-            {formatPercent(s.value / total)}
+    <div className="flex flex-col sm:flex-row items-center gap-4 py-2">
+      {/* Donut con total centrado. outerRadius en % para que se adapte al
+          ancho del card sin importar el breakpoint (evita cortes). */}
+      <div className="relative w-full sm:w-1/2 h-[180px] sm:h-[200px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={segments}
+              dataKey="value"
+              nameKey="label"
+              innerRadius="58%"
+              outerRadius="92%"
+              paddingAngle={2}
+              startAngle={90}
+              endAngle={-270}
+              isAnimationActive={false}
+            >
+              {segments.map(s => <Cell key={s.label} fill={s.color} stroke="white" strokeWidth={2} />)}
+            </Pie>
+            <Tooltip
+              formatter={(v: number, n: string) => [
+                `${formatNumber(v)} cab. · ${formatPercent(v / total)}`,
+                n,
+              ]}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        {/* Número total centrado en el agujero del donut */}
+        <div className="absolute inset-0 grid place-items-center pointer-events-none">
+          <div className="text-center">
+            <p className="text-2xl sm:text-3xl font-extrabold text-asfion-navy tabular-nums leading-none">
+              {formatNumber(total)}
+            </p>
+            <p className="text-[10px] sm:text-xs uppercase font-semibold text-asfion-muted mt-1">
+              Preñadas
+            </p>
           </div>
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-asfion-muted">{s.label}</p>
-          <p className="text-[10px] sm:text-xs text-asfion-navy">{formatNumber(s.value)} cab.</p>
         </div>
-      ))}
+      </div>
+
+      {/* Leyenda: segmento + % + count */}
+      <div className="flex-1 w-full sm:w-1/2 flex flex-col gap-2">
+        {segments.map(s => (
+          <div key={s.label} className="flex items-center gap-2 text-sm min-w-0">
+            <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: s.color }} />
+            <span className="flex-1 font-semibold text-asfion-navy">{s.label}</span>
+            <span className="tabular-nums text-asfion-muted w-14 text-right">
+              {formatNumber(s.value)}
+            </span>
+            <span className="tabular-nums font-semibold text-asfion-navyDeep w-14 text-right">
+              {formatPercent(s.value / total)}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

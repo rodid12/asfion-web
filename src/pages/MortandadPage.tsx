@@ -486,28 +486,34 @@ function CausaMuerteDonut({ data }: { data: Array<{ causa: string; n: number }> 
   }
 
   return (
-    <div className="flex flex-col md:flex-row md:items-center gap-4">
-      <div className="w-full md:w-[50%] h-[260px]">
+    // STACK SIEMPRE — el donut se cortaba antes porque el card vive en
+    // 1/3 del ancho (Evolución mensual ocupa 2/3 al lado), y con flex-row
+    // el pie + leyenda no entraban. Stack vertical les da el ancho completo.
+    // outerRadius/innerRadius en % para que el pie se ajuste al ancho que
+    // tenga el card y nunca quede cortado por el viewport.
+    <div className="flex flex-col gap-3">
+      <div className="w-full h-[220px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={serie}
               dataKey="value"
               nameKey="name"
-              innerRadius={55}
-              outerRadius={95}
+              innerRadius="55%"
+              outerRadius="90%"
               paddingAngle={2}
+              isAnimationActive={false}
             >
-              {serie.map(s => <Cell key={s.name} fill={s.fill} />)}
+              {serie.map(s => <Cell key={s.name} fill={s.fill} stroke="white" strokeWidth={2} />)}
             </Pie>
             <Tooltip formatter={(v: number, n: string) => [`${v} casos`, n]} />
           </PieChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Leyenda con nombre, conteo y %. Compatible con el patrón visual
-          del Power BI (etiqueta + número + porcentaje). */}
-      <div className="flex-1 flex flex-col gap-1.5 max-h-[260px] overflow-y-auto pr-1">
+      {/* Leyenda con nombre, conteo y %. max-h con scroll para que muchas
+          causas (15+) no estiren el card más allá del Evolución mensual. */}
+      <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto pr-1">
         {serie.map(s => (
           <div key={s.name} className="flex items-center gap-2 text-sm">
             <span

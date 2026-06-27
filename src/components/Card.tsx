@@ -25,7 +25,10 @@ export function Card({ title, subtitle, actions, className, children, ...rest }:
           {actions && <div>{actions}</div>}
         </div>
       )}
-      <div className="px-5 pb-5">{children}</div>
+      {/* Cuando NO hay header (sin title/actions) aplicamos pt-5 simétrico
+          al pb-5, sino el contenido pegaba contra el borde superior del
+          card (ej. el filter bar de PastoreoPage). */}
+      <div className={cn(!title && !actions ? 'p-5' : 'px-5 pb-5')}>{children}</div>
     </div>
   );
 }

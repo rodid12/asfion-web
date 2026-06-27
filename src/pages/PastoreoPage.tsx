@@ -344,7 +344,10 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
           FILTROS — Campo · Circuito · Categoría · Etapa
           ────────────────────────────────────────────────────────────── */}
       <Card>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        {/* gap-4 + md:gap-5 da más respiro entre los 4 dropdowns. El Card
+            base ahora aplica p-5 cuando no hay header (fix en Card.tsx)
+            así que el filter bar también respira top/bottom. */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-5">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] uppercase tracking-wide font-semibold text-asfion-muted">Campo</label>
             <select

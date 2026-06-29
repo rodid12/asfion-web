@@ -353,7 +353,7 @@ function rowToCompra(r: any): Compra {
     totalMachos:     r.total_machos  != null ? Number(r.total_machos)  : undefined,
     totalHembras:    r.total_hembras != null ? Number(r.total_hembras) : undefined,
     kgNetosOrigen:   Number(r.kg_netos_origen),
-    kgNetosDestino:  Number(r.kg_netos_destino),
+    kgNetosDestino:  r.kg_netos_destino != null ? Number(r.kg_netos_destino) : null,
     mermaPorcentaje: r.merma_porcentaje != null ? Number(r.merma_porcentaje) : undefined,
     kgCorregidos:    r.kg_corregidos    != null ? Number(r.kg_corregidos) : undefined,
     precio:          r.precio != null ? Number(r.precio) : undefined,

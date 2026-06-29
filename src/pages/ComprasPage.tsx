@@ -148,7 +148,7 @@ export function ComprasPage({ compras, campos }: Props) {
       cabezas += cabezasOp;
       machos += tm;
       hembras += th;
-      const kg = Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
+      const kg = c.kgNetosDestino != null && Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
       kgNetos += kg;
       if (c.precio != null && Number.isFinite(c.precio) && kg > 0) {
         inversion += kg * c.precio;
@@ -173,7 +173,7 @@ export function ComprasPage({ compras, campos }: Props) {
       const tm = c.totalMachos ?? 0;
       const th = c.totalHembras ?? 0;
       const cabezasOp = (tm > 0 || th > 0) ? (tm + th) : parseCabezas(c.cantCabYCat);
-      const kg = Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
+      const kg = c.kgNetosDestino != null && Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
       const inv = (c.precio != null && Number.isFinite(c.precio)) ? kg * c.precio : 0;
       const cur = map.get(key) ?? { cabezas: 0, ops: 0, inversion: 0 };
       cur.cabezas += cabezasOp;
@@ -196,7 +196,7 @@ export function ComprasPage({ compras, campos }: Props) {
       const tm = c.totalMachos ?? 0;
       const th = c.totalHembras ?? 0;
       const cabezasOp = (tm > 0 || th > 0) ? (tm + th) : parseCabezas(c.cantCabYCat);
-      const kg = Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
+      const kg = c.kgNetosDestino != null && Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
       const inv = (c.precio != null && Number.isFinite(c.precio)) ? kg * c.precio : 0;
       const cur = map.get(key) ?? { inversion: 0, cabezas: 0, ops: 0 };
       cur.inversion += inv;

@@ -284,7 +284,9 @@ export interface Compra {
   totalMachos?: number;
   totalHembras?: number;
   kgNetosOrigen: number;
-  kgNetosDestino: number;
+  // Post mig 0021: NULLABLE — compras "en tránsito" sin peso destino aún
+  // (ej. operación 0013-26 partida en 2 jaulas, ninguna pesada al bajar).
+  kgNetosDestino: number | null;
   mermaPorcentaje?: number;      // auto-calculado en form
   kgCorregidos?: number;         // manual
   // Comerciales

@@ -276,8 +276,15 @@ function PorRodeoTabla({ rows }: { rows: RodeoRow[] }) {
 }
 
 function SegmentacionDonut({ cabeza, cuerpo, cola }: { cabeza: number; cuerpo: number; cola: number }) {
-  const total = cabeza + cuerpo + cola;
-  if (total === 0) {
+  // Defendemos contra NaN/Infinity en cada segmento — si un Tacto tiene un
+  // campo con string mal parseado o numero raro, antes pasaba NaN crudo a
+  // recharts (que renderizaba el Pie roto). Sanitizamos a 0 cada uno y
+  // chequeamos el total con isFinite antes del early-return.
+  const cabezaSafe = Number.isFinite(cabeza) ? cabeza : 0;
+  const cuerpoSafe = Number.isFinite(cuerpo) ? cuerpo : 0;
+  const colaSafe   = Number.isFinite(cola)   ? cola   : 0;
+  const total = cabezaSafe + cuerpoSafe + colaSafe;
+  if (!Number.isFinite(total) || total <= 0) {
     return (
       <p className="text-sm text-asfion-muted py-6 text-center">
         Sin datos de segmentación de servicio cargados.
@@ -288,9 +295,9 @@ function SegmentacionDonut({ cabeza, cuerpo, cola }: { cabeza: number; cuerpo: n
   // Ahora es un donut REAL proporcional (no 3 círculos planos del mismo tamaño),
   // con total centrado y leyenda a la derecha con conteo + %.
   const segments = [
-    { label: 'Cabeza', value: cabeza, color: '#FF8409' },
-    { label: 'Cuerpo', value: cuerpo, color: '#FBC79A' },
-    { label: 'Cola',   value: cola,   color: '#163349' },
+    { label: 'Cabeza', value: cabezaSafe, color: '#FF8409' },
+    { label: 'Cuerpo', value: cuerpoSafe, color: '#FBC79A' },
+    { label: 'Cola',   value: colaSafe, color: '#163349' },
   ];
 
   return (

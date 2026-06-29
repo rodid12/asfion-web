@@ -50,29 +50,46 @@ async function fetchAllPaginated<T = any>(
   table: string,
   applyOrder: (q: QueryBuilder) => QueryBuilder,
 ): Promise<T[]> {
-  const out: T[] = [];
-  let from = 0;
-  // Q3 audit: antes este loop tenía `while (out.length < 100_000)` como
-  // safeguard contra loops infinitos. El problema: si una tabla crecía a
-  // 100.001 filas, el último page se cortaba silencioso. Cambio a
-  // `while (true)` con break explícito cuando data.length < PAGE_SIZE
-  // (= esa fue la última página). Si por alguna razón Supabase devuelve
-  // PAGE_SIZE exacto en cada llamada (loop infinito real), explotamos con
-  // un error después de 1.000 iteraciones — eso son 1M de filas, MUY
-  // arriba de cualquier caso real de un cliente.
-  let iter = 0;
-  while (true) {
-    if (iter++ > 1000) throw new Error(`fetchAllPaginated(${table}): >1M filas, abortando`);
-    const base = supabase.from(table).select('*');
-    const ordered = applyOrder(base);
-    const { data, error } = await ordered.range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-    out.push(...(data as T[]));
-    if (data.length < PAGE_SIZE) break;
-    from += PAGE_SIZE;
+  // PRIMERA round-trip: usamos `count: 'exact'` para que Postgres devuelva
+  // el total de filas junto con la primera página. Eso nos permite calcular
+  // cuántas páginas faltan y lanzarlas en PARALELO en lugar de esperar
+  // cada una secuencialmente (antes 2500 rows = 3 round-trips × 150ms =
+  // ~450ms; ahora 2500 rows = 1 round-trip serial + 2 paralelos = ~200ms).
+  //
+  // Si la tabla cabe en una página (count <= PAGE_SIZE) ahorrramos la
+  // segunda round-trip directamente y devolvemos.
+  const baseFirst = supabase.from(table).select('*', { count: 'exact' });
+  const orderedFirst = applyOrder(baseFirst) as ReturnType<typeof baseFirst.range>;
+  const { data: firstData, error: firstErr, count } = await orderedFirst.range(0, PAGE_SIZE - 1);
+  if (firstErr) throw firstErr;
+  const first = (firstData ?? []) as T[];
+  if (count == null || count <= PAGE_SIZE) return first;
+
+  // Safeguard: contra count corrupto / explosión de paginación. 1M filas
+  // sería un cliente fuera de cualquier perfil real, abortamos.
+  const totalPages = Math.ceil(count / PAGE_SIZE);
+  if (totalPages > 1000) {
+    throw new Error(`fetchAllPaginated(${table}): >1M filas (count=${count}), abortando`);
   }
-  return out;
+
+  // Lanzar páginas restantes en paralelo. Cada Promise hace su propia
+  // request range(N, N+PAGE_SIZE-1) — el ordering se preserva porque
+  // Postgres devuelve cada slot ordenado por la cláusula del applyOrder
+  // y nosotros las concatenamos en orden de página.
+  const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 1);
+  const restResults = await Promise.all(
+    remainingPages.map(async (pageIdx) => {
+      const base = supabase.from(table).select('*');
+      const ordered = applyOrder(base);
+      const start = pageIdx * PAGE_SIZE;
+      const { data, error } = await ordered.range(start, start + PAGE_SIZE - 1);
+      if (error) throw error;
+      return (data ?? []) as T[];
+    }),
+  );
+
+  // Concatenar manteniendo orden: primera página + páginas siguientes.
+  return [first, ...restResults].flat();
 }
 
 function rowToCampo(r: any): Campo {

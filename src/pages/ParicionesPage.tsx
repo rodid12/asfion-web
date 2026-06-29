@@ -96,7 +96,64 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
     return campos.filter(c => c.id === filtros.campoId);
   }, [filtros.campoId, campos]);
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Resumen del servicio — fuente preferida para los KPIs. Se calcula
+  // ARRIBA del `kpis` (DAX legacy) para que ese pueda hacer early-return
+  // y saltarse las 14 fórmulas cuando hay resumen.
+  // ─────────────────────────────────────────────────────────────────────────
+  const resumenTotales = useMemo(() => {
+    if (!resumenServicio || resumenServicio.length === 0) return null;
+    const aniosValidos = resumenServicio.map(r => r.servicioAnio).filter((x): x is number => Number.isFinite(x));
+    if (aniosValidos.length === 0) return null;
+    const ultimoAnio = Math.max(...aniosValidos);
+    const rows = resumenServicio.filter(r => r.servicioAnio === ultimoAnio);
+    const sum = (pick: (r: typeof rows[0]) => number | undefined) =>
+      rows.reduce<number>((s, r) => s + (pick(r) ?? 0), 0);
+
+    const prenadas         = sum(r => r.prenadas);
+    const nptAbortos       = sum(r => r.nptAbortosRetacto);
+    const mortVientres     = sum(r => r.mortandadVientres);
+    const mortTernSenal    = sum(r => r.ternerosSenalados);
+    const mortTernSinSen   = sum(r => r.ternerosSinSenalar);
+    const recuentoSalida   = sum(r => r.recuentoSalidaTerneros);
+    const vacasDuranteServ = sum(r => r.vacasDuranteServicio);
+    const nacidos          = sum(r => r.ternerosNacidos);
+    const vivos            = sum(r => r.ternerosVivos);
+
+    const den = (d: number) => (d > 0 ? d : 1);
+    return {
+      anio: ultimoAnio,
+      tropas: rows.length,
+      prenadas, vacasDuranteServ, nacidos, vivos,
+      mortVientres, mortTernSenal, mortTernSinSen, recuentoSalida,
+      nptAbortos,
+      mermaTrParicion: prenadas > 0 ? (prenadas - nacidos) / den(prenadas) : 0,
+      mermaTrDestete:  prenadas > 0 ? (prenadas - vivos)   / den(prenadas) : 0,
+      pctAbortosNpt:       nptAbortos     / den(prenadas),
+      pctMortVientres:     mortVientres   / den(prenadas),
+      pctMortTernSenal:    mortTernSenal  / den(nacidos),
+      pctMortTernSinSen:   mortTernSinSen / den(nacidos),
+      pctDesteteSobrePren: vivos          / den(prenadas),
+    };
+  }, [resumenServicio]);
+
+  // Shape vacía para cuando hay resumen y `kpis` se "saltea" — sigue
+  // siendo el tipo del useMemo (no rompe los `kpis.X` de la rama legacy
+  // del render porque esa rama solo se ejecuta cuando resumenTotales=null
+  // → en ese caso kpis tiene los valores reales).
+  const KPIS_EMPTY = {
+    total: 0, eventos: 0, nacimientosVivos: 0, nacimientos: 0, muertes: 0,
+    abortos: 0, retactos: 0, muerteSenalado: 0, nacidoMuerto: 0,
+    ternerosEnPie: 0, stockBase: 0, vacasSinParir: 0, orejanos: 0, asistidos: 0,
+    pctParicion: 0, pctDestete: 0, pctAbortos: 0, pctMuerteSenal: 0, pctNacidoMuerto: 0,
+  };
+
   const kpis = useMemo(() => {
+    // LAZY BAIL-OUT: si hay resumen del servicio cargado, la UI usa
+    // `resumenTotales` y nunca lee `kpis.X` — saltamos las 14 fórmulas
+    // DAX (norm, sets, reduces) que tomaban ~20-40ms con 2.500 pariciones.
+    if (resumenTotales) return KPIS_EMPTY;
+
     // ────────────────────────────────────────────────────────────────────
     // FÓRMULAS DAX EXACTAS del Power BI de Agus (verificadas 26/06/2026).
     //
@@ -237,70 +294,10 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
       pctMuerteSenal:   nacimientos  ? muerteSenalado / nacimientos : 0,
       pctNacidoMuerto:  nacimientos  ? nacidoMuerto / nacimientos : 0,
     };
-  }, [filtrados, camposVisibles]);
+  }, [filtrados, camposVisibles, resumenTotales]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Totales desde pariciones_resumen_servicio (Hoja 3 del Excel del cliente).
-  //
-  // Cuando hay rows del año más reciente, TODOS los KPIs principales y los %
-  // de eficiencia se calculan desde acá, matcheando exacto el Excel.
-  // Si no hay resumen cargado, los componentes caen al cálculo histórico
-  // desde eventos individuales (Power BI legacy).
-  //
-  // Fórmulas exactas del Excel (replicadas literal):
-  //   Vivos              = Nacidos − Mort.Señalados − Recuento Salida
-  //   VacasDuranteServ.  = Preñadas − Mort.Vientres
-  //   MermaTrParicion    = (Preñadas − Nacidos) / Preñadas
-  //   MermaTrDestete     = (Preñadas − Vivos) / Preñadas
-  //   %AbortosNpt        = NPT+Abortos / Preñadas
-  //   %MortVientres      = Mort.Vientres / Preñadas
-  //   %MortTernSeñalados = Mort.Señalados / Nacidos
-  //   %MortTernSinSeñal  = Mort.SinSeñalar / Nacidos
-  //   %DesteteSobrePreñ  = Vivos / Preñadas
-  // ─────────────────────────────────────────────────────────────────────────
-  const resumenTotales = useMemo(() => {
-    if (!resumenServicio || resumenServicio.length === 0) return null;
-    const aniosValidos = resumenServicio.map(r => r.servicioAnio).filter((x): x is number => Number.isFinite(x));
-    if (aniosValidos.length === 0) return null;
-    const ultimoAnio = Math.max(...aniosValidos);
-    const rows = resumenServicio.filter(r => r.servicioAnio === ultimoAnio);
-    const sum = (pick: (r: typeof rows[0]) => number | undefined) =>
-      rows.reduce<number>((s, r) => s + (pick(r) ?? 0), 0);
-
-    const prenadas         = sum(r => r.prenadas);
-    const nptAbortos       = sum(r => r.nptAbortosRetacto);
-    const mortVientres     = sum(r => r.mortandadVientres);
-    const mortTernSenal    = sum(r => r.ternerosSenalados);
-    const mortTernSinSen   = sum(r => r.ternerosSinSenalar);
-    const recuentoSalida   = sum(r => r.recuentoSalidaTerneros);
-    const vacasDuranteServ = sum(r => r.vacasDuranteServicio);
-    const nacidos          = sum(r => r.ternerosNacidos);
-    const vivos            = sum(r => r.ternerosVivos);
-
-    // Porcentajes — divisiones devuelven 0 si denom = 0 para que la UI no
-    // muestre "NaN%" mientras hay tropas con datos parciales.
-    const den = (d: number) => (d > 0 ? d : 1);
-    return {
-      anio: ultimoAnio,
-      tropas: rows.length,
-
-      // KPIs principales
-      prenadas, vacasDuranteServ, nacidos, vivos,
-      mortVientres, mortTernSenal, mortTernSinSen, recuentoSalida,
-      nptAbortos,
-
-      // Mermas (acumuladas — parición y destete)
-      mermaTrParicion: prenadas > 0 ? (prenadas - nacidos) / den(prenadas) : 0,
-      mermaTrDestete:  prenadas > 0 ? (prenadas - vivos)   / den(prenadas) : 0,
-
-      // % eficiencia (matchean fórmulas del Excel literal)
-      pctAbortosNpt:       nptAbortos     / den(prenadas),
-      pctMortVientres:     mortVientres   / den(prenadas),
-      pctMortTernSenal:    mortTernSenal  / den(nacidos),
-      pctMortTernSinSen:   mortTernSinSen / den(nacidos),
-      pctDesteteSobrePren: vivos          / den(prenadas),
-    };
-  }, [resumenServicio]);
+  // (resumenTotales y kpis ya están declarados arriba con el lazy bail-out
+  //  — esa duplicación quedó del refactor incremental, ahora removida.)
 
   // Texto del título: si hay un campo seleccionado, lo nombramos (estilo
   // "Pariciones Picaflor" del Power BI). Sino, queda genérico.
@@ -341,6 +338,9 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
             • Cuando NO hay → caen al cálculo histórico desde eventos
               individuales (Power BI legacy) para no dejar la página vacía
               en clientes que aún no cerraron temporada.
+          A futuro la fuente principal va a ser siempre el Excel cargado
+          via script de ingesta → la rama "Power BI legacy" queda como red
+          de seguridad por si el resumen no estuviera disponible.
           ───────────────────────────────────────────────────────────── */}
       {resumenTotales ? (
         <>

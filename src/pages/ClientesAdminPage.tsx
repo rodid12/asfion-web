@@ -10,7 +10,7 @@
 // migration 0015 garantiza que solo emails listados en is_super_admin()
 // pueden ejecutar los inserts/updates.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { PlusIcon, RefreshCwIcon, ArrowLeftIcon, AlertTriangleIcon, XIcon } from 'lucide-react';
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
@@ -532,8 +532,15 @@ function UsuariosSection({ clienteId, campos }: { clienteId: string; campos: Cam
     }
   };
 
+  // Map precomputado de id → nombre — campoNombre se llama 1 vez por user
+  // en la tabla, y con campos.find() era O(N campos) por usuario (= 50 users
+  // × 20 campos = 1000 ops por render). Con Map.get es O(1).
+  const camposIdToNombre = useMemo(
+    () => new Map(campos.map(c => [c.id, c.nombre])),
+    [campos],
+  );
   const campoNombre = (id?: string | null) =>
-    id ? (campos.find(c => c.id === id)?.nombre ?? id) : '—';
+    id ? (camposIdToNombre.get(id) ?? id) : '—';
 
   return (
     <Card

@@ -128,19 +128,29 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
     }
   }, [circuito, circuitoOpts]);
 
-  // Aplico todos los filtros — incluye filtro por etapa: si elijo "control",
-  // descarto los ciclos que no tengan etapa control cargada (no inflan KPIs
-  // con NULLs). Para "todas", muestro todo.
-  const filtrados = useMemo(() => {
+  // Dos niveles de filtrado para evitar recalcular charts al cambiar etapa:
+  //  - filtradosSinEtapa = filter por campo/circuito/categoria → lo usan
+  //    los CHARTS (porCampo, porCircuito). Cambiar etapa no los toca.
+  //  - filtrados = filtradosSinEtapa + filter por etapa → lo usan los KPIs,
+  //    que sí deben respetar la etapa elegida (descartar ciclos sin
+  //    fecha_control si etapa='control', etc).
+  const filtradosSinEtapa = useMemo(() => {
     return pastoreoCiclos.filter(c => {
       if (campo     !== 'todos'  && c.campoNombre !== campo)                        return false;
       if (circuito  !== 'todos'  && c.circuitoNombre !== circuito)                  return false;
       if (categoria !== 'todas'  && normalizarCategoria(c.categoria) !== categoria) return false;
+      return true;
+    });
+  }, [pastoreoCiclos, campo, circuito, categoria]);
+
+  const filtrados = useMemo(() => {
+    if (etapa === 'todas' || etapa === 'largada') return filtradosSinEtapa;
+    return filtradosSinEtapa.filter(c => {
       if (etapa === 'control' && c.fechaControl == null)  return false;
       if (etapa === 'final'   && c.fechaEncierre == null) return false;
       return true;
     });
-  }, [pastoreoCiclos, campo, circuito, categoria, etapa]);
+  }, [filtradosSinEtapa, etapa]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Cálculo de KPIs ("globitos" del Power BI).
@@ -260,18 +270,21 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
   // ─────────────────────────────────────────────────────────────────────────
   // Charts — cabezas por campo, kg producidos/Ha por circuito (filtrados)
   // ─────────────────────────────────────────────────────────────────────────
+  // Charts usan filtradosSinEtapa porque la cantidad de cabezas y kg/Ha de
+  // un ciclo son los mismos sin importar qué etapa esté mirando el usuario.
+  // Evita recalcular ~30ms al togglear Largada/Control/Final.
   const porCampo = useMemo(() => {
     const m = new Map<string, number>();
-    for (const c of filtrados) {
+    for (const c of filtradosSinEtapa) {
       m.set(c.campoNombre, (m.get(c.campoNombre) ?? 0) + (c.cantAnimales ?? 0));
     }
     return Array.from(m, ([nombre, cabezas]) => ({ nombre, cabezas }))
       .sort((a, b) => b.cabezas - a.cabezas);
-  }, [filtrados]);
+  }, [filtradosSinEtapa]);
 
   const porCircuito = useMemo(() => {
     const m = new Map<string, { kg: number; w: number }>();
-    for (const c of filtrados) {
+    for (const c of filtradosSinEtapa) {
       const v = c.kgCarneProducidosHaFinal ?? c.kgCarneProducidosHaControl;
       const w = c.cantAnimales ?? 0;
       if (v == null || w === 0) continue;
@@ -283,7 +296,7 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
     return Array.from(m, ([nombre, { kg, w }]) => ({ nombre, kgPorHa: w > 0 ? kg / w : 0 }))
       .sort((a, b) => b.kgPorHa - a.kgPorHa)
       .slice(0, 10);
-  }, [filtrados]);
+  }, [filtradosSinEtapa]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Export CSV — todas las columnas relevantes de las 3 etapas

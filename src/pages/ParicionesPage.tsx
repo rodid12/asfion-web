@@ -1,47 +1,26 @@
-// Página del módulo Pariciones — versión "Power BI" pedida por el cliente.
+// Página del módulo Pariciones.
 //
-// Estructura (de arriba abajo):
-//   1. Header con título y export CSV.
-//   2. FilterBar (rango, campo, evento).
-//   3. 7 KPIs en grid: Stock Base · Eventos · Nacimientos · Muertes · Vacas sin Parir · Ternero en Pie · Asistencia(Si).
-//   4. Fila de 5 % de eficiencia (MiniKpi compactos).
-//   5. Charts row A: donut Eventos · donut Nacimientos segmentados (cabeza/cuerpo/cola).
-//   6. Causa de Muerte (bar chart vertical) y Evolución mensual.
-//   7. Por campo (stacked) + Por grupo (segmentación por fecha).
-//   8. Tabla detalle con Export CSV.
+// REFACTORIZADA en A4 del audit arquitectónico — antes este archivo tenía
+// 619 líneas con 2 ramas de cálculo (kpis DAX legacy + resumenTotales del
+// Excel) conviviendo en el mismo render. Ahora:
 //
-// Fórmulas (replican el DAX del Power BI del cliente):
-//   Stock Base       = sum(campos.stock_inicial_vacas) sobre los campos visibles
-//   Nacimientos      = count eventos tipo Nacimiento
-//   Muertes          = count eventos tipo Muerte
-//   Abortos          = count eventos tipo Aborto
-//   Retactos         = count eventos tipo Retacto
-//   Eventos          = filtrados.length
-//   Muerte Señalado  = count pariciones con causaTipo = "Muerte Señalado"
-//   Nacido Muerto    = count pariciones con causaTipo = "Nacido Muerto"
-//   Ternero en Pie   = Nacimientos - Muerte Señalado
-//   Vacas sin Parir  = Stock Base - Nacimientos - Retactos
-//   Orejanos         = count pariciones con sexo = "Orejano"
-//   Asistencia(Si)   = count Nacimientos con asistencia = "Si"
+//   - computeResumenTotales() — función pura → calcula totales del Excel
+//   - computeKpisLegacy()     — función pura → calcula fórmulas DAX
+//   - <KpisDesdeResumen>      — render del grid Excel (3 filas)
+//   - <KpisLegacy>            — render del grid DAX (3 filas)
 //
-//   % Destete        = Ternero en Pie / Stock Base
-//   % Abortos        = Abortos / Stock Base
-//   % Muerte Señalado = Muerte Señalado / Nacimientos
-//   % Nacido Muerto  = Nacido Muerto / Nacimientos
+// Esta page solo orquesta:
+//   1. Filtros (rango/campo/evento)
+//   2. Decide si hay resumen del cierre → KpisDesdeResumen, sino KpisLegacy
+//   3. Charts (donut, mensuales, por campo, por grupo, causa muerte)
+//   4. Tabla con export CSV
+//   5. ResumenServicioTable al final (cuando hay)
+//
+// Pieza testeable (A5): las funciones puras de cálculo se pueden cubrir
+// con tests unitarios sin necesidad de DOM ni props complejas.
 
 import React, { useMemo, useState } from 'react';
-import {
-  BabyIcon,
-  HeartCrackIcon,
-  ShieldOffIcon,
-  SkullIcon,
-  TrendingUpIcon,
-  UsersIcon,
-  WarehouseIcon,
-} from 'lucide-react';
 import { Card } from '@/components/Card';
-import { Kpi } from '@/components/Kpi';
-import { MiniKpi } from '@/components/MiniKpi';
 import { FilterBar } from '@/components/FilterBar';
 import { ParicionesTable } from '@/components/ParicionesTable';
 import { ParicionesMensuales } from '@/charts/ParicionesMensuales';
@@ -54,17 +33,20 @@ import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyModule } from '@/components/EmptyModule';
 import { aplicarFiltros, FILTROS_DEFAULT, type Filtros } from '@/data/filters';
-import { formatNumber, formatPercent } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Paricion, ResumenServicio } from '@/data/types';
 import { ResumenServicioTable } from '@/components/ResumenServicioTable';
 import { campoNombreFn } from '@/lib/campoMap';
+import { KpisDesdeResumen } from '@/components/pariciones/KpisDesdeResumen';
+import { KpisLegacy } from '@/components/pariciones/KpisLegacy';
+import { computeResumenTotales } from '@/components/pariciones/computeResumenTotales';
+import { computeKpisLegacy } from '@/components/pariciones/computeKpisLegacy';
 
 interface Props {
   pariciones: Paricion[];
   campos: Campo[];
-  /** Resumen mermas servicio por tropa (Excel Hoja 3). Opcional — se
-   *  renderea solo si hay rows. */
+  /** Resumen mermas servicio por tropa (Excel Hoja 3). Opcional — si está
+   *  cargado el KPI grid de arriba lo prefiere; sino cae al DAX legacy. */
   resumenServicio?: ResumenServicio[];
 }
 
@@ -88,219 +70,29 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
     return [...set].sort((a, b) => b - a);
   }, [pariciones]);
 
-  // Campos visibles según el filtro de campo (1 o todos).
-  // El Stock Base se suma sobre los visibles para que cuando el cliente
-  // filtre "Picaflor", el denominador sea solo el de Picaflor.
+  // Campos visibles según el filtro de campo (1 o todos). El Stock Base se
+  // suma sobre los visibles para que cuando el cliente filtre "Picaflor",
+  // el denominador sea solo el de Picaflor (lo usa KpisLegacy).
   const camposVisibles = useMemo(() => {
     if (filtros.campoId === 'todos') return campos;
     return campos.filter(c => c.id === filtros.campoId);
   }, [filtros.campoId, campos]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Resumen del servicio — fuente preferida para los KPIs. Se calcula
-  // ARRIBA del `kpis` (DAX legacy) para que ese pueda hacer early-return
-  // y saltarse las 14 fórmulas cuando hay resumen.
-  // ─────────────────────────────────────────────────────────────────────────
-  const resumenTotales = useMemo(() => {
-    if (!resumenServicio || resumenServicio.length === 0) return null;
-    const aniosValidos = resumenServicio.map(r => r.servicioAnio).filter((x): x is number => Number.isFinite(x));
-    if (aniosValidos.length === 0) return null;
-    const ultimoAnio = Math.max(...aniosValidos);
-    const rows = resumenServicio.filter(r => r.servicioAnio === ultimoAnio);
-    const sum = (pick: (r: typeof rows[0]) => number | undefined) =>
-      rows.reduce<number>((s, r) => s + (pick(r) ?? 0), 0);
+  // Resumen del servicio — fuente preferida. Si está, mostramos
+  // KpisDesdeResumen; sino, KpisLegacy desde eventos individuales.
+  const resumenTotales = useMemo(
+    () => computeResumenTotales(resumenServicio),
+    [resumenServicio],
+  );
 
-    const prenadas         = sum(r => r.prenadas);
-    const nptAbortos       = sum(r => r.nptAbortosRetacto);
-    const mortVientres     = sum(r => r.mortandadVientres);
-    const mortTernSenal    = sum(r => r.ternerosSenalados);
-    const mortTernSinSen   = sum(r => r.ternerosSinSenalar);
-    const recuentoSalida   = sum(r => r.recuentoSalidaTerneros);
-    const vacasDuranteServ = sum(r => r.vacasDuranteServicio);
-    const nacidos          = sum(r => r.ternerosNacidos);
-    const vivos            = sum(r => r.ternerosVivos);
+  // KpisLegacy solo se calcula cuando NO hay resumen — early bail-out
+  // ahorra ~20-40ms de fórmulas DAX sobre 2.5k pariciones (audit N12).
+  const kpisLegacy = useMemo(
+    () => resumenTotales ? null : computeKpisLegacy(filtrados, camposVisibles),
+    [resumenTotales, filtrados, camposVisibles],
+  );
 
-    const den = (d: number) => (d > 0 ? d : 1);
-    return {
-      anio: ultimoAnio,
-      tropas: rows.length,
-      prenadas, vacasDuranteServ, nacidos, vivos,
-      mortVientres, mortTernSenal, mortTernSinSen, recuentoSalida,
-      nptAbortos,
-      mermaTrParicion: prenadas > 0 ? (prenadas - nacidos) / den(prenadas) : 0,
-      mermaTrDestete:  prenadas > 0 ? (prenadas - vivos)   / den(prenadas) : 0,
-      pctAbortosNpt:       nptAbortos     / den(prenadas),
-      pctMortVientres:     mortVientres   / den(prenadas),
-      pctMortTernSenal:    mortTernSenal  / den(nacidos),
-      pctMortTernSinSen:   mortTernSinSen / den(nacidos),
-      pctDesteteSobrePren: vivos          / den(prenadas),
-    };
-  }, [resumenServicio]);
-
-  // Shape vacía para cuando hay resumen y `kpis` se "saltea" — sigue
-  // siendo el tipo del useMemo (no rompe los `kpis.X` de la rama legacy
-  // del render porque esa rama solo se ejecuta cuando resumenTotales=null
-  // → en ese caso kpis tiene los valores reales).
-  const KPIS_EMPTY = {
-    total: 0, eventos: 0, nacimientosVivos: 0, nacimientos: 0, muertes: 0,
-    abortos: 0, retactos: 0, muerteSenalado: 0, nacidoMuerto: 0,
-    ternerosEnPie: 0, stockBase: 0, vacasSinParir: 0, orejanos: 0, asistidos: 0,
-    pctParicion: 0, pctDestete: 0, pctAbortos: 0, pctMuerteSenal: 0, pctNacidoMuerto: 0,
-  };
-
-  const kpis = useMemo(() => {
-    // LAZY BAIL-OUT: si hay resumen del servicio cargado, la UI usa
-    // `resumenTotales` y nunca lee `kpis.X` — saltamos las 14 fórmulas
-    // DAX (norm, sets, reduces) que tomaban ~20-40ms con 2.500 pariciones.
-    if (resumenTotales) return KPIS_EMPTY;
-
-    // ────────────────────────────────────────────────────────────────────
-    // FÓRMULAS DAX EXACTAS del Power BI de Agus (verificadas 26/06/2026).
-    //
-    // Cada KPI usa DISTINCTCOUNT(ID) — un ID = un row del Excel original.
-    // NO usa caravana (mi intento previo era especulativo). Todas las
-    // comparaciones aplican TRIM+UPPER (norm()) sobre los strings, para
-    // ignorar mayúsculas y espacios accidentales del operario.
-    //
-    // Las fórmulas referenciadas son:
-    //
-    //   Stock Base       = SUM(StockDesconectado[StockInicial])
-    //   Eventos          = DISTINCTCOUNT(Pariciones[ID])
-    //                       WHERE EVENTO_NORM IN {NACIMIENTO, NACIDO MUERTO}
-    //                          OR SEXO_NORM = OREJANO
-    //   Muertes          = DISTINCTCOUNT(ID) WHERE EVENTO = MUERTE
-    //   Asistencia (Si)  = DISTINCTCOUNT(ID) WHERE ASISTENCIA = SI
-    //   Orejanos         = DISTINCTCOUNT(ID) WHERE SEXO = OREJANO
-    //   Nacimientos      = DISTINCTCOUNT(ID) WHERE EVENTO=NACIMIENTO
-    //                       AND SEXO≠OREJANO          ← Nacimientos sin orejanos
-    //   Nacimientos Total= Nacimientos (sin filtro Cabeza/Cuerpo/Cola)
-    //   Muerte Señalado  = DISTINCTCOUNT(ID) WHERE CAUSA = MUERTE SEÑALADO
-    //   Nacido Muerto    = DISTINCTCOUNT(ID) WHERE CAUSA = NACIDO MUERTO
-    //   Abortos          = DISTINCTCOUNT(ID) WHERE EVENTO = ABORTO
-    //
-    //   Ternero en Pie   = Nacimientos Total − Muerte Señalado
-    //   Vacas sin Parir  = Stock Base − Eventos + Abortos    ← suma abortos!
-    //   % Abortos        = Abortos / Stock Base
-    //   % Destete Parcial= Ternero en Pie / Stock Base
-    //   % Muerte Señ.    = Muerte Señalado / Nacimientos
-    //   % Nacido Muerto  = Nacido Muerto / Nacimientos
-    //
-    // Sobre 2.547 filas: matchea PBI con diferencia de 1 row (un nacimiento
-    // con campo vacío que el PBI infiere y nosotros no).
-    // ────────────────────────────────────────────────────────────────────
-    const norm = (s?: string | null) => (s ?? '').trim().toUpperCase();
-
-    // Construimos los sets de IDs para cada filtro. Set elimina duplicados
-    // automáticamente (= DISTINCTCOUNT). Si el operario cargara 2 filas con
-    // mismo ID, contarían como 1.
-    const eventosIds = new Set<string>();
-    const muertesIds = new Set<string>();
-    const muerteSenIds = new Set<string>();
-    const nacidoMuertoIds = new Set<string>();
-    const nacIds = new Set<string>();         // Nacimientos sin orejanos
-    const abortosIds = new Set<string>();
-    const orejanosIds = new Set<string>();
-    const asistIds = new Set<string>();
-
-    filtrados.forEach(p => {
-      const ev = norm(p.evento);
-      const sx = norm(p.sexo);
-      const ca = norm(p.causaTipo);
-
-      // Eventos: NACIMIENTO || NACIDO MUERTO (literal en EVENTO) || OREJANO
-      // En la práctica el dataset no tiene "Nacido Muerto" como EVENTO
-      // (eso aparece sólo en CAUSA), así que la condición efectiva es
-      // "evento=NACIMIENTO || sexo=OREJANO".
-      if (ev === 'NACIMIENTO' || ev === 'NACIDO MUERTO' || sx === 'OREJANO') {
-        eventosIds.add(p.id);
-      }
-      // Nacimientos: evento=NACIMIENTO y NO orejano. Es el denominador
-      // de los % de Muerte Señalado y Nacido Muerto.
-      if (ev === 'NACIMIENTO' && sx !== 'OREJANO') {
-        nacIds.add(p.id);
-      }
-      // Muertes — la fórmula DAX literal no excluye orejanos
-      if (ev === 'MUERTE') muertesIds.add(p.id);
-      // Causas (por columna CAUSA MUERTE)
-      if (ca === 'MUERTE SEÑALADO') muerteSenIds.add(p.id);
-      if (ca === 'NACIDO MUERTO') nacidoMuertoIds.add(p.id);
-      // Abortos
-      if (ev === 'ABORTO') abortosIds.add(p.id);
-      // Orejanos — métrica aparte ("Orejanos Excluidos")
-      if (sx === 'OREJANO') orejanosIds.add(p.id);
-      // Asistencia (Si)
-      if (norm(p.asistencia) === 'SI') asistIds.add(p.id);
-    });
-
-    const eventos          = eventosIds.size;
-    const nacimientos      = nacIds.size;          // = Nacimientos Total
-    const muertes          = muertesIds.size;
-    const muerteSenalado   = muerteSenIds.size;
-    const nacidoMuerto     = nacidoMuertoIds.size;
-    const abortos          = abortosIds.size;
-    const orejanos         = orejanosIds.size;
-    const asistidos        = asistIds.size;
-
-    // El antiguo "nacimientosVivos" se mantiene para compat con el subtitle
-    // del KPI ("X vivos · Y muertos"). Vivos = Nacimientos cuyo ID no
-    // aparece como Muerte Señalado (porque "Muerte Señalado" = ternero
-    // nació vivo y luego murió). Para hacerlo simple, lo aproximamos.
-    const nacimientosVivos = Math.max(0, nacimientos - muerteSenalado);
-
-    // Stock Base
-    const stockBase = camposVisibles.reduce(
-      (s, c) => s + (c.stockInicialVacas ?? 0),
-      0,
-    );
-
-    // Ternero en Pie = Nacimientos Total − Muerte Señalado
-    const ternerosEnPie = Math.max(0, nacimientos - muerteSenalado);
-
-    // Vacas sin Parir = Stock Base − Eventos + Abortos  (DAX literal)
-    // Razón: Eventos ya excluye abortos (sólo cuenta nacimientos y orejanos),
-    // así que para llegar a "vacas que no tuvieron evento de parto pero
-    // tampoco abortaron" la fórmula resta eventos y suma abortos de nuevo.
-    const vacasSinParir = Math.max(0, stockBase - eventos + abortos);
-
-    // Retactos no se usan más con la fórmula DAX (no aparecen en ninguna
-    // medida). Lo mantenemos en 0 para compat con la UI.
-    const retactos = 0;
-
-    return {
-      total: eventos,        // antes "grupos.size", ahora = medida DAX "Eventos"
-      eventos,               // alias explícito por si lo usa otra UI
-      nacimientosVivos,
-      nacimientos,           // = "Nacimientos Total" del DAX
-      muertes,
-      abortos,
-      retactos,
-      muerteSenalado,
-      nacidoMuerto,
-      ternerosEnPie,
-      stockBase,
-      vacasSinParir,
-      orejanos,
-      asistidos,
-      // Porcentajes (las divisiones devuelven 0 si denom = 0)
-      // % Parición = Nacimientos Totales (partos) / Stock Base → mide
-      //   qué proporción del rodeo parió, incluyendo terneros que después
-      //   murieron. Es la métrica del Power BI de Agus.
-      // % Destete Parcial = Ternero en Pie / Stock Base → mide qué
-      //   proporción del rodeo terminó con un ternero vivo a la fecha.
-      //   Es nuestra métrica complementaria (más conservadora).
-      pctParicion:      stockBase    ? nacimientos / stockBase : 0,
-      pctDestete:       stockBase    ? ternerosEnPie / stockBase : 0,
-      pctAbortos:       stockBase    ? abortos / stockBase : 0,
-      pctMuerteSenal:   nacimientos  ? muerteSenalado / nacimientos : 0,
-      pctNacidoMuerto:  nacimientos  ? nacidoMuerto / nacimientos : 0,
-    };
-  }, [filtrados, camposVisibles, resumenTotales]);
-
-  // (resumenTotales y kpis ya están declarados arriba con el lazy bail-out
-  //  — esa duplicación quedó del refactor incremental, ahora removida.)
-
-  // Texto del título: si hay un campo seleccionado, lo nombramos (estilo
-  // "Pariciones Picaflor" del Power BI). Sino, queda genérico.
+  // Texto del título: si hay un campo seleccionado, lo nombramos.
   const tituloCampo = filtros.campoId === 'todos'
     ? null
     : (campos.find(c => c.id === filtros.campoId)?.nombre ?? null);
@@ -331,208 +123,12 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
 
       <FilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
 
-      {/* ─────────────────────────────────────────────────────────────────
-          KPIs principales. Dos modos:
-            • Cuando hay resumen del servicio (pariciones_resumen_servicio)
-              cargado → tiles + % matchean EXACTO el Excel del cliente.
-            • Cuando NO hay → caen al cálculo histórico desde eventos
-              individuales (Power BI legacy) para no dejar la página vacía
-              en clientes que aún no cerraron temporada.
-          A futuro la fuente principal va a ser siempre el Excel cargado
-          via script de ingesta → la rama "Power BI legacy" queda como red
-          de seguridad por si el resumen no estuviera disponible.
-          ───────────────────────────────────────────────────────────── */}
-      {resumenTotales ? (
-        <>
-          {/* Fila A — 4 KPIs grandes con el cierre del servicio del Excel */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Kpi
-              label="Preñadas"
-              value={formatNumber(resumenTotales.prenadas)}
-              sublabel={`Servicio ${resumenTotales.anio} · ${resumenTotales.tropas} tropas`}
-              accent="navy"
-              icon={<WarehouseIcon size={18} />}
-            />
-            <Kpi
-              label="Vacas durante servicio"
-              value={formatNumber(resumenTotales.vacasDuranteServ)}
-              sublabel={`Preñadas − ${formatNumber(resumenTotales.mortVientres)} mort. vientres`}
-              accent="navy"
-              icon={<ShieldOffIcon size={18} />}
-            />
-            <Kpi
-              label="Terneros nacidos"
-              value={formatNumber(resumenTotales.nacidos)}
-              sublabel={`Merma TR-parición: ${formatPercent(resumenTotales.mermaTrParicion)}`}
-              accent="orange"
-              icon={<BabyIcon size={18} />}
-            />
-            <Kpi
-              label="Terneros vivos"
-              value={formatNumber(resumenTotales.vivos)}
-              sublabel={
-                `${formatNumber(resumenTotales.nacidos)} nacidos − ` +
-                `${formatNumber(resumenTotales.mortTernSenal)} señalados − ` +
-                `${formatNumber(resumenTotales.recuentoSalida)} recuento`
-              }
-              accent="orange"
-              icon={<UsersIcon size={18} />}
-            />
-          </div>
-
-          {/* Fila B — Mortandades desglosadas como en el Excel */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Kpi
-              label="Mortandad vientres"
-              value={formatNumber(resumenTotales.mortVientres)}
-              sublabel="Vacas muertas durante servicio"
-              accent="terracota"
-              icon={<SkullIcon size={18} />}
-            />
-            <Kpi
-              label="NPT y abortos"
-              value={formatNumber(resumenTotales.nptAbortos)}
-              sublabel="Diagnosticados al retacto"
-              accent="terracota"
-              icon={<SkullIcon size={18} />}
-            />
-            <Kpi
-              label="Mort. tern. señalados"
-              value={formatNumber(resumenTotales.mortTernSenal)}
-              sublabel="Terneros señalados muertos"
-              accent="terracota"
-              icon={<SkullIcon size={18} />}
-            />
-            <Kpi
-              label="Mort. tern. sin señalar"
-              value={formatNumber(resumenTotales.mortTernSinSen)}
-              sublabel={`+ ${formatNumber(resumenTotales.recuentoSalida)} faltantes al recuento`}
-              accent="terracota"
-              icon={<SkullIcon size={18} />}
-            />
-          </div>
-
-          {/* Fila C — % de eficiencia, fórmulas del Excel literal */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <MiniKpi
-              label="% Destete sobre Preñ."
-              value={formatPercent(resumenTotales.pctDesteteSobrePren)}
-              accent="orange"
-            />
-            <MiniKpi
-              label="% Abortos y NPT"
-              value={formatPercent(resumenTotales.pctAbortosNpt)}
-              accent="terracota"
-            />
-            <MiniKpi
-              label="% Mort. vientres"
-              value={formatPercent(resumenTotales.pctMortVientres)}
-              accent="terracota"
-            />
-            <MiniKpi
-              label="% Mort. señalados"
-              value={formatPercent(resumenTotales.pctMortTernSenal)}
-              accent="terracota"
-            />
-            <MiniKpi
-              label="% Mort. sin señalar"
-              value={formatPercent(resumenTotales.pctMortTernSinSen)}
-              accent="danger"
-            />
-          </div>
-        </>
-      ) : (
-        /* ─── Fallback: sin resumen → cálculo desde eventos individuales ─ */
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Kpi
-              label="Stock Base"
-              value={kpis.stockBase > 0 ? formatNumber(kpis.stockBase) : '—'}
-              sublabel={kpis.stockBase === 0 ? 'Sin stock cargado' : 'Vacas preñadas al inicio'}
-              accent="navy"
-              icon={<WarehouseIcon size={18} />}
-            />
-            <Kpi
-              label="Eventos"
-              value={formatNumber(kpis.total)}
-              sublabel={`${formatNumber(kpis.retactos)} retactos · ${formatNumber(kpis.abortos)} abortos`}
-              accent="navy"
-              icon={<TrendingUpIcon size={18} />}
-            />
-            <Kpi
-              label="Nacimientos"
-              value={formatNumber(kpis.nacimientos)}
-              sublabel={`${formatNumber(kpis.nacimientosVivos)} vivos · ${formatNumber(kpis.muertes)} muertos`}
-              accent="orange"
-              icon={<BabyIcon size={18} />}
-            />
-            <Kpi
-              label="Muertes"
-              value={formatNumber(kpis.muertes)}
-              sublabel={`${formatNumber(kpis.muerteSenalado)} señaladas · ${formatNumber(kpis.nacidoMuerto)} nac. muertos`}
-              accent="terracota"
-              icon={<SkullIcon size={18} />}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Kpi
-              label="Vacas sin Parir"
-              value={kpis.stockBase > 0 ? formatNumber(kpis.vacasSinParir) : '—'}
-              sublabel="Stock − Partos − Retactos − Abortos"
-              accent="navy"
-              icon={<ShieldOffIcon size={18} />}
-            />
-            <Kpi
-              label="Ternero en Pie"
-              value={formatNumber(kpis.ternerosEnPie)}
-              sublabel="Nacimientos − Muerte Señalado · (sin resumen del cierre)"
-              accent="orange"
-              icon={<UsersIcon size={18} />}
-            />
-            <Kpi
-              label="Asistencia (Si)"
-              value={formatNumber(kpis.asistidos)}
-              sublabel={kpis.nacimientos ? `${formatPercent(kpis.asistidos / kpis.nacimientos)} de partos` : ''}
-              accent="navy"
-              icon={<HeartCrackIcon size={18} />}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-            <MiniKpi
-              label="% Parición"
-              value={kpis.stockBase ? formatPercent(kpis.pctParicion) : '—'}
-              accent="orange"
-            />
-            <MiniKpi
-              label="% Destete Parcial"
-              value={kpis.stockBase ? formatPercent(kpis.pctDestete) : '—'}
-              accent="orange"
-            />
-            <MiniKpi
-              label="% Abortos"
-              value={kpis.stockBase ? formatPercent(kpis.pctAbortos) : '—'}
-              accent="terracota"
-            />
-            <MiniKpi
-              label="% Muerte Señalado"
-              value={kpis.nacimientos ? formatPercent(kpis.pctMuerteSenal) : '—'}
-              accent="terracota"
-            />
-            <MiniKpi
-              label="% Nacido Muerto"
-              value={kpis.nacimientos ? formatPercent(kpis.pctNacidoMuerto) : '—'}
-              accent="danger"
-            />
-            <MiniKpi
-              label="Orejanos Excluidos"
-              value={formatNumber(kpis.orejanos)}
-              accent="navy"
-            />
-          </div>
-        </>
-      )}
+      {/* KPIs principales — Excel-faithful cuando hay resumen, DAX legacy
+          como fallback. La preferencia por el resumen está documentada en
+          el comentario inline de computeResumenTotales. */}
+      {resumenTotales
+        ? <KpisDesdeResumen totales={resumenTotales} />
+        : kpisLegacy && <KpisLegacy kpis={kpisLegacy} />}
 
       {/* Charts row A: 2 donuts (eventos + nacimientos segmentados) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -579,10 +175,8 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
         <ParicionesTable data={filtrados} campos={campos} />
       </Card>
 
-      {/* Resumen Mermas Servicio — el agregado anual por tropa que arma
-          el cliente al cierre de cada temporada. La columna "Terneros
-          Vivos" sale destacada en verde (es la métrica más importante
-          según pedido explícito del cliente). */}
+      {/* Resumen Mermas Servicio — agregado anual por tropa con la columna
+          "Terneros Vivos" destacada en verde (pedido explícito del cliente). */}
       {resumenServicio.length > 0 && (
         <ResumenServicioTable rows={resumenServicio} />
       )}
@@ -594,8 +188,7 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
 // espera en su Excel: fecha humana primero, identificación del animal
 // (campo, lote, caravana) en el medio, datos del evento al final.
 function exportPariciones(rows: Paricion[], campos: Campo[]): void {
-  // Map precomputado — antes O(N×M) en cada click de export
-  // (audit 27-jun-2026, item 11).
+  // Map precomputado — antes O(N×M) en cada click (audit item 11).
   const campoNombre = campoNombreFn(campos);
   const cols: CsvColumn<Paricion>[] = [
     { header: 'Fecha',           value: r => r.fecha },
@@ -616,4 +209,3 @@ function exportPariciones(rows: Paricion[], campos: Campo[]): void {
   const csv = rowsToCsv(rows, cols);
   downloadCsv(csv, csvFilename('pariciones'));
 }
-

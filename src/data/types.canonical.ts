@@ -104,6 +104,148 @@ export interface ParicionCanonical {
   createdAt: string;
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// CATÁLOGOS (mig 0001) — entidades base del modelo de datos
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Campo / establecimiento (Agisot, Carolina, Margarita, Picaflor, etc). */
+export interface CampoCanonical {
+  id: string;
+  nombre: string;
+  /** Solo lo usa la app móvil para filtrado multi-organización. El dashboard
+   *  no lo necesita pero acepta su presencia silenciosa. */
+  organizacionId?: string;
+  /** Stock inicial de vacas preñadas al comienzo de temporada de parición.
+   *  Denominador de % destete / % abortos. Si está null, los KPIs % muestran "—". */
+  stockInicialVacas?: number;
+}
+
+/** Lote o subdivisión dentro de un campo (ej. "Progreso 3", "Ensenada 15"). */
+export interface LoteCanonical {
+  id: string;
+  campoId: string;
+  nombre: string;
+}
+
+/** Pluviómetro físico instalado en un campo (ej. "Casco", "Puesto", "D17").
+ *  Distintos de los lotes: un campo tiene 1-3 pluviómetros vs 30-40 lotes. */
+export interface PluviometroCanonical {
+  id: string;
+  campoId: string;
+  nombre: string;
+}
+
+/** Circuito de pastoreo dentro de un campo. Se subdivide en parcelas.
+ *  hectareas es NOT NULL DEFAULT 0 en DB — siempre tiene valor. */
+export interface CircuitoCanonical {
+  id: string;
+  campoId: string;
+  nombre: string;
+  hectareas: number;
+}
+
+/** Parcela dentro de un circuito. Numeradas 1..N por circuito. */
+export interface ParcelaCanonical {
+  id: string;
+  circuitoId: string;
+  numero: number;
+  hectareas: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LLUVIA (mig 0001)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Una lluvia = lectura de un pluviómetro en una fecha dada. Hay 2 maneras de
+// identificar el pluviómetro:
+//   - `pluviometroId` — FK al catálogo `pluviometros` (forma "moderna")
+//   - `pluviometro` — string libre denormalizado (forma legacy, UI legible)
+//
+// El sync de la app móvil setea ambos cuando carga; el dashboard prefiere
+// `pluviometroId` para agrupar y cae a `pluviometro` cuando falta.
+
+export interface LluviaCanonical {
+  id: string;
+  cliente_id?: string;
+  fecha: string;                          // 'YYYY-MM-DD'
+  campoId: string;
+  usuarioEmail: string;
+
+  pluviometro: string;                    // nombre denormalizado (UI legible)
+  pluviometroId?: string;                 // FK al catálogo pluviometros
+  milimetros: number;
+  observaciones?: string;
+
+  createdAt: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MORTANDAD (mig 0001)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Cada mortandad = 1 animal muerto. Categoría es texto libre alimentado por
+// el catálogo MORT_CATEGORIA del cliente (ej. "Vc Preñ", "TernM", "Vaq 1°
+// Servicio"). Causa es de 2 niveles:
+//   - causaTipo (enum CausaMuerteTipo) — agrupa para charts
+//   - causaDetalle (texto libre) — la causa real específica
+//
+// ⚠️ GPS NO está en el canonical — el app lo expone como `gps: {lat, lon}`
+// (objeto anidado, UX form), el dashboard como `gpsLat/gpsLon` aplanados
+// (refleja DB y simplifica charts de mapa). Cada repo agrega lo suyo.
+
+export interface MortandadCanonical {
+  id: string;
+  cliente_id?: string;
+  fecha: string;
+  campoId: string;
+  loteId?: string;
+  usuarioEmail: string;
+
+  categoria: string;                      // catálogo MORT_CATEGORIA
+  actividad?: string;                     // Cria / engorde / Recria P / etc
+  causaTipo?: CausaMuerteTipo;            // nivel 1 (enum)
+  causaDetalle?: string;                  // nivel 2 (texto libre)
+  caravanaColor?: CaravanaColor;
+  caravanaNumero?: string;
+  observaciones?: string;
+
+  createdAt: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PASTOREO — modelo "stay log" (mig 0001 + 0003)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Cada registro = un movimiento de hacienda hacia un circuito+parcela. Tiene:
+//   - fecha = fecha de ENTRADA al circuito+parcela
+//   - fechaSalida opcional. NULL = stay abierto (hacienda sigue ahí)
+//
+// El "stay log" es el modelo de eventos. El cierre por temporada
+// (cierre_pastoreo Excel) usa la tabla aparte `pastoreo_ciclos` (mig 0018).
+
+export interface PastoreoCanonical {
+  id: string;
+  cliente_id?: string;
+  fecha: string;                          // fecha de entrada
+  fechaSalida?: string;                   // undefined = stay abierto
+  campoId: string;
+  circuitoId: string;                     // OBLIGATORIO en Pastoreo
+  parcelaId: string;                      // OBLIGATORIO en Pastoreo
+  parcelaNumero?: number;                 // denormalizado
+  usuarioEmail: string;
+
+  categoria: string;                      // PAST_CATEGORIA (texto libre)
+  categoriaAnimal?: string;               // PAST_CAT_ANIMAL
+  evento?: string;                        // 'Entrada' | 'Salida' | 'Rotacion' | 'Muerte'
+  caravanaNumero?: string;
+  causa?: string;
+  // Datos productivos (mig 0003) — para KPIs del dashboard
+  animales?: number;                      // cantidad de cabezas en el stay
+  kgPromedio?: number;                    // peso promedio (kg)
+
+  createdAt: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPRA (mig 0004 + 0017 + 0019 + 0021)
 // ─────────────────────────────────────────────────────────────────────────────

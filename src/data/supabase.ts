@@ -404,7 +404,9 @@ function rowToCircuito(r: any): Circuito {
     id: r.id,
     campoId: r.campo_id,
     nombre: r.nombre,
-    hectareas: r.hectareas != null ? Number(r.hectareas) : undefined,
+    // hectareas es NOT NULL DEFAULT 0 en DB, así que != null es siempre true.
+    // Fallback a 0 por defensa si algún row corrupto llegara con null.
+    hectareas: r.hectareas != null ? Number(r.hectareas) : 0,
   };
 }
 

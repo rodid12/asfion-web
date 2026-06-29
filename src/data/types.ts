@@ -25,6 +25,9 @@ import type {
   EventoParicion,
   CausaMuerteTipo,
   ParicionCanonical,
+  LluviaCanonical,
+  MortandadCanonical,
+  PastoreoCanonical,
 } from './types.canonical';
 export type {
   Sexo,
@@ -35,21 +38,19 @@ export type {
   CausaMuerteTipo,
 };
 
+// Catálogos compartidos — vienen del canonical
+export type { CampoCanonical as Campo,
+              LoteCanonical as Lote,
+              PluviometroCanonical as Pluviometro,
+              CircuitoCanonical as Circuito,
+              ParcelaCanonical as Parcela } from './types.canonical';
+
 // SyncState es SOLO para el sync flow del app móvil (offline → cloud),
 // pero el dashboard también lo lee de los rows ya sincados. Lo dejamos
 // específico del web por ahora (el app lo tiene definido aparte).
 export type SyncState = 'pending' | 'syncing' | 'synced' | 'failed';
 
-export interface Campo {
-  id: string;
-  nombre: string;
-  /**
-   * Stock inicial de vacas preñadas al comienzo de temporada. Sirve como
-   * denominador de los % de eficiencia (% destete, % abortos, etc).
-   * Si está null, los KPIs porcentuales muestran "—".
-   */
-  stockInicialVacas?: number;
-}
+// Campo se re-exporta desde CampoCanonical en el bloque de catálogos arriba.
 
 // Paricion = ParicionCanonical + syncState (este último es específico del
 // repo web para reflejar si el row vino sincronizado desde la app móvil).
@@ -58,18 +59,9 @@ export interface Paricion extends ParicionCanonical {
 }
 
 // -----------------------------------------------------------------------------
-// Lluvia
+// Lluvia — del canonical directo (no necesita extensiones específicas del web)
 // -----------------------------------------------------------------------------
-export interface Lluvia {
-  id: string;
-  fecha: string;
-  campoId: string;
-  usuarioEmail: string;
-  pluviometro: string;       // nombre denormalizado (UI legible)
-  pluviometroId?: string;
-  milimetros: number;
-  createdAt: string;
-}
+export type Lluvia = LluviaCanonical;
 
 // -----------------------------------------------------------------------------
 // Tactos — para el módulo Preñez
@@ -121,55 +113,21 @@ export interface NdviPastura {
 }
 
 // -----------------------------------------------------------------------------
-// Mortandad
+// Mortandad — del canonical + GPS aplanado específico del dashboard.
+// El app móvil usa GPS anidado `gps: {lat, lon}` (UX form); acá los
+// aplanamos para simplificar charts de mapa (MortandadMap.tsx). El mapper
+// rowToMortandad convierte cuando llega del backend.
 // -----------------------------------------------------------------------------
-export interface Mortandad {
-  id: string;
-  fecha: string;
-  campoId: string;
-  loteId?: string;
-  usuarioEmail: string;
-  categoria: string;             // catálogo MORT_CATEGORIA (texto libre)
-  actividad?: string;
-  causaTipo?: CausaMuerteTipo;
-  causaDetalle?: string;
-  caravanaColor?: CaravanaColor;
-  caravanaNumero?: string;
-  observaciones?: string;
-  // GPS — capturado por el form de la app móvil al registrar la muerte.
-  // Útil para mapear dónde están ocurriendo eventos (zonas de pozos,
-  // monte cerrado, agua estancada, etc). Opcional porque a veces el
-  // operario carga sin señal.
+export interface Mortandad extends MortandadCanonical {
   gpsLat?: number;
   gpsLon?: number;
   gpsAccuracyM?: number;
-  createdAt: string;
 }
 
 // -----------------------------------------------------------------------------
-// Pastoreo (stay log — entrada + salida en mismo registro)
+// Pastoreo (stay log) — del canonical directo
 // -----------------------------------------------------------------------------
-export interface Pastoreo {
-  id: string;
-  fecha: string;                 // = fecha_entrada
-  fechaSalida?: string;          // NULL = stay abierto
-  campoId: string;
-  circuitoId: string;
-  parcelaId: string;
-  parcelaNumero?: number;
-  usuarioEmail: string;
-  categoria: string;             // catálogo PAST_CATEGORIA
-  categoriaAnimal?: string;
-  evento?: string;
-  caravanaNumero?: string;
-  causa?: string;
-  // Datos productivos (migration 0003) — alimentan los KPIs Animales,
-  // KG/Cab, Kg Totales y Carga del dashboard. Opcionales en stays viejos
-  // sin estos datos.
-  animales?: number;
-  kgPromedio?: number;
-  createdAt: string;
-}
+export type Pastoreo = PastoreoCanonical;
 
 // -----------------------------------------------------------------------------
 // Resumen Mermas Servicio (migration 0020) — agregación anual por tropa
@@ -274,12 +232,6 @@ export interface PastoreoCiclo {
 // En el dashboard NO necesitamos extender — usamos el canónico directo.
 export type { CompraCanonical as Compra } from './types.canonical';
 
-// -----------------------------------------------------------------------------
-// Catálogos secundarios — necesarios para resolver nombres en charts
-// -----------------------------------------------------------------------------
-export interface Circuito {
-  id: string;
-  campoId: string;
-  nombre: string;
-  hectareas?: number;
-}
+// Circuito (+ Campo, Lote, Pluviometro, Parcela) se re-exportan desde el
+// canonical en el bloque de catálogos arriba del archivo. Dejamos este
+// comentario por si alguien busca "Circuito" con grep.

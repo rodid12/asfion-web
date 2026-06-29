@@ -11,11 +11,8 @@
 import { supabase } from '@/lib/supabase';
 import type {
   Campo,
-  CaravanaColor,
-  CausaMuerteTipo,
   Circuito,
   Compra,
-  EventoParicion,
   Lluvia,
   Mortandad,
   NdviPastura,
@@ -23,11 +20,25 @@ import type {
   Pastoreo,
   PastoreoCiclo,
   ResumenServicio,
-  Sexo,
-  SiNo,
   Tacto,
-  VacasGrupo,
 } from './types';
+import {
+  mapRow,
+  CAMPO_SCHEMA,
+  PARICION_SCHEMA,
+  LLUVIA_SCHEMA,
+  MORTANDAD_SCHEMA,
+  PASTOREO_SCHEMA,
+  COMPRA_SCHEMA,
+  CIRCUITO_SCHEMA,
+} from './mapRow.canonical';
+import type {
+  ParicionCanonical,
+  LluviaCanonical,
+  MortandadCanonical,
+  PastoreoCanonical,
+  CompraCanonical,
+} from './types.canonical';
 
 // ----------------------------------------------------------------------------
 // Paginación
@@ -92,32 +103,23 @@ async function fetchAllPaginated<T = any>(
   return [first, ...restResults].flat();
 }
 
+// Mappers de DB → tipo TS. Ahora son one-liners gracias a mapRow + SCHEMAs
+// canónicos (asfion-web/src/data/mapRow.canonical.ts). Cuando agregás una
+// columna nueva al schema canonical, este mapper se actualiza automático.
+//
+// Para campos específicos del dashboard (no canónicos) — ej. syncState en
+// Paricion, gpsLat/gpsLon en Mortandad — el mapper devuelve `{...canonical, ...extras}`.
+
 function rowToCampo(r: any): Campo {
-  return {
-    id: r.id,
-    nombre: r.nombre,
-    stockInicialVacas: r.stock_inicial_vacas != null ? Number(r.stock_inicial_vacas) : undefined,
-  };
+  return mapRow<Campo>(r, CAMPO_SCHEMA);
 }
 
 function rowToParicion(r: any): Paricion {
+  // syncState siempre es 'synced' en el dashboard — solo leemos rows ya
+  // sincronizados desde la app móvil. El campo viene del repo web (no canonical).
   return {
-    id: r.id,
-    fecha: r.fecha,
-    campoId: r.campo_id,
-    loteId: r.lote_id ?? undefined,
-    usuarioEmail: r.usuario_email,
-    createdAt: r.created_at,
+    ...mapRow<ParicionCanonical>(r, PARICION_SCHEMA),
     syncState: 'synced',
-    vacasGrupo: r.vacas_grupo as VacasGrupo,
-    evento: r.evento as EventoParicion,
-    sexo: (r.sexo ?? undefined) as Sexo | undefined,
-    asistencia: (r.asistencia ?? undefined) as SiNo | undefined,
-    caravanaColor: (r.caravana_color ?? undefined) as CaravanaColor | undefined,
-    caravanaNumero: r.caravana_numero ?? undefined,
-    causaTipo: (r.causa_tipo ?? undefined) as CausaMuerteTipo | undefined,
-    causaDetalle: r.causa_detalle ?? undefined,
-    observaciones: r.observaciones ?? undefined,
   };
 }
 
@@ -151,16 +153,13 @@ export async function fetchPariciones(): Promise<Paricion[]> {
 // =============================================================================
 
 function rowToLluvia(r: any): Lluvia {
-  return {
-    id: r.id,
-    fecha: r.fecha,
-    campoId: r.campo_id,
-    usuarioEmail: r.usuario_email,
-    pluviometro: r.pluviometro_nombre ?? '',
-    pluviometroId: r.pluviometro_id ?? undefined,
-    milimetros: Number(r.milimetros ?? 0),
-    createdAt: r.created_at,
-  };
+  // El dashboard recibe `pluviometro_nombre` (computado por una view o join)
+  // mientras que el canonical schema espera `pluviometro` directo. Reescribimos
+  // antes de pasar a mapRow para que el SCHEMA sirva.
+  return mapRow<Lluvia>(
+    { ...r, pluviometro: r.pluviometro_nombre ?? r.pluviometro ?? '' },
+    LLUVIA_SCHEMA,
+  );
 }
 
 export async function fetchLluvias(): Promise<Lluvia[]> {
@@ -178,23 +177,13 @@ export async function fetchLluvias(): Promise<Lluvia[]> {
 // =============================================================================
 
 function rowToMortandad(r: any): Mortandad {
+  // GPS está aplanado en el dashboard (no en el canonical). Lo agregamos
+  // como extra después de mapRow para mantener el spec canónico limpio.
   return {
-    id: r.id,
-    fecha: r.fecha,
-    campoId: r.campo_id,
-    loteId: r.lote_id ?? undefined,
-    usuarioEmail: r.usuario_email,
-    categoria: r.categoria,
-    actividad: r.actividad ?? undefined,
-    causaTipo: (r.causa_tipo ?? undefined) as CausaMuerteTipo | undefined,
-    causaDetalle: r.causa_detalle ?? undefined,
-    caravanaColor: (r.caravana_color ?? undefined) as CaravanaColor | undefined,
-    caravanaNumero: r.caravana_numero ?? undefined,
-    observaciones: r.observaciones ?? undefined,
-    gpsLat: r.gps_lat != null ? Number(r.gps_lat) : undefined,
-    gpsLon: r.gps_lon != null ? Number(r.gps_lon) : undefined,
-    gpsAccuracyM: r.gps_accuracy_m != null ? Number(r.gps_accuracy_m) : undefined,
-    createdAt: r.created_at,
+    ...mapRow<MortandadCanonical>(r, MORTANDAD_SCHEMA),
+    gpsLat:        r.gps_lat        != null ? Number(r.gps_lat)        : undefined,
+    gpsLon:        r.gps_lon        != null ? Number(r.gps_lon)        : undefined,
+    gpsAccuracyM:  r.gps_accuracy_m != null ? Number(r.gps_accuracy_m) : undefined,
   };
 }
 
@@ -213,24 +202,7 @@ export async function fetchMortandad(): Promise<Mortandad[]> {
 // =============================================================================
 
 function rowToPastoreo(r: any): Pastoreo {
-  return {
-    id: r.id,
-    fecha: r.fecha_entrada,
-    fechaSalida: r.fecha_salida ?? undefined,
-    campoId: r.campo_id,
-    circuitoId: r.circuito_id,
-    parcelaId: r.parcela_id,
-    parcelaNumero: r.parcela_numero ?? undefined,
-    usuarioEmail: r.usuario_email,
-    categoria: r.categoria,
-    categoriaAnimal: r.categoria_animal ?? undefined,
-    evento: r.evento ?? undefined,
-    caravanaNumero: r.caravana_numero ?? undefined,
-    causa: r.causa ?? undefined,
-    animales:   r.animales    != null ? Number(r.animales)    : undefined,
-    kgPromedio: r.kg_promedio != null ? Number(r.kg_promedio) : undefined,
-    createdAt: r.created_at,
-  };
+  return mapRow<Pastoreo>(r, PASTOREO_SCHEMA);
 }
 
 export async function fetchPastoreo(): Promise<Pastoreo[]> {
@@ -360,29 +332,7 @@ export async function fetchPastoreoCiclos(): Promise<PastoreoCiclo[]> {
 // =============================================================================
 
 function rowToCompra(r: any): Compra {
-  return {
-    id: r.id,
-    fecha: r.fecha,
-    campoId: r.campo_id,
-    usuarioEmail: r.usuario_email,
-    actividad:       r.actividad ?? undefined,
-    cantCabYCat:     r.cant_cab_y_cat ?? undefined,
-    totalMachos:     r.total_machos  != null ? Number(r.total_machos)  : undefined,
-    totalHembras:    r.total_hembras != null ? Number(r.total_hembras) : undefined,
-    kgNetosOrigen:   Number(r.kg_netos_origen),
-    kgNetosDestino:  r.kg_netos_destino != null ? Number(r.kg_netos_destino) : null,
-    mermaPorcentaje: r.merma_porcentaje != null ? Number(r.merma_porcentaje) : undefined,
-    kgCorregidos:    r.kg_corregidos    != null ? Number(r.kg_corregidos) : undefined,
-    precio:          r.precio != null ? Number(r.precio) : undefined,
-    consignado:      r.consignado ?? undefined,
-    titular:         r.titular ?? undefined,
-    plazo:           r.plazo ?? undefined,
-    numeroDte:       r.numero_dte ?? undefined,
-    numeroOperacion: r.numero_operacion ?? undefined,
-    kmRecorrido:     r.km_recorrido != null ? Number(r.km_recorrido) : undefined,
-    observaciones:   r.observaciones ?? undefined,
-    createdAt: r.created_at,
-  };
+  return mapRow<Compra>(r, COMPRA_SCHEMA);
 }
 
 export async function fetchCompras(): Promise<Compra[]> {
@@ -400,14 +350,7 @@ export async function fetchCompras(): Promise<Compra[]> {
 // =============================================================================
 
 function rowToCircuito(r: any): Circuito {
-  return {
-    id: r.id,
-    campoId: r.campo_id,
-    nombre: r.nombre,
-    // hectareas es NOT NULL DEFAULT 0 en DB, así que != null es siempre true.
-    // Fallback a 0 por defensa si algún row corrupto llegara con null.
-    hectareas: r.hectareas != null ? Number(r.hectareas) : 0,
-  };
+  return mapRow<Circuito>(r, CIRCUITO_SCHEMA);
 }
 
 export async function fetchCircuitos(): Promise<Circuito[]> {

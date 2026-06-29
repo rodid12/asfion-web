@@ -10,6 +10,20 @@
 import { supabase } from '@/lib/supabase';
 
 // =============================================================================
+// URL canónica para magic links — evita que invitaciones se manden a deploys
+// de preview en Vercel (`*-git-*.vercel.app`). Si un atacante consigue un
+// dominio similar al de preview, podría redirigir tokens válidos a su clone.
+//
+// Resolución:
+//   1. VITE_APP_URL (env var de prod, ej "https://dashboard.asfion.com.ar")
+//   2. window.location.origin (fallback dev/local)
+// =============================================================================
+function canonicalAppUrl(): string {
+  const envUrl = (import.meta as any).env?.VITE_APP_URL as string | undefined;
+  return envUrl?.trim() || window.location.origin;
+}
+
+// =============================================================================
 // Tipos crudos
 // =============================================================================
 
@@ -253,7 +267,7 @@ export async function adminInviteUsuario(input: InviteUsuarioInput): Promise<voi
     email: emailNorm,
     options: {
       shouldCreateUser: true,
-      emailRedirectTo: input.redirectTo ?? window.location.origin,
+      emailRedirectTo: input.redirectTo ?? canonicalAppUrl(),
     },
   });
   if (otpError) {
@@ -306,7 +320,7 @@ export async function adminReenviarMagicLink(email: string, redirectTo?: string)
     email: email.trim().toLowerCase(),
     options: {
       shouldCreateUser: false, // ya existe, solo mandar el link
-      emailRedirectTo: redirectTo ?? window.location.origin,
+      emailRedirectTo: redirectTo ?? canonicalAppUrl(),
     },
   });
   if (error) throw new Error(`adminReenviarMagicLink: ${error.message}`);

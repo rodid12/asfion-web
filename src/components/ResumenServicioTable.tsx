@@ -25,11 +25,15 @@ interface Props {
 
 export function ResumenServicioTable({ rows }: Props) {
   // Año más reciente — si Agus carga 2025 mañana, mostramos ese por default.
-  // Filtros futuros podrían venir del padre; por ahora UI mínima.
-  const ultimoAnio = useMemo(
-    () => Math.max(...rows.map(r => r.servicioAnio)),
-    [rows],
-  );
+  //
+  // Filtro Number.isFinite antes del Math.max porque `servicioAnio` es
+  // nullable en DB: si todas las rows tienen undefined/NaN, Math.max(...[])
+  // = -Infinity y el header decía "Resumen Mermas Servicio -Infinity".
+  // Fallback al año actual cuando no hay rows con año válido.
+  const ultimoAnio = useMemo(() => {
+    const años = rows.map(r => r.servicioAnio).filter((x): x is number => Number.isFinite(x));
+    return años.length > 0 ? Math.max(...años) : new Date().getFullYear();
+  }, [rows]);
   const filas = useMemo(
     () => rows.filter(r => r.servicioAnio === ultimoAnio)
               .sort((a, b) => (a.campo + a.tropa).localeCompare(b.campo + b.tropa)),

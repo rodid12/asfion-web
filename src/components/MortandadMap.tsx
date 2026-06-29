@@ -16,6 +16,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Mortandad } from '@/data/types';
+import { safeHtml } from '@/lib/html';
 
 interface Props {
   mortandad: Mortandad[];
@@ -119,7 +120,11 @@ export function MortandadMap({ mortandad, campoNombre, normalizarCausa }: Props)
             : (m.causaDetalle ?? m.causaTipo ?? 'Sin identificar');
           const color = COLOR_CAUSA[causa] ?? COLOR_DEFAULT;
           const campo = campoNombre ? campoNombre(m.campoId) : m.campoId;
-          const popupHtml = `
+          // safeHtml escapa cada ${...} automáticamente — bloquea XSS via
+          // `<script>` o `<img onerror>` que un operario podría tipear en
+          // observaciones para ejecutar JS en sesiones de otros usuarios
+          // del mismo tenant (RLS no aplica porque comparten cliente_id).
+          const popupHtml = safeHtml`
             <div style="font-family: ui-sans-serif, system-ui; min-width: 180px;">
               <div style="font-weight: 700; color: #163349; margin-bottom: 4px;">
                 ${campo}
@@ -130,10 +135,13 @@ export function MortandadMap({ mortandad, campoNombre, normalizarCausa }: Props)
               <div style="font-size: 12px;">
                 <strong>Causa:</strong> ${causa}
               </div>
-              ${m.caravanaNumero ? `<div style="font-size: 12px;"><strong>Caravana:</strong> ${m.caravanaNumero}</div>` : ''}
-              ${m.observaciones ? `<div style="font-size: 11px; color: #6B7280; margin-top: 6px;">${m.observaciones}</div>` : ''}
             </div>
-          `;
+          ` + (m.caravanaNumero
+              ? safeHtml`<div style="font-size: 12px;"><strong>Caravana:</strong> ${m.caravanaNumero}</div>`
+              : '')
+            + (m.observaciones
+              ? safeHtml`<div style="font-size: 11px; color: #6B7280; margin-top: 6px;">${m.observaciones}</div>`
+              : '');
           L.circleMarker([lat, lon], {
             radius: 7,
             fillColor: color,

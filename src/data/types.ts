@@ -9,21 +9,35 @@
 // El admin puede agregar/editar valores desde el panel sin migraciones.
 // Tratá estos types como "defaults útiles", no como contrato estricto.
 
-export type VacasGrupo = 'Vacas cabeza' | 'Vaca cuerpo' | 'Vaca cola';
+// ─────────────────────────────────────────────────────────────────────────────
+// Tipos COMPARTIDOS — re-exports del canonical (fuente única en
+// `types.canonical.ts`). Si necesitás agregar valores a los catálogos,
+// editá ese archivo Y corré `npm run sync-types` para propagar a la app.
+// ─────────────────────────────────────────────────────────────────────────────
+// Import + re-export — el import sirve para usar los tipos en este archivo
+// (ej. interface Mortandad que usa CausaMuerteTipo); el re-export sirve
+// para que otros componentes los importen desde '@/data/types' como antes.
+import type {
+  Sexo,
+  SiNo,
+  CaravanaColor,
+  VacasGrupo,
+  EventoParicion,
+  CausaMuerteTipo,
+  ParicionCanonical,
+} from './types.canonical';
+export type {
+  Sexo,
+  SiNo,
+  CaravanaColor,
+  VacasGrupo,
+  EventoParicion,
+  CausaMuerteTipo,
+};
 
-// "Retacto" existe en el lookup del AppSheet pero nunca se usó; lo dejamos
-// en el tipo por si en algún momento se empieza a cargar.
-export type EventoParicion = 'Nacimiento' | 'Muerte' | 'Aborto' | 'Retacto';
-
-export type Sexo = 'Macho' | 'Hembra' | 'Orejano';
-export type SiNo = 'Si' | 'No';
-
-// Solo los colores realmente en uso en los datos reales.
-export type CaravanaColor = 'Amarillo' | 'Blanca' | 'Celeste' | 'Naranja';
-
-// Causa de muerte: enum corto en el AppSheet (nivel 1) + texto libre (nivel 2)
-export type CausaMuerteTipo = 'Muerte Señalado' | 'Nacido Muerto' | 'Desconocido';
-
+// SyncState es SOLO para el sync flow del app móvil (offline → cloud),
+// pero el dashboard también lo lee de los rows ya sincados. Lo dejamos
+// específico del web por ahora (el app lo tiene definido aparte).
 export type SyncState = 'pending' | 'syncing' | 'synced' | 'failed';
 
 export interface Campo {
@@ -37,24 +51,10 @@ export interface Campo {
   stockInicialVacas?: number;
 }
 
-export interface Paricion {
-  id: string;
-  fecha: string;               // YYYY-MM-DD
-  campoId: string;
-  loteId?: string;
-  usuarioEmail: string;
-  createdAt: string;
+// Paricion = ParicionCanonical + syncState (este último es específico del
+// repo web para reflejar si el row vino sincronizado desde la app móvil).
+export interface Paricion extends ParicionCanonical {
   syncState: SyncState;
-
-  vacasGrupo: VacasGrupo;
-  evento: EventoParicion;
-  sexo?: Sexo;
-  asistencia?: SiNo;
-  caravanaColor?: CaravanaColor;
-  caravanaNumero?: string;
-  causaTipo?: CausaMuerteTipo;    // nivel 1 (enum)
-  causaDetalle?: string;          // nivel 2 (texto libre)
-  observaciones?: string;
 }
 
 // -----------------------------------------------------------------------------
@@ -269,38 +269,10 @@ export interface PastoreoCiclo {
 // Replica el módulo "Compra" del AppSheet del cliente. Captura entrada de
 // hacienda (compra) — datos físicos (kg origen/destino), comerciales
 // (precio, consignado) y logísticos (DTE, km, número de operación).
-export interface Compra {
-  id: string;
-  fecha: string;
-  campoId: string;
-  usuarioEmail: string;
-  // Físico
-  actividad?: string;            // Destete Precoz / Engorde / Invernada
-  cantCabYCat?: string;          // "83 machos. 27 hembras"
-  // Total machos / hembras como columnas separadas (migration 0017).
-  // Antes solo existía cantCabYCat como TEXT, que requería parsing
-  // frágil para los KPIs de relación M/H. Si vienen vacíos, el dashboard
-  // hace fallback al parseo del texto libre.
-  totalMachos?: number;
-  totalHembras?: number;
-  kgNetosOrigen: number;
-  // Post mig 0021: NULLABLE — compras "en tránsito" sin peso destino aún
-  // (ej. operación 0013-26 partida en 2 jaulas, ninguna pesada al bajar).
-  kgNetosDestino: number | null;
-  mermaPorcentaje?: number;      // auto-calculado en form
-  kgCorregidos?: number;         // manual
-  // Comerciales
-  precio?: number;               // ARS/kg típicamente
-  consignado?: string;
-  titular?: string;
-  plazo?: string;
-  // Logística
-  numeroDte?: string;
-  numeroOperacion?: string;
-  kmRecorrido?: number;
-  observaciones?: string;
-  createdAt: string;
-}
+//
+// El tipo canónico vive en `types.canonical.ts` (compartido con la app).
+// En el dashboard NO necesitamos extender — usamos el canónico directo.
+export type { CompraCanonical as Compra } from './types.canonical';
 
 // -----------------------------------------------------------------------------
 // Catálogos secundarios — necesarios para resolver nombres en charts

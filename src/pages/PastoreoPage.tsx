@@ -423,7 +423,11 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
           Base (siempre): Ciclos · Cabezas · Has · Kg/Cab · Kg Totales · Carga
           Solo Control/Final/Todas: Kg prod/animal · GDPV · Kg prod/Ha · Días
           ────────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+      {/* 5+5 en lg (antes 6+4) — con 6 cards de ~190px el "KG TOTALES" de
+          9+ chars (ej "2.447.534") no entraba ni a text-3xl. A 5 cols los
+          cards son ~230px y el número se ve entero. Conceptualmente:
+          Fila 1 = estado del rodeo · Fila 2 = carga + productividad. */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
         <Kpi
           label="Ciclos"
           value={formatNumber(kpis.ciclos)}
@@ -461,6 +465,13 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
           icon={<WeightIcon className="w-4 h-4" />}
           accent="terracota"
         />
+      </div>
+
+      {/* Segunda fila — Carga + productividad. Carga siempre se muestra
+          (incluso en etapa='largada'). Los 4 tiles de productividad caen
+          a "—" en largada, sin esconder la fila entera, para mantener el
+          layout estable cuando el usuario cambia de etapa. */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
         <Kpi
           label="Carga Ca/Ha"
           value={kpis.cargaCaHa > 0 ? kpis.cargaCaHa.toFixed(2) : '—'}
@@ -468,42 +479,34 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
           accent="navy"
           sublabel={`${formatNumber(Math.round(kpis.cargaKgHa))} kg/ha`}
         />
+        <Kpi
+          label="Kg producidos / animal"
+          value={etapa === 'largada' ? '—' : (kpis.kgProdPorAnim > 0 ? formatNumber(Math.round(kpis.kgProdPorAnim)) : '—')}
+          icon={<TrendingUpIcon className="w-4 h-4" />}
+          accent="orange"
+          sublabel={etapa === 'largada' ? 'sin datos en largada' : 'kg ganados por cabeza'}
+        />
+        <Kpi
+          label="GDPV"
+          value={etapa === 'largada' ? '—' : (kpis.gdpv > 0 ? kpis.gdpv.toFixed(2) : '—')}
+          icon={<TrendingUpIcon className="w-4 h-4" />}
+          accent="navy"
+          sublabel={etapa === 'largada' ? 'sin datos en largada' : 'kg/día/cab (ponderado)'}
+        />
+        <Kpi
+          label="Kg producidos / Ha"
+          value={etapa === 'largada' ? '—' : (kpis.kgProdPorHa > 0 ? formatNumber(Math.round(kpis.kgProdPorHa)) : '—')}
+          icon={<LandPlotIcon className="w-4 h-4" />}
+          accent="terracota"
+        />
+        <Kpi
+          label="Días pastoreo"
+          value={etapa === 'largada' ? '—' : (kpis.diasProm > 0 ? formatNumber(Math.round(kpis.diasProm)) : '—')}
+          icon={<CalendarDaysIcon className="w-4 h-4" />}
+          accent="navy"
+          sublabel={etapa === 'largada' ? '' : 'promedio ponderado'}
+        />
       </div>
-
-      {/* Segunda fila — KPIs de productividad. Solo tienen sentido si la
-          etapa es Control/Final/Todas (Largada NO tiene GDPV ni kg producidos). */}
-      {etapa !== 'largada' && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-          <Kpi
-            label="Kg producidos / animal"
-            value={kpis.kgProdPorAnim > 0 ? formatNumber(Math.round(kpis.kgProdPorAnim)) : '—'}
-            icon={<TrendingUpIcon className="w-4 h-4" />}
-            accent="orange"
-            sublabel="kg ganados por cabeza"
-          />
-          <Kpi
-            label="GDPV"
-            value={kpis.gdpv > 0 ? kpis.gdpv.toFixed(2) : '—'}
-            icon={<TrendingUpIcon className="w-4 h-4" />}
-            accent="navy"
-            sublabel="kg/día/cab (ponderado)"
-          />
-          <Kpi
-            label="Kg producidos / Ha"
-            value={kpis.kgProdPorHa > 0 ? formatNumber(Math.round(kpis.kgProdPorHa)) : '—'}
-            icon={<LandPlotIcon className="w-4 h-4" />}
-            accent="terracota"
-          />
-          <Kpi
-            label="Días pastoreo"
-            value={kpis.diasProm > 0 ? formatNumber(Math.round(kpis.diasProm)) : '—'}
-            icon={<CalendarDaysIcon className="w-4 h-4" />}
-            accent="navy"
-            sublabel="promedio ponderado"
-          />
-        </div>
-      )}
-
       {/* ─────────────────────────────────────────────────────────────────
           CHARTS
           ────────────────────────────────────────────────────────────── */}

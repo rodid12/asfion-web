@@ -485,6 +485,39 @@ function CausaMuerteDonut({ data }: { data: Array<{ causa: string; n: number }> 
     );
   }
 
+  // Label custom para slices — muestra "X (Y%)" dentro de la porción cuando
+  // ésta tiene tamaño suficiente. Slices muy chicos (<5%) no rotulan para
+  // no superponerse. Las etiquetas vienen DENTRO del donut (ring exterior)
+  // así no se cortan en cards angostos.
+  const renderSliceLabel = (props: {
+    cx: number; cy: number; midAngle: number;
+    innerRadius: number; outerRadius: number;
+    value: number; percent: number;
+  }) => {
+    const { cx, cy, midAngle, innerRadius, outerRadius, value, percent } = props;
+    if (percent < 0.05) return null; // slices < 5% no rotulan
+    const RADIAN = Math.PI / 180;
+    // Mitad entre innerRadius y outerRadius — texto centrado en el anillo
+    const r = innerRadius + (outerRadius - innerRadius) * 0.55;
+    const x = cx + r * Math.cos(-midAngle * RADIAN);
+    const y = cy + r * Math.sin(-midAngle * RADIAN);
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="white"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={11}
+        fontWeight={700}
+        style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
+      >
+        <tspan x={x} dy="-0.4em">{value}</tspan>
+        <tspan x={x} dy="1.2em">{(percent * 100).toFixed(0)}%</tspan>
+      </text>
+    );
+  };
+
   return (
     // STACK SIEMPRE — el donut se cortaba antes porque el card vive en
     // 1/3 del ancho (Evolución mensual ocupa 2/3 al lado), y con flex-row
@@ -492,16 +525,18 @@ function CausaMuerteDonut({ data }: { data: Array<{ causa: string; n: number }> 
     // outerRadius/innerRadius en % para que el pie se ajuste al ancho que
     // tenga el card y nunca quede cortado por el viewport.
     <div className="flex flex-col gap-3">
-      <div className="w-full h-[220px]">
+      <div className="w-full h-[240px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={serie}
               dataKey="value"
               nameKey="name"
-              innerRadius="55%"
+              innerRadius="45%"
               outerRadius="90%"
               paddingAngle={2}
+              labelLine={false}
+              label={renderSliceLabel}
               isAnimationActive={false}
             >
               {serie.map(s => <Cell key={s.name} fill={s.fill} stroke="white" strokeWidth={2} />)}

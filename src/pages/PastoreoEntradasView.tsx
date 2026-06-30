@@ -47,6 +47,7 @@ import {
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { PageHeader } from '@/components/PageHeader';
 import { formatNumber } from '@/lib/utils';
+import { fechaCorta } from '@/lib/fechas';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Circuito, Pastoreo } from '@/data/types';
 
@@ -231,7 +232,11 @@ export function PastoreoEntradasView({ pastoreo, campos, circuitos, embedded = f
         />
         <Kpi
           label="Última entrada"
-          value={kpis.fechaUltima}
+          // Formato corto "31 May 2026" (11 chars) — el ISO original
+          // "2026-05-31" (10 chars) caía en bucket text-3xl y no entraba
+          // en el ancho del tile (grid de 5 cols), quedaba truncado a
+          // "2026-05-...". Con fechaCorta entra entero en text-2xl.
+          value={fechaCorta(kpis.fechaUltima)}
           accent="terracota"
           icon={<CalendarDaysIcon size={18} />}
         />

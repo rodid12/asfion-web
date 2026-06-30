@@ -80,9 +80,17 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
 
   // Resumen del servicio — fuente preferida. Si está, mostramos
   // KpisDesdeResumen; sino, KpisLegacy desde eventos individuales.
+  // Pasamos el nombre del campo seleccionado (o null si "todos") para
+  // que el resumen también respete el filtro de campo de la FilterBar.
+  const campoNombreFiltro = useMemo(
+    () => filtros.campoId === 'todos'
+      ? null
+      : (campos.find(c => c.id === filtros.campoId)?.nombre ?? null),
+    [filtros.campoId, campos],
+  );
   const resumenTotales = useMemo(
-    () => computeResumenTotales(resumenServicio),
-    [resumenServicio],
+    () => computeResumenTotales(resumenServicio, campoNombreFiltro),
+    [resumenServicio, campoNombreFiltro],
   );
 
   // KpisLegacy solo se calcula cuando NO hay resumen — early bail-out
@@ -93,9 +101,8 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
   );
 
   // Texto del título: si hay un campo seleccionado, lo nombramos.
-  const tituloCampo = filtros.campoId === 'todos'
-    ? null
-    : (campos.find(c => c.id === filtros.campoId)?.nombre ?? null);
+  // Reusa `campoNombreFiltro` calculado arriba (DRY).
+  const tituloCampo = campoNombreFiltro;
 
   if (pariciones.length === 0) {
     return <EmptyModule label="pariciones" />;

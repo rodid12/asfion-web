@@ -47,21 +47,36 @@ export interface ResumenTotales {
  * Devuelve los totales del año más reciente con datos válidos, o `null` si
  * no hay nada cargado (cliente nuevo que aún no cerró temporada — el caller
  * cae al cálculo legacy desde eventos individuales).
+ *
+ * @param resumenServicio  Rows del cierre del servicio (puede traer múltiples campos/años)
+ * @param campoNombre      Nombre del campo a filtrar, o null/undefined para "todos los campos".
+ *                         Si se pasa, solo se agregan las tropas de ese campo
+ *                         (caso de uso: filtro de campo en ParicionesPage).
  */
 export function computeResumenTotales(
   resumenServicio: ResumenServicio[] | undefined,
+  campoNombre?: string | null,
 ): ResumenTotales | null {
   if (!resumenServicio || resumenServicio.length === 0) return null;
 
+  // Filtro de campo (si se especificó) — replica el comportamiento del
+  // KpisLegacy donde `aplicarFiltros()` también lo aplica. Antes este
+  // helper ignoraba el filtro y mostraba siempre totales globales — bug
+  // reportado por el cliente: "filtro Carolina no actualiza KPIs".
+  const filtradosPorCampo = campoNombre
+    ? resumenServicio.filter(r => r.campo === campoNombre)
+    : resumenServicio;
+  if (filtradosPorCampo.length === 0) return null;
+
   // Año más reciente con datos. El .filter() es defensivo — `servicioAnio`
   // es nullable en DB y Math.max(...[]) devuelve -Infinity.
-  const aniosValidos = resumenServicio
+  const aniosValidos = filtradosPorCampo
     .map(r => r.servicioAnio)
     .filter((x): x is number => Number.isFinite(x));
   if (aniosValidos.length === 0) return null;
 
   const ultimoAnio = Math.max(...aniosValidos);
-  const rows = resumenServicio.filter(r => r.servicioAnio === ultimoAnio);
+  const rows = filtradosPorCampo.filter(r => r.servicioAnio === ultimoAnio);
 
   const sum = (pick: (r: ResumenServicio) => number | undefined) =>
     rows.reduce<number>((s, r) => s + (pick(r) ?? 0), 0);

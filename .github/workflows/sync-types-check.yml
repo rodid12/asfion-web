@@ -1,0 +1,61 @@
+# =============================================================================
+# sync-types-check — verifica que asfion-app tenga los archivos canonical
+# sincronizados con asfion-web. Corre en cada PR y push a main.
+# =============================================================================
+#
+# Por qué: A1/A2 del audit arquitectónico introdujeron tipos compartidos
+# entre los repos vía un script de sync (asfion-web/scripts/sync-types.mjs).
+# El audit #3 detectó que sin CI guard, el sync puede divergir silencioso:
+#   - Dev edita types.canonical.ts en web → commitea solo el web → app stale
+#   - Dev ignora el header "no editar" del archivo copia → próximo sync lo pisa
+#
+# Esta action clona AMBOS repos (web actual + app), corre `sync-types --check`
+# desde web, y falla el build si los archivos canonical del app no matchean.
+#
+# REQUISITO: la action asume que asfion-app está bajo el mismo OWNER de
+# GitHub. Si está en otra org, ajustar `repository:` abajo.
+# =============================================================================
+
+name: sync-types check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/data/types.canonical.ts'
+      - 'src/data/mapRow.canonical.ts'
+      - 'scripts/sync-types.mjs'
+  push:
+    branches: [main]
+    paths:
+      - 'src/data/types.canonical.ts'
+      - 'src/data/mapRow.canonical.ts'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout asfion-web
+        uses: actions/checkout@v4
+        with:
+          path: asfion-web
+
+      - name: Checkout asfion-app
+        uses: actions/checkout@v4
+        with:
+          # Ajustar `repository` si el repo del app vive en otra org/path
+          repository: ${{ github.repository_owner }}/asfion-app
+          path: asfion-app
+          # Token con read access al otro repo. Para repos públicos del mismo
+          # owner alcanza con el default; para privados, crear un PAT y
+          # guardarlo como `SYNC_TYPES_TOKEN` en los secrets del repo web.
+          token: ${{ secrets.SYNC_TYPES_TOKEN || github.token }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run sync-types in check mode
+        working-directory: asfion-web
+        run: node scripts/sync-types.mjs ../asfion-app --check

@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "sync-types": "node scripts/sync-types.mjs"
+    "sync-types": "node scripts/sync-types.mjs",
+    "sync-types:check": "node scripts/sync-types.mjs --check"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",

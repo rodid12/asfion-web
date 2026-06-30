@@ -43,18 +43,16 @@ export function diasEntreISO(desde: string, hasta: string): number {
   return Math.round((b.getTime() - a.getTime()) / 86400000);
 }
 
-const MESES_ABBR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-
-/** Formato corto para mostrar en KPI tiles: "31 May 2026" (11 chars).
- *  Más compacto que ISO "2026-05-31" pero conserva el año completo.
- *  Cae en bucket text-2xl de kpiValueClass — entra bien en tiles
- *  estrechos (grid de 5+ columnas). Devuelve '—' si iso es falsy o
- *  no parseable. */
+/** Formato corto para mostrar en KPI tiles: "31/05/2026" (10 chars).
+ *  Formato numérico DD/MM/YYYY estándar argentino — inequívoco (no se
+ *  presta a confusión con inglés como sí pasaba con abreviaciones
+ *  ambiguas tipo "May"/"Sep"/"Mar" que coinciden en ambos idiomas).
+ *  Devuelve '—' si iso es falsy o no parseable. */
 export function fechaCorta(iso: string | null | undefined): string {
   if (!iso || iso === '—') return '—';
   const d = fechaISOaLocal(iso);
   if (Number.isNaN(d.getTime())) return iso; // fallback: devolvemos el string original
   const dd = String(d.getDate()).padStart(2, '0');
-  const mes = MESES_ABBR[d.getMonth()];
-  return `${dd} ${mes} ${d.getFullYear()}`;
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
 }

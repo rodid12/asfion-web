@@ -232,10 +232,10 @@ export function PastoreoEntradasView({ pastoreo, campos, circuitos, embedded = f
         />
         <Kpi
           label="Última entrada"
-          // Formato corto "31 May 2026" (11 chars) — el ISO original
-          // "2026-05-31" (10 chars) caía en bucket text-3xl y no entraba
-          // en el ancho del tile (grid de 5 cols), quedaba truncado a
-          // "2026-05-...". Con fechaCorta entra entero en text-2xl.
+          // Formato DD/MM/YYYY argentino — inequívoco en español
+          // (antes mostraba ISO "2026-05-..." truncado, después probé
+          // "31 May 2026" pero "May" suena a inglés). Bucket de 10 chars
+          // se ajustó en kpiSize para que esta fecha entre en text-2xl.
           value={fechaCorta(kpis.fechaUltima)}
           accent="terracota"
           icon={<CalendarDaysIcon size={18} />}

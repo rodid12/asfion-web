@@ -33,9 +33,14 @@ export function kpiValueClass(value: string | number, size: 'kpi' | 'mini' = 'kp
   }
   // Tile grande (Kpi). Bucket extra (text-sm) para soportar números
   // tipo "$15.234.567.890" (15 chars) sin partir.
+  //
+  // Bucket de 10 chars: ajustado a `<= 9` para que strings de 10 chars
+  // (típicamente fechas "DD/MM/YYYY" o pesos "$2.066.451") bajen a
+  // text-2xl en lg. En grilla de 5 cols el tile mide ~170px netos —
+  // 10 chars × 17px de text-3xl no entran y caía en ellipsis ("31/05/…").
   return (
     len <= 7   ? 'text-2xl sm:text-3xl lg:text-4xl' :
-    len <= 10  ? 'text-xl sm:text-2xl lg:text-3xl'  :
+    len <= 9   ? 'text-xl sm:text-2xl lg:text-3xl'  :
     len <= 13  ? 'text-lg sm:text-xl lg:text-2xl'   :
     len <= 16  ? 'text-base sm:text-lg lg:text-xl'  :
                  'text-sm sm:text-base lg:text-lg'

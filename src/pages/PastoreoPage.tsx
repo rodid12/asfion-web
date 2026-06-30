@@ -56,6 +56,7 @@ import { formatNumber } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Circuito, Pastoreo, PastoreoCiclo } from '@/data/types';
 import { PastoreoEntradasView } from './PastoreoEntradasView';
+import type { SimpleFiltros } from '@/components/SimpleFilterBar';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Etapas — definimos un type discriminado para que el resto del código pueda
@@ -282,21 +283,12 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
       .sort((a, b) => b.cabezas - a.cabezas);
   }, [filtradosSinEtapa]);
 
-  const porCircuito = useMemo(() => {
-    const m = new Map<string, { kg: number; w: number }>();
-    for (const c of filtradosSinEtapa) {
-      const v = c.kgCarneProducidosHaFinal ?? c.kgCarneProducidosHaControl;
-      const w = c.cantAnimales ?? 0;
-      if (v == null || w === 0) continue;
-      const key = `${c.campoNombre} · ${c.circuitoNombre}`;
-      const acc = m.get(key) ?? { kg: 0, w: 0 };
-      acc.kg += v * w; acc.w += w;
-      m.set(key, acc);
-    }
-    return Array.from(m, ([nombre, { kg, w }]) => ({ nombre, kgPorHa: w > 0 ? kg / w : 0 }))
-      .sort((a, b) => b.kgPorHa - a.kgPorHa)
-      .slice(0, 10);
-  }, [filtradosSinEtapa]);
+  // (El useMemo `porCircuito` que calculaba "kg producidos/Ha por circuito"
+  //  se removió a pedido del cliente — esa métrica va en Cierre de Corrales.
+  //  Si en el futuro la queremos rehacer ahí, el cálculo era:
+  //   for c of filtradosSinEtapa:
+  //     valor = c.kgCarneProducidosHaFinal ?? kgCarneProducidosHaControl
+  //     ponderar por c.cantAnimales y agrupar por campo+circuito.)
 
   // ─────────────────────────────────────────────────────────────────────────
   // Export CSV — todas las columnas relevantes de las 3 etapas
@@ -330,6 +322,19 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
     setCampo('todos'); setCircuito('todos'); setCategoria('todas'); setEtapa('todas');
   }
 
+  // Filtros que propagamos a la sección embebida "Entradas históricas".
+  // El filtro de campo de PastoreoPage usa NOMBRE (porque pastoreo_ciclos
+  // lleva campoNombre denormalizado); SimpleFiltros usa campoId. Convertimos.
+  // - rango: 'todo' → no escondemos data por el rango default de 90d de SimpleFiltros
+  //   (las entradas históricas pueden ser muy viejas — queremos verlas todas
+  //   salvo que el user filtre por campo arriba).
+  const filtrosEntradas = useMemo<SimpleFiltros>(() => ({
+    rango: 'todo',
+    campoId: campo === 'todos'
+      ? 'todos'
+      : (campos.find(c => c.nombre === campo)?.id ?? 'todos'),
+  }), [campo, campos]);
+
   // Empty state si todavía no se aplicó la migración 0018 o no hay data.
   if (pastoreoCiclos.length === 0) {
     return (
@@ -337,7 +342,7 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
         <PageHeader title="Pastoreo" subtitle="Ciclos completos (Largada · Control · Final)" />
         <EmptyModule label="ciclos de pastoreo" />
         {/* Stays viejos siguen visibles abajo si los hay */}
-        <PastoreoEntradasView pastoreo={pastoreo} campos={campos} circuitos={circuitos} embedded />
+        <PastoreoEntradasView pastoreo={pastoreo} campos={campos} circuitos={circuitos} embedded filtrosExternos={filtrosEntradas} />
       </div>
     );
   }
@@ -485,12 +490,16 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
           a "—" en largada, sin esconder la fila entera, para mantener el
           layout estable cuando el usuario cambia de etapa. */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+        {/* Tile de carga — el cliente pidió ver primero los KG/HA (peso total
+            por hectárea) que es la métrica que más usa para decisiones de
+            manejo. Las cabezas/ha quedan como sublabel — siguen visibles
+            pero secundarias. */}
         <Kpi
-          label="Carga Ca/Ha"
-          value={kpis.cargaCaHa > 0 ? kpis.cargaCaHa.toFixed(2) : '—'}
+          label="Kg / Ha"
+          value={kpis.cargaKgHa > 0 ? formatNumber(Math.round(kpis.cargaKgHa)) : '—'}
           icon={<ActivityIcon className="w-4 h-4" />}
           accent="navy"
-          sublabel={`${formatNumber(Math.round(kpis.cargaKgHa))} kg/ha`}
+          sublabel={kpis.cargaCaHa > 0 ? `${kpis.cargaCaHa.toFixed(2)} cab/ha` : ''}
         />
         <Kpi
           label="Kg producidos / animal"
@@ -522,8 +531,13 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
       </div>
       {/* ─────────────────────────────────────────────────────────────────
           CHARTS
+          (El chart "Kg producidos / Ha por circuito" se sacó de acá
+          a pedido del cliente — esa métrica corresponde a Cierre de
+          Corrales conceptualmente, aunque la data salga del Excel de
+          pastoreo. Cuando se enchufe la data de cierre real, ese chart
+          se rehace en CorralesPage.)
           ────────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <Card title="Cabezas por campo">
           {porCampo.length === 0 ? (
             <div className="text-sm text-asfion-muted py-8 text-center">Sin datos para los filtros actuales</div>
@@ -545,23 +559,6 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
           )}
         </Card>
 
-        <Card title="Kg producidos / Ha por circuito (top 10)">
-          {porCircuito.length === 0 ? (
-            <div className="text-sm text-asfion-muted py-8 text-center">Sin datos productivos para los filtros actuales</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={Math.max(260, porCircuito.length * 32)}>
-              <BarChart data={porCircuito} layout="vertical" margin={{ left: 20, right: 40, top: 10, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis type="number" tickFormatter={v => `${formatNumber(Math.round(v))}`} />
-                <YAxis type="category" dataKey="nombre" width={170} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => `${formatNumber(Math.round(v))} kg/Ha`} />
-                <Bar dataKey="kgPorHa" fill="#E07B3F" radius={[0, 6, 6, 0]}>
-                  <LabelList dataKey="kgPorHa" position="right" formatter={(v: number) => formatNumber(Math.round(v))} fontSize={11} fill="#1E3A5F" />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────
@@ -619,7 +616,7 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
 
       {/* Stays históricos (modelo viejo) — para no perder data cargada por
           la app móvil antes del rediseño. Embebido = sin PageHeader propio. */}
-      <PastoreoEntradasView pastoreo={pastoreo} campos={campos} circuitos={circuitos} embedded />
+      <PastoreoEntradasView pastoreo={pastoreo} campos={campos} circuitos={circuitos} embedded filtrosExternos={filtrosEntradas} />
     </div>
   );
 }

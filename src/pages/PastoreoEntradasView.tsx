@@ -72,7 +72,13 @@ function isEntrada(evento?: string): boolean {
 }
 
 export function PastoreoEntradasView({ pastoreo, campos, circuitos, embedded = false, filtrosExternos }: Props) {
-  const [filtrosLocales, setFiltrosLocales] = useState<SimpleFiltros>(SIMPLE_FILTROS_DEFAULT);
+  // Default 'todo' (no '90d' como el resto de módulos) — las entradas históricas
+  // de pastoreo se cargan retrospectivamente cubriendo varios meses, y un rango
+  // de 90 días esconde data legítima. Si el user quiere acotar, usa el dropdown.
+  const [filtrosLocales, setFiltrosLocales] = useState<SimpleFiltros>({
+    ...SIMPLE_FILTROS_DEFAULT,
+    rango: 'todo',
+  });
   // Cuando embedded, los filtros vienen del padre (PastoreoPage). Si no,
   // usamos los locales como antes.
   const filtros = embedded && filtrosExternos ? filtrosExternos : filtrosLocales;

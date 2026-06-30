@@ -143,6 +143,9 @@ function computeRotacion(
 
 export function PastoreoRotacionView({ pastoreo, campos, circuitos }: Props) {
   const [modo, setModo] = useState<Modo>('ciclo');
+  const [campoFiltro, setCampoFiltro] = useState<string>('todos');           // id del campo
+  const [circuitoFiltro, setCircuitoFiltro] = useState<string>('todos');     // id del circuito
+
   // Mes default = el más reciente con data (sino hoy)
   const mesesDisponibles = useMemo(() => {
     const set = new Set<string>();
@@ -155,9 +158,27 @@ export function PastoreoRotacionView({ pastoreo, campos, circuitos }: Props) {
     return mesesDisponibles[0] ?? dateAISO(new Date()).slice(0, 7);
   });
 
+  // Opciones de circuito dependen del campo seleccionado — si el cliente
+  // filtra "Carolina", solo le mostramos circuitos de Carolina en el dropdown.
+  const circuitosOpts = useMemo(() => {
+    if (campoFiltro === 'todos') return circuitos;
+    return circuitos.filter(c => c.campoId === campoFiltro);
+  }, [circuitos, campoFiltro]);
+
+  // Aplicamos los filtros de campo/circuito ANTES de pasar a computeRotacion,
+  // así el cálculo de "promedio del set" para el highlight terracota/rojo
+  // refleja el subconjunto que el cliente está viendo, no el total global.
+  const pastoreoFiltrado = useMemo(() => {
+    return pastoreo.filter(s => {
+      if (campoFiltro !== 'todos' && s.campoId !== campoFiltro) return false;
+      if (circuitoFiltro !== 'todos' && s.circuitoId !== circuitoFiltro) return false;
+      return true;
+    });
+  }, [pastoreo, campoFiltro, circuitoFiltro]);
+
   const filas = useMemo(
-    () => computeRotacion(pastoreo, campos, circuitos, modo, modo === 'mes' ? mesISO : null),
-    [pastoreo, campos, circuitos, modo, mesISO],
+    () => computeRotacion(pastoreoFiltrado, campos, circuitos, modo, modo === 'mes' ? mesISO : null),
+    [pastoreoFiltrado, campos, circuitos, modo, mesISO],
   );
 
   const totales = useMemo(() => {
@@ -166,6 +187,20 @@ export function PastoreoRotacionView({ pastoreo, campos, circuitos }: Props) {
     const rot = filas.reduce((s, r) => s + r.rotaciones, 0);
     return { parcelas: filas.length, dias, rotaciones: rot, promedio: rot > 0 ? dias / rot : 0 };
   }, [filas]);
+
+  // Umbral para colorear filas según riesgo agronómico. La idea (validada
+  // con el cliente): una parcela que se usa MUCHO más que el promedio del
+  // set está en riesgo de quedarse sin pastura.
+  //   - terracota suave: > 1× promedio  (uso alto, monitorear)
+  //   - terracota fuerte: > 2× promedio (riesgo, frenar rotaciones)
+  // Promedio = mediana ponderada por días, calculado sobre el set visible
+  // (= post filtros), para que cambie cuando el cliente zoomea a un circuito.
+  const promedioDias = useMemo(() => {
+    if (filas.length === 0) return 0;
+    return filas.reduce((s, r) => s + r.diasTotales, 0) / filas.length;
+  }, [filas]);
+
+  const hoy = useMemo(() => new Date(), []);
 
   return (
     <div className="space-y-6">
@@ -186,7 +221,7 @@ export function PastoreoRotacionView({ pastoreo, campos, circuitos }: Props) {
         }
       />
 
-      {/* Selector Modo + Mes (cuando aplica) */}
+      {/* Selector Modo + Mes + Campo + Circuito */}
       <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <span className="text-xs uppercase font-semibold text-asfion-muted">Vista</span>
@@ -214,7 +249,7 @@ export function PastoreoRotacionView({ pastoreo, campos, circuitos }: Props) {
               <select
                 value={mesISO}
                 onChange={e => setMesISO(e.target.value)}
-                className="bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange transition cursor-pointer"
+                className={SELECT_CLASSES}
               >
                 {mesesDisponibles.length === 0 && <option value={mesISO}>{mesISO}</option>}
                 {mesesDisponibles.map(m => (
@@ -224,13 +259,61 @@ export function PastoreoRotacionView({ pastoreo, campos, circuitos }: Props) {
             </div>
           </>
         )}
+
+        <div className="h-8 w-px bg-asfion-borderSoft" />
+
+        {/* Campo: cambiar reset el filtro de circuito porque las opciones
+            del dropdown dependen del campo (no queremos que quede un
+            circuito de otro campo seleccionado). */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs uppercase font-semibold text-asfion-muted">Campo</span>
+          <select
+            value={campoFiltro}
+            onChange={e => { setCampoFiltro(e.target.value); setCircuitoFiltro('todos'); }}
+            className={SELECT_CLASSES}
+          >
+            <option value="todos">Todos</option>
+            {campos.map(c => (
+              <option key={c.id} value={c.id}>{c.nombre}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs uppercase font-semibold text-asfion-muted">Circuito</span>
+          <select
+            value={circuitoFiltro}
+            onChange={e => setCircuitoFiltro(e.target.value)}
+            className={SELECT_CLASSES}
+            disabled={circuitosOpts.length === 0}
+          >
+            <option value="todos">Todos</option>
+            {circuitosOpts.map(c => (
+              <option key={c.id} value={c.id}>{c.nombre}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Leyenda de colores — explica el highlight visual de riesgo agronómico */}
+      <div className="flex flex-wrap items-center gap-4 text-xs text-asfion-muted">
+        <span className="font-semibold uppercase">Riesgo agronómico:</span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded bg-asfion-orange/15 border border-asfion-orange/40" />
+          Uso alto (&gt; promedio)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded bg-asfion-terracota/20 border border-asfion-terracota/50" />
+          Sobreuso (&gt; 2× promedio — riesgo de quedarse sin pastura)
+        </span>
       </div>
 
       {/* Tabla */}
       <Card title="Detalle por parcela" subtitle="Ordenado por días totales descendente">
         {filas.length === 0 ? (
           <div className="py-10 text-center text-sm text-asfion-muted italic">
-            Sin movimientos en {modo === 'mes' ? formatMes(mesISO) : 'el período cargado'}.
+            Sin movimientos en {modo === 'mes' ? formatMes(mesISO) : 'el período cargado'}
+            {(campoFiltro !== 'todos' || circuitoFiltro !== 'todos') ? ' con los filtros aplicados' : ''}.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -243,27 +326,51 @@ export function PastoreoRotacionView({ pastoreo, campos, circuitos }: Props) {
                   <th className="py-2 px-2 font-semibold tabular-nums">Días totales</th>
                   <th className="py-2 px-2 font-semibold tabular-nums">Rotaciones</th>
                   <th className="py-2 px-2 font-semibold tabular-nums">Días promedio</th>
-                  <th className="py-2 px-2 font-semibold">Última entrada</th>
+                  <th className="py-2 px-2 font-semibold">Última rotación</th>
                 </tr>
               </thead>
               <tbody>
-                {filas.map(r => (
-                  <tr key={r.parcelaId} className="border-b border-asfion-borderSoft/50 hover:bg-asfion-bg/60 transition">
-                    <td className="py-2 px-2 text-asfion-muted">{r.campoNombre}</td>
-                    <td className="py-2 px-2 text-asfion-muted">{r.circuitoNombre}</td>
-                    <td className="py-2 px-2 font-semibold text-asfion-navyDeep">{r.parcela}</td>
-                    <td className="py-2 px-2 tabular-nums font-semibold text-asfion-orange">{formatNumber(r.diasTotales)}</td>
-                    <td className="py-2 px-2 tabular-nums">{r.rotaciones}</td>
-                    <td className="py-2 px-2 tabular-nums">{r.diasPromedio.toFixed(1)}</td>
-                    <td className="py-2 px-2 text-asfion-muted text-xs">{r.ultimaEntrada}</td>
-                  </tr>
-                ))}
+                {filas.map(r => {
+                  const riesgo = clasificarRiesgo(r.diasTotales, promedioDias);
+                  return (
+                    <tr
+                      key={r.parcelaId}
+                      className={
+                        'border-b border-asfion-borderSoft/50 hover:bg-asfion-bg/60 transition ' +
+                        (riesgo === 'alto'      ? 'bg-asfion-terracota/10' :
+                         riesgo === 'moderado'  ? 'bg-asfion-orange/8'     : '')
+                      }
+                      title={
+                        riesgo === 'alto'      ? 'Sobreuso — más del doble del promedio del set visible' :
+                        riesgo === 'moderado'  ? 'Uso alto — supera el promedio del set visible' : undefined
+                      }
+                    >
+                      <td className="py-2 px-2 text-asfion-muted">{r.campoNombre}</td>
+                      <td className="py-2 px-2 text-asfion-muted">{r.circuitoNombre}</td>
+                      <td className="py-2 px-2 font-semibold text-asfion-navyDeep">
+                        {r.parcela}
+                        {riesgo === 'alto' && (
+                          <span className="ml-2 text-[10px] uppercase font-bold text-asfion-terracota">⚠ sobreuso</span>
+                        )}
+                      </td>
+                      <td className={
+                        'py-2 px-2 tabular-nums font-semibold ' +
+                        (riesgo === 'alto' ? 'text-asfion-terracota' : 'text-asfion-orange')
+                      }>
+                        {formatNumber(r.diasTotales)}
+                      </td>
+                      <td className="py-2 px-2 tabular-nums">{r.rotaciones}</td>
+                      <td className="py-2 px-2 tabular-nums">{r.diasPromedio.toFixed(1)}</td>
+                      <td className="py-2 px-2 text-asfion-muted text-xs">{relativoEnDias(r.ultimaEntrada, hoy)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
               {totales && (
                 <tfoot>
                   <tr className="border-t-2 border-asfion-navyDeep bg-asfion-bg/40 font-bold">
                     <td className="py-3 px-2 text-asfion-navyDeep" colSpan={3}>
-                      Total ({totales.parcelas} parcelas)
+                      Total ({totales.parcelas} parcelas) — promedio del set: {promedioDias.toFixed(0)} días
                     </td>
                     <td className="py-3 px-2 tabular-nums text-asfion-orange">{formatNumber(totales.dias)}</td>
                     <td className="py-3 px-2 tabular-nums text-asfion-navyDeep">{totales.rotaciones}</td>
@@ -295,6 +402,43 @@ function formatMes(iso: string): string {
   const idx = parseInt(m ?? '1', 10) - 1;
   const nombre = MESES_LARGOS[Math.max(0, Math.min(11, idx))];
   return `${nombre} ${y}`;
+}
+
+/** Clase Tailwind reutilizada para los <select> de la barra de filtros. */
+const SELECT_CLASSES =
+  'bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 ' +
+  'text-sm font-semibold text-asfion-navy ' +
+  'hover:bg-asfion-orangeSoft/25 ' +
+  'focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange ' +
+  'disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer';
+
+/** Clasifica el riesgo agronómico de una parcela según cuánto se usa
+ *  comparado al promedio del set visible.
+ *   - 'alto':     > 2× promedio (sobreuso real, posible riesgo)
+ *   - 'moderado': > 1× promedio (uso por encima del promedio)
+ *   - 'normal':   <= promedio
+ *  Si promedio es 0 (set vacío), devuelve 'normal' para evitar pintar todo. */
+function clasificarRiesgo(diasTotales: number, promedio: number): 'alto' | 'moderado' | 'normal' {
+  if (promedio <= 0) return 'normal';
+  if (diasTotales > promedio * 2) return 'alto';
+  if (diasTotales > promedio) return 'moderado';
+  return 'normal';
+}
+
+/** Devuelve "hoy", "ayer", "hace 12 días", etc. Para fechas futuras
+ *  (raro pero defensivo) devuelve la fecha ISO sin transformar. */
+function relativoEnDias(iso: string, hoy: Date): string {
+  if (!iso) return '—';
+  const d = fechaISOaLocal(iso);
+  const diffMs = hoy.getTime() - d.getTime();
+  const dias = Math.floor(diffMs / MS_POR_DIA);
+  if (dias < 0) return iso;
+  if (dias === 0) return 'hoy';
+  if (dias === 1) return 'ayer';
+  if (dias < 30) return `hace ${dias} días`;
+  if (dias < 60) return 'hace 1 mes';
+  if (dias < 365) return `hace ${Math.round(dias / 30)} meses`;
+  return `hace ${Math.round(dias / 365)} año${dias >= 365 * 2 ? 's' : ''}`;
 }
 
 function exportRotacion(rows: RotacionRow[], modo: Modo, mesISO: string): void {

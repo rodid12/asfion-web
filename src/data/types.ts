@@ -70,6 +70,36 @@ export type Lluvia = LluviaCanonical;
 // Un tacto = revisión veterinaria de un grupo (rodeo) para confirmar
 // preñez. La data viene del veterinario externo, hoy se carga vía SQL.
 // Cuando haya form en app móvil, se va a poder cargar desde allí.
+// -----------------------------------------------------------------------------
+// Cierre de Corrales (Feedlot)
+// -----------------------------------------------------------------------------
+//
+// Cada row es una tropa cerrada (encerrada + terminada o recriada). Los
+// KPIs globales del Power BI son promedios ponderados por `cantidad`
+// (animales) — el cálculo está en `pages/CorralesPage.tsx`.
+//
+// Tabla DB: `cierre_corrales` (migration 0029)
+// Origen de la data: Excel "Cierre_Corrales.xlsx" del Power BI página 6.
+export interface Corral {
+  id: string;
+  etapa: 'Re Cría' | 'Terminación';
+  categoria: 'Novillo' | 'Vaquillona';
+  tropa: string;                     // "TROPA 1", "TROPA 2", ...
+  establecimiento?: string;
+  tipoAnimal?: string;               // "Nov", "Vaq", "Vaq1"
+  fechaEncierre?: string;            // YYYY-MM-DD
+  animales: number;                  // = "Cantidad" en el Excel (ponderador DAX)
+  pesoInicial: number;               // kg
+  pesoFinal: number;                 // kg
+  duracionDias: number;
+  cmsKgPorDia: number;               // CMS (kg/an/día)
+  cmsPctPv: number;                  // CMS (% PV)
+  adpv: number;                      // kg/an/día — aumento diario peso vivo
+  ecPromedio: number;                // kg/kg — eficiencia de conversión
+  racionPesoMs: number;              // $/kg MS — costo ración
+  alimPesoProducido: number;         // $/kg prod — costo alimentación
+}
+
 export interface Tacto {
   id: string;
   rodeo: string;

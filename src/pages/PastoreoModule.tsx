@@ -14,7 +14,7 @@
 
 import React, { useState } from 'react';
 import { clsx } from 'clsx';
-import type { Campo, Circuito, Pastoreo, PastoreoCiclo } from '@/data/types';
+import type { Campo, Circuito, Corral, Pastoreo, PastoreoCiclo } from '@/data/types';
 import { PastoreoPage } from './PastoreoPage';
 import { CorralesPage } from './CorralesPage';
 
@@ -25,15 +25,16 @@ interface Props {
   pastoreoCiclos: PastoreoCiclo[];
   campos: Campo[];
   circuitos: Circuito[];
+  corrales: Corral[];
 }
 
 const SUB_TABS: { key: SubTab; label: string; count?: (p: Props) => number }[] = [
   // Count = ciclos cargados (tabla nueva pastoreo_ciclos). Si todavía no se
   // aplicó la migración 0018, cae a stays viejos para no mostrar 0.
   { key: 'pastoreo', label: 'Pastoreo',        count: p => p.pastoreoCiclos.length || p.pastoreo.length },
-  // Corrales: por ahora el data viene vacío (la fuente todavía no está
-  // conectada — Sheets / app móvil). Sin count.
-  { key: 'corrales', label: 'Cierre Corrales' },
+  // Corrales: data viene de la tabla cierre_corrales (mig 0029). Count
+  // muestra cuántas tropas hay cargadas en total (no filtra por etapa/cat).
+  { key: 'corrales', label: 'Cierre Corrales',  count: p => p.corrales.length },
 ];
 
 export function PastoreoModule(props: Props) {
@@ -87,9 +88,11 @@ export function PastoreoModule(props: Props) {
         />
       )}
       {subTab === 'corrales' && (
-        // corrales=[] hasta que se conecte la fuente — el empty state vive
-        // adentro de CorralesPage. Conservamos exactamente el mismo render.
-        <CorralesPage corrales={[]} />
+        // Data viene de la tabla `cierre_corrales` (mig 0029). Si la tabla
+        // todavía no aplicó o no hay rows, CorralesPage muestra su empty
+        // state automáticamente. Cuando hay rows, renderiza filtros +
+        // KPIs ponderados + tabla por tropa (réplica Power BI página 6).
+        <CorralesPage corrales={props.corrales} />
       )}
     </div>
   );

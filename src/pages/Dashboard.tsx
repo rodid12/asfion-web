@@ -228,6 +228,7 @@ export function Dashboard() {
             pastoreoCiclos={d.pastoreoCiclos}
             campos={d.campos}
             circuitos={d.circuitos}
+            corrales={d.corrales}
           />
         )}
         {view === 'modules' && data && modulo === 'compras' && (

@@ -21,6 +21,7 @@ import type {
   PastoreoCiclo,
   ResumenServicio,
   Tacto,
+  Corral,
 } from './types';
 import {
   mapRow,
@@ -439,5 +440,51 @@ export async function fetchNdvi(): Promise<NdviPastura[]> {
       return [];
     }
     throw new Error(`fetchNdvi: ${err?.message ?? err}`);
+  }
+}
+
+// =============================================================================
+// Cierre de Corrales (Feedlot) — migration 0029
+// =============================================================================
+
+function rowToCorral(r: any): Corral {
+  return {
+    id: r.id,
+    etapa:            r.etapa,
+    categoria:        r.categoria,
+    tropa:            r.tropa,
+    establecimiento:  r.establecimiento ?? undefined,
+    tipoAnimal:       r.tipo_animal ?? undefined,
+    fechaEncierre:    r.fecha_encierre ?? undefined,
+    animales:         Number(r.cantidad ?? 0),
+    pesoInicial:      Number(r.peso_inicial ?? 0),
+    pesoFinal:        Number(r.peso_final ?? 0),
+    duracionDias:     Number(r.duracion_dias ?? 0),
+    cmsKgPorDia:      Number(r.cms_kg_dia ?? 0),
+    cmsPctPv:         Number(r.cms_pct_pv ?? 0),
+    adpv:             Number(r.adpv ?? 0),
+    ecPromedio:       Number(r.ec_promedio ?? 0),
+    racionPesoMs:     Number(r.racion_peso_ms ?? 0),
+    alimPesoProducido:Number(r.alim_peso_prod ?? 0),
+  };
+}
+
+export async function fetchCorrales(): Promise<Corral[]> {
+  try {
+    const rows = await fetchAllPaginated<any>('cierre_corrales',
+      q => q.order('etapa', { ascending: true })
+            .order('categoria', { ascending: true })
+            .order('tropa', { ascending: true }) as QueryBuilder);
+    return rows.map(rowToCorral);
+  } catch (err: any) {
+    // Tabla se crea en migration 0029 — si no aplicó, devolvemos array
+    // vacío para que CorralesPage muestre su empty state sin romper el
+    // resto del dashboard.
+    const msg = String(err?.message ?? err).toLowerCase();
+    if (msg.includes('does not exist') || msg.includes('relation') || err?.code === '42P01') {
+      console.warn('Tabla cierre_corrales no existe todavía — aplicá migration 0029');
+      return [];
+    }
+    throw new Error(`fetchCorrales: ${err?.message ?? err}`);
   }
 }

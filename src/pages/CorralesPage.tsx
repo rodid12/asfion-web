@@ -25,27 +25,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { formatNumber } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
-
-/**
- * Shape de un row de cierre de corral. Cuando se enchufe la fuente real,
- * exportar esta interfaz desde data/types.ts y reemplazar en la prop.
- */
-export interface Corral {
-  id: string;
-  etapa: 'Re Cría' | 'Terminación';
-  categoria: 'Novillo' | 'Vaquillona';
-  tropa: string;
-  pesoInicial: number;
-  pesoFinal: number;
-  duracionDias: number;
-  ecPromedio: number;          // EC kg/kg
-  cmsPctPv: number;            // CMS % peso vivo
-  cmsKgPorDia: number;         // CMS kg/an/día
-  adpv: number;                // kg/an/día
-  alimPesoProducido: number;   // $/kg prod
-  racionPesoMs: number;        // $/kg MS
-  animales: number;
-}
+import type { Corral } from '@/data/types';
 
 interface Props {
   /** Cierres de corral cargados. Por ahora siempre vacío; cuando enchufemos

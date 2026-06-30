@@ -12,7 +12,7 @@
 // que el UI muestre el badge "Sin conexión — datos del DD/MM HH:MM".
 
 import { useEffect, useState } from 'react';
-import type { Campo, Circuito, Compra, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto } from './types';
+import type { Campo, Circuito, Compra, Corral, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto } from './types';
 import {
   fetchCampos,
   fetchCircuitos,
@@ -25,6 +25,7 @@ import {
   fetchPastoreoCiclos,
   fetchResumenServicio,
   fetchTactos,
+  fetchCorrales,
 } from './supabase';
 import { loadCache, saveCache } from './offlineCache';
 
@@ -40,6 +41,7 @@ export interface DashboardData {
   compras: Compra[];
   ndvi: NdviPastura[];
   tactos: Tacto[];
+  corrales: Corral[];
 }
 
 export interface UseDataResult {
@@ -67,6 +69,7 @@ const EMPTY: DashboardData = {
   compras: [],
   ndvi: [],
   tactos: [],
+  corrales: [],
 };
 
 export function useDashboardData(): UseDataResult {
@@ -106,7 +109,7 @@ export function useDashboardData(): UseDataResult {
 
       // 2-4. Fetch online en paralelo (o secuencial si no había cache).
       try {
-        const [campos, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos] =
+        const [campos, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales] =
           await Promise.all([
             fetchCampos(),
             fetchCircuitos(),
@@ -119,9 +122,10 @@ export function useDashboardData(): UseDataResult {
             fetchCompras(),
             fetchNdvi(),
             fetchTactos(),
+            fetchCorrales(),
           ]);
         if (cancelled) return;
-        const fresh: DashboardData = { campos, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos };
+        const fresh: DashboardData = { campos, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales };
         setData(fresh);
         setOffline(false);
         setCachedAt(null);

@@ -229,6 +229,7 @@ export function Dashboard() {
             campos={d.campos}
             circuitos={d.circuitos}
             corrales={d.corrales}
+            mortandad={d.mortandad}
           />
         )}
         {view === 'modules' && data && modulo === 'compras' && (

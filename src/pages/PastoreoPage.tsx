@@ -30,8 +30,8 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   LabelList,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -54,7 +54,7 @@ import { EmptyModule } from '@/components/EmptyModule';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { formatNumber } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
-import type { Campo, Circuito, Pastoreo, PastoreoCiclo } from '@/data/types';
+import type { Campo, Circuito, Mortandad, Pastoreo, PastoreoCiclo } from '@/data/types';
 import { PastoreoEntradasView } from './PastoreoEntradasView';
 import type { SimpleFiltros } from '@/components/SimpleFilterBar';
 
@@ -91,9 +91,12 @@ interface Props {
   pastoreo: Pastoreo[];
   campos: Campo[];
   circuitos: Circuito[];
+  /** Eventos de mortandad — se cruzan con los ciclos por campo para el chart
+   *  stacked "Cabezas por campo" (entradas vivas + muertos). */
+  mortandad: Mortandad[];
 }
 
-export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Props) {
+export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos, mortandad }: Props) {
   const [campo, setCampo] = useState<string>('todos');
   const [circuito, setCircuito] = useState<string>('todos');
   const [categoria, setCategoria] = useState<string>('todas');
@@ -274,14 +277,39 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
   // Charts usan filtradosSinEtapa porque la cantidad de cabezas y kg/Ha de
   // un ciclo son los mismos sin importar qué etapa esté mirando el usuario.
   // Evita recalcular ~30ms al togglear Largada/Control/Final.
-  const porCampo = useMemo(() => {
+  // Mortandad por campo: cruzamos mortandad.campoId → campo.nombre
+  // para sumar al mismo bucket que pastoreoCiclos.campoNombre.
+  // Respeta el filtro de campo si el usuario lo aplicó arriba.
+  const muertosPorNombre = useMemo(() => {
+    const idANombre = new Map(campos.map(c => [c.id, c.nombre]));
     const m = new Map<string, number>();
-    for (const c of filtradosSinEtapa) {
-      m.set(c.campoNombre, (m.get(c.campoNombre) ?? 0) + (c.cantAnimales ?? 0));
+    for (const ev of mortandad) {
+      if (campo !== 'todos' && idANombre.get(ev.campoId) !== campo) continue;
+      const nombre = idANombre.get(ev.campoId) ?? '(sin campo)';
+      m.set(nombre, (m.get(nombre) ?? 0) + 1);   // cada row de mortandad = 1 cabeza
     }
-    return Array.from(m, ([nombre, cabezas]) => ({ nombre, cabezas }))
-      .sort((a, b) => b.cabezas - a.cabezas);
-  }, [filtradosSinEtapa]);
+    return m;
+  }, [mortandad, campos, campo]);
+
+  // porCampo ahora trae 3 valores:
+  //   - vivos     = cabezas hoy en el ciclo (de pastoreoCiclos.cantAnimales)
+  //   - muertos   = bajas registradas en ese campo (de tabla mortandad)
+  //   - inicial   = vivos + muertos (= cabezas con las que arrancó la temporada)
+  // El chart renderea vivos + muertos como barras stacked y muestra inicial
+  // como label total al final.
+  const porCampo = useMemo(() => {
+    const vivos = new Map<string, number>();
+    for (const c of filtradosSinEtapa) {
+      vivos.set(c.campoNombre, (vivos.get(c.campoNombre) ?? 0) + (c.cantAnimales ?? 0));
+    }
+    // Unión de keys: campos que tengan vivos o muertos.
+    const nombres = new Set<string>([...vivos.keys(), ...muertosPorNombre.keys()]);
+    return Array.from(nombres, nombre => {
+      const v = vivos.get(nombre) ?? 0;
+      const m = muertosPorNombre.get(nombre) ?? 0;
+      return { nombre, vivos: v, muertos: m, inicial: v + m };
+    }).sort((a, b) => b.inicial - a.inicial);
+  }, [filtradosSinEtapa, muertosPorNombre]);
 
   // (El useMemo `porCircuito` que calculaba "kg producidos/Ha por circuito"
   //  se removió a pedido del cliente — esa métrica va en Cierre de Corrales.
@@ -538,21 +566,39 @@ export function PastoreoPage({ pastoreoCiclos, pastoreo, campos, circuitos }: Pr
           se rehace en CorralesPage.)
           ────────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4">
-        <Card title="Cabezas por campo">
+        <Card
+          title="Cabezas por campo"
+          subtitle="Vivos hoy + muertos en el período — el total = cabezas iniciales del ciclo"
+        >
           {porCampo.length === 0 ? (
             <div className="text-sm text-asfion-muted py-8 text-center">Sin datos para los filtros actuales</div>
           ) : (
             <ResponsiveContainer width="100%" height={Math.max(260, porCampo.length * 40)}>
-              <BarChart data={porCampo} layout="vertical" margin={{ left: 20, right: 30, top: 10, bottom: 10 }}>
+              <BarChart data={porCampo} layout="vertical" margin={{ left: 20, right: 60, top: 10, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                 <XAxis type="number" tickFormatter={v => formatNumber(v)} />
                 <YAxis type="category" dataKey="nombre" width={100} tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v: number) => formatNumber(v)} />
-                <Bar dataKey="cabezas" radius={[0, 6, 6, 0]}>
-                  {porCampo.map((_, i) => (
-                    <Cell key={i} fill={['#1E3A5F','#E07B3F','#C46B5F','#2F5179','#A45B4F'][i % 5]} />
-                  ))}
-                  <LabelList dataKey="cabezas" position="right" formatter={(v: number) => formatNumber(v)} fontSize={11} fill="#1E3A5F" />
+                <Tooltip
+                  formatter={(v: number, name: string) => [formatNumber(v), name === 'vivos' ? 'Vivos hoy' : 'Muertos']}
+                />
+                <Legend
+                  payload={[
+                    { value: 'Vivos hoy', type: 'square', color: '#1E3A5F' },
+                    { value: 'Muertos',   type: 'square', color: '#C46B5F' },
+                  ]}
+                  wrapperStyle={{ fontSize: 12 }}
+                />
+                {/* Stacked: vivos (azul navy) + muertos (terracota suave).
+                    El último Bar del stack es el que recibe el LabelList del total. */}
+                <Bar dataKey="vivos"   stackId="cabezas" fill="#1E3A5F" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="muertos" stackId="cabezas" fill="#C46B5F" radius={[0, 6, 6, 0]}>
+                  <LabelList
+                    dataKey="inicial"
+                    position="right"
+                    formatter={(v: number) => formatNumber(v)}
+                    fontSize={11}
+                    fill="#1E3A5F"
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

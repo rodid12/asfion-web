@@ -14,11 +14,12 @@
 
 import React, { useState } from 'react';
 import { clsx } from 'clsx';
-import type { Campo, Circuito, Corral, Pastoreo, PastoreoCiclo } from '@/data/types';
+import type { Campo, Circuito, Corral, Mortandad, Pastoreo, PastoreoCiclo } from '@/data/types';
 import { PastoreoPage } from './PastoreoPage';
 import { CorralesPage } from './CorralesPage';
+import { PastoreoRotacionView } from './PastoreoRotacionView';
 
-type SubTab = 'pastoreo' | 'corrales';
+type SubTab = 'pastoreo' | 'rotacion' | 'corrales';
 
 interface Props {
   pastoreo: Pastoreo[];
@@ -26,14 +27,19 @@ interface Props {
   campos: Campo[];
   circuitos: Circuito[];
   corrales: Corral[];
+  /** Eventos de mortandad — los cruza PastoreoPage para el chart stacked
+   *  "Cabezas por campo" (entradas vivas + muertos). */
+  mortandad: Mortandad[];
 }
 
 const SUB_TABS: { key: SubTab; label: string; count?: (p: Props) => number }[] = [
   // Count = ciclos cargados (tabla nueva pastoreo_ciclos). Si todavía no se
   // aplicó la migración 0018, cae a stays viejos para no mostrar 0.
-  { key: 'pastoreo', label: 'Pastoreo',        count: p => p.pastoreoCiclos.length || p.pastoreo.length },
-  // Corrales: data viene de la tabla cierre_corrales (mig 0029). Count
-  // muestra cuántas tropas hay cargadas en total (no filtra por etapa/cat).
+  { key: 'pastoreo', label: 'Pastoreo',         count: p => p.pastoreoCiclos.length || p.pastoreo.length },
+  // Rotación: derivada de pastoreo (stays con entrada/salida). Count = #
+  // parcelas únicas con al menos un movimiento cargado.
+  { key: 'rotacion', label: 'Rotación',         count: p => new Set(p.pastoreo.map(s => s.parcelaId)).size },
+  // Corrales: data viene de la tabla cierre_corrales (mig 0029).
   { key: 'corrales', label: 'Cierre Corrales',  count: p => p.corrales.length },
 ];
 
@@ -82,6 +88,16 @@ export function PastoreoModule(props: Props) {
       {subTab === 'pastoreo' && (
         <PastoreoPage
           pastoreoCiclos={props.pastoreoCiclos}
+          pastoreo={props.pastoreo}
+          campos={props.campos}
+          circuitos={props.circuitos}
+          mortandad={props.mortandad}
+        />
+      )}
+      {subTab === 'rotacion' && (
+        // Vista derivada de pastoreo (stays con fecha entrada/salida).
+        // Tiene toggle interno ciclo/mes — no requiere otros datasets.
+        <PastoreoRotacionView
           pastoreo={props.pastoreo}
           campos={props.campos}
           circuitos={props.circuitos}

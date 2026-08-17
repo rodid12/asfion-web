@@ -34,7 +34,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { EmptyModule } from '@/components/EmptyModule';
 import { aplicarFiltros, FILTROS_DEFAULT, type Filtros } from '@/data/filters';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
-import type { Campo, Paricion, ResumenServicio } from '@/data/types';
+import type { CampaniaReproductiva, Campo, Paricion, ResumenServicio, Tacto } from '@/data/types';
 import { ResumenServicioTable } from '@/components/ResumenServicioTable';
 import { campoNombreFn } from '@/lib/campoMap';
 import { KpisDesdeResumen } from '@/components/pariciones/KpisDesdeResumen';
@@ -48,15 +48,77 @@ interface Props {
   /** Resumen mermas servicio por tropa (Excel Hoja 3). Opcional — si está
    *  cargado el KPI grid de arriba lo prefiere; sino cae al DAX legacy. */
   resumenServicio?: ResumenServicio[];
+  /** Foto inicial de Preñez, agrupable por campaña y campo (mig 0030). */
+  tactos?: Tacto[];
+  /** Define el período activo y evita mezclar campañas reproductivas. */
+  campaniasReproductivas?: CampaniaReproductiva[];
 }
 
-export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Props) {
-  const [filtros, setFiltros] = useState<Filtros>(FILTROS_DEFAULT);
+export function ParicionesPage({
+  pariciones,
+  campos,
+  resumenServicio = [],
+  tactos = [],
+  campaniasReproductivas = [],
+}: Props) {
+  // La campaña activa abre seleccionada. Así, al comenzar septiembre se ve
+  // inmediatamente el stock de Preñez aunque todavía no haya ningún parto,
+  // y los eventos de campañas anteriores no se descuentan del stock nuevo.
+  const campaniaInicial = campaniasReproductivas.find(c => c.activa)
+    ?? [...campaniasReproductivas].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))[0];
+  const [filtros, setFiltros] = useState<Filtros>(() => campaniaInicial
+    ? {
+        ...FILTROS_DEFAULT,
+        año: undefined,
+        desde: campaniaInicial.fechaInicio,
+        hasta: campaniaInicial.fechaFin,
+      }
+    : FILTROS_DEFAULT);
 
-  const filtrados = useMemo(
+  const filtradosPorControles = useMemo(
     () => aplicarFiltros(pariciones, filtros),
     [pariciones, filtros],
   );
+
+  // Resolver qué campaña representa el filtro actual. Los rangos custom
+  // contenidos dentro de una campaña también usan su misma foto de Preñez.
+  // Para rangos relativos, inferimos por los eventos que ya tengan campaña.
+  const campaniaSeleccionada = useMemo(() => {
+    if (filtros.desde && filtros.hasta) {
+      const porRango = campaniasReproductivas.find(c =>
+        filtros.desde! >= c.fechaInicio && filtros.hasta! <= c.fechaFin,
+      );
+      if (porRango) return porRango;
+    }
+    if (filtros.año != null) {
+      const porAnio = campaniasReproductivas.find(c => c.servicioAnio === filtros.año);
+      if (porAnio) return porAnio;
+    }
+
+    const ids = new Set(
+      filtradosPorControles
+        .map(p => p.campaniaId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const activa = campaniasReproductivas.find(c => c.activa);
+    if (activa && ids.has(activa.id)) return activa;
+    if (ids.size === 1) {
+      const [id] = ids;
+      return campaniasReproductivas.find(c => c.id === id);
+    }
+    return undefined;
+  }, [filtros, campaniasReproductivas, filtradosPorControles]);
+
+  // Además del rango de fechas, cuando conocemos la campaña exigimos que el
+  // evento pertenezca a ella. El fallback por fecha cubre eventos offline que
+  // todavía no recibieron `campania_id` del trigger de Supabase.
+  const filtrados = useMemo(() => {
+    if (!campaniaSeleccionada) return filtradosPorControles;
+    return filtradosPorControles.filter(p =>
+      p.campaniaId === campaniaSeleccionada.id ||
+      (!p.campaniaId && p.fecha >= campaniaSeleccionada.fechaInicio && p.fecha <= campaniaSeleccionada.fechaFin),
+    );
+  }, [filtradosPorControles, campaniaSeleccionada]);
 
   // Años con data — para alimentar el dropdown del filtro.
   const añosDisponibles = useMemo(() => {
@@ -67,8 +129,9 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
         if (Number.isFinite(y) && y > 2000 && y < 2100) set.add(y);
       }
     }
+    for (const c of campaniasReproductivas) set.add(c.servicioAnio);
     return [...set].sort((a, b) => b - a);
-  }, [pariciones]);
+  }, [pariciones, campaniasReproductivas]);
 
   // Campos visibles según el filtro de campo (1 o todos). El Stock Base se
   // suma sobre los visibles para que cuando el cliente filtre "Picaflor",
@@ -77,6 +140,32 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
     if (filtros.campoId === 'todos') return campos;
     return campos.filter(c => c.id === filtros.campoId);
   }, [filtros.campoId, campos]);
+
+  // Preñez es la fuente de stock para la campaña seleccionada. Sumamos todas
+  // las categorías que pertenecen al mismo campo (AG → Agisot; dos rodeos de
+  // Carolina/Picaflor, etc.) sin modificar los rows originales de tactos.
+  const { camposParaKpis, vinculadaAPrenez } = useMemo(() => {
+    if (!campaniaSeleccionada) {
+      return { camposParaKpis: camposVisibles, vinculadaAPrenez: false };
+    }
+
+    const stockPorCampo = new Map<string, number>();
+    let tactosMapeados = 0;
+    for (const t of tactos) {
+      if (t.campaniaId !== campaniaSeleccionada.id || !t.campoId) continue;
+      const prenadas = t.prenezCabeza + t.prenezCuerpo + t.prenezCola;
+      stockPorCampo.set(t.campoId, (stockPorCampo.get(t.campoId) ?? 0) + prenadas);
+      tactosMapeados++;
+    }
+
+    return {
+      camposParaKpis: camposVisibles.map(c => ({
+        ...c,
+        stockInicialVacas: stockPorCampo.get(c.id) ?? 0,
+      })),
+      vinculadaAPrenez: tactosMapeados > 0,
+    };
+  }, [campaniaSeleccionada, camposVisibles, tactos]);
 
   // Resumen del servicio — fuente preferida. Si está, mostramos
   // KpisDesdeResumen; sino, KpisLegacy desde eventos individuales.
@@ -89,22 +178,28 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
     [filtros.campoId, campos],
   );
   const resumenTotales = useMemo(
-    () => computeResumenTotales(resumenServicio, campoNombreFiltro),
-    [resumenServicio, campoNombreFiltro],
+    () => computeResumenTotales(
+      resumenServicio,
+      campoNombreFiltro,
+      campaniaSeleccionada?.servicioAnio ?? filtros.año ?? null,
+    ),
+    [resumenServicio, campoNombreFiltro, campaniaSeleccionada, filtros.año],
   );
 
   // KpisLegacy solo se calcula cuando NO hay resumen — early bail-out
   // ahorra ~20-40ms de fórmulas DAX sobre 2.5k pariciones (audit N12).
   const kpisLegacy = useMemo(
-    () => resumenTotales ? null : computeKpisLegacy(filtrados, camposVisibles),
-    [resumenTotales, filtrados, camposVisibles],
+    () => resumenTotales
+      ? null
+      : computeKpisLegacy(filtrados, camposParaKpis, vinculadaAPrenez),
+    [resumenTotales, filtrados, camposParaKpis, vinculadaAPrenez],
   );
 
   // Texto del título: si hay un campo seleccionado, lo nombramos.
   // Reusa `campoNombreFiltro` calculado arriba (DRY).
   const tituloCampo = campoNombreFiltro;
 
-  if (pariciones.length === 0) {
+  if (pariciones.length === 0 && resumenServicio.length === 0 && tactos.length === 0) {
     return <EmptyModule label="pariciones" />;
   }
 
@@ -135,7 +230,7 @@ export function ParicionesPage({ pariciones, campos, resumenServicio = [] }: Pro
           el comentario inline de computeResumenTotales. */}
       {resumenTotales
         ? <KpisDesdeResumen totales={resumenTotales} />
-        : kpisLegacy && <KpisLegacy kpis={kpisLegacy} />}
+        : kpisLegacy && <KpisLegacy kpis={kpisLegacy} vinculadaAPrenez={vinculadaAPrenez} />}
 
       {/* Charts row A: 2 donuts (eventos + nacimientos segmentados) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

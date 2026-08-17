@@ -22,9 +22,10 @@ import type { KpisLegacy as KpisLegacyType } from './computeKpisLegacy';
 
 interface Props {
   kpis: KpisLegacyType;
+  vinculadaAPrenez?: boolean;
 }
 
-export function KpisLegacy({ kpis }: Props) {
+export function KpisLegacy({ kpis, vinculadaAPrenez = false }: Props) {
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -62,7 +63,9 @@ export function KpisLegacy({ kpis }: Props) {
         <Kpi
           label="Vacas sin Parir"
           value={kpis.stockBase > 0 ? formatNumber(kpis.vacasSinParir) : '—'}
-          sublabel="Stock − Partos − Retactos − Abortos"
+          sublabel={vinculadaAPrenez
+            ? 'Preñez inicial − partos − abortos'
+            : 'Stock − Partos − Retactos − Abortos'}
           accent="navy"
           icon={<ShieldOffIcon size={18} />}
         />

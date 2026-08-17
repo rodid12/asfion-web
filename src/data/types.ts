@@ -43,7 +43,8 @@ export type { CampoCanonical as Campo,
               LoteCanonical as Lote,
               PluviometroCanonical as Pluviometro,
               CircuitoCanonical as Circuito,
-              ParcelaCanonical as Parcela } from './types.canonical';
+              ParcelaCanonical as Parcela,
+              CampaniaReproductivaCanonical as CampaniaReproductiva } from './types.canonical';
 
 // SyncState es SOLO para el sync flow del app móvil (offline → cloud),
 // pero el dashboard también lo lee de los rows ya sincados. Lo dejamos
@@ -104,6 +105,10 @@ export interface Tacto {
   id: string;
   rodeo: string;
   campo?: string;
+  /** Campo real al que pertenece la categoría/rodeo (AG → Agisot). */
+  campoId?: string;
+  /** Campaña cuya foto inicial representa este tacto. */
+  campaniaId?: string;
   fecha?: string;
   origenTotal: number;
   prenezCabeza: number;

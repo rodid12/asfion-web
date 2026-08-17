@@ -36,7 +36,7 @@ import type { DashboardData } from './useData';
 const CACHE_KEY = 'asfion:dashboard-data';
 // Bump esto cuando cambies el shape de DashboardData (ej. agregás un
 // nuevo módulo). El cache viejo se descarta y se regenera.
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3; // agrega campaniasReproductivas (mig 0030)
 
 interface CacheEntry {
   savedAt: string;

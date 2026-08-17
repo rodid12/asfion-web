@@ -62,8 +62,15 @@ const norm = (s?: string | null) => (s ?? '').trim().toUpperCase();
 export function computeKpisLegacy(
   pariciones: Paricion[],
   camposVisibles: Campo[],
+  usarPrenezComoBase = false,
 ): KpisLegacy {
-  if (pariciones.length === 0) return KPIS_EMPTY;
+  // El stock debe verse incluso antes de la primera parición de la campaña.
+  // Antes el early-return dejaba todos los KPIs en cero y ocultaba la foto
+  // inicial proveniente de Preñez.
+  const stockBase = camposVisibles.reduce((s, c) => s + (c.stockInicialVacas ?? 0), 0);
+  if (pariciones.length === 0) {
+    return { ...KPIS_EMPTY, stockBase, vacasSinParir: stockBase };
+  }
 
   // Sets de IDs por filtro — Set elimina duplicados = DISTINCTCOUNT del DAX.
   const eventosIds      = new Set<string>();
@@ -74,6 +81,7 @@ export function computeKpisLegacy(
   const abortosIds      = new Set<string>();
   const orejanosIds     = new Set<string>();
   const asistIds        = new Set<string>();
+  const partosIds       = new Set<string>();
 
   pariciones.forEach(p => {
     const ev = norm(p.evento);
@@ -90,6 +98,18 @@ export function computeKpisLegacy(
     if (ev === 'ABORTO') abortosIds.add(p.id);
     if (sx === 'OREJANO') orejanosIds.add(p.id);
     if (norm(p.asistencia) === 'SI') asistIds.add(p.id);
+
+    // Para la campaña vinculada a Preñez, una vaca deja de estar "por parir"
+    // cuando tuvo nacimiento vivo/orejano, nacido muerto o aborto. Una muerte
+    // señalada posterior NO se descuenta de nuevo porque afecta al ternero.
+    if (ev !== 'ABORTO' && (
+      ev === 'NACIMIENTO' ||
+      ev === 'NACIDO MUERTO' ||
+      sx === 'OREJANO' ||
+      ca === 'NACIDO MUERTO'
+    )) {
+      partosIds.add(p.id);
+    }
   });
 
   const eventos        = eventosIds.size;
@@ -101,16 +121,15 @@ export function computeKpisLegacy(
   const orejanos       = orejanosIds.size;
   const asistidos      = asistIds.size;
 
-  // Stock Base = SUM(StockDesconectado[StockInicial]) sobre campos visibles
-  const stockBase = camposVisibles.reduce((s, c) => s + (c.stockInicialVacas ?? 0), 0);
-
   // Ternero en Pie = Nacimientos Total − Muerte Señalado
   const ternerosEnPie = Math.max(0, nacimientos - muerteSenalado);
 
-  // Vacas sin Parir = Stock Base − Eventos + Abortos  (DAX literal)
-  // Razón: Eventos ya excluye abortos, así que para "vacas que no parieron
-  // ni abortaron" la fórmula suma abortos de nuevo.
-  const vacasSinParir = Math.max(0, stockBase - eventos + abortos);
+  // Históricos: conserva la fórmula DAX ya validada contra Power BI.
+  // Campaña nueva: Preñez es la foto inicial y se descuentan partos/nacidos
+  // muertos + abortos. Nunca mutamos el tacto; este saldo siempre es derivado.
+  const vacasSinParir = usarPrenezComoBase
+    ? Math.max(0, stockBase - partosIds.size - abortos)
+    : Math.max(0, stockBase - eventos + abortos);
 
   return {
     total: eventos,

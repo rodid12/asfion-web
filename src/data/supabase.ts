@@ -11,6 +11,7 @@
 import { supabase } from '@/lib/supabase';
 import type {
   Campo,
+  CampaniaReproductiva,
   Circuito,
   Compra,
   Lluvia,
@@ -32,6 +33,7 @@ import {
   PASTOREO_SCHEMA,
   COMPRA_SCHEMA,
   CIRCUITO_SCHEMA,
+  CAMPANIA_REPRODUCTIVA_SCHEMA,
 } from './mapRow.canonical';
 import type {
   ParicionCanonical,
@@ -39,6 +41,7 @@ import type {
   MortandadCanonical,
   PastoreoCanonical,
   CompraCanonical,
+  CampaniaReproductivaCanonical,
 } from './types.canonical';
 
 // ----------------------------------------------------------------------------
@@ -131,6 +134,32 @@ export async function fetchCampos(): Promise<Campo[]> {
     .order('nombre');
   if (error) throw new Error(`fetchCampos: ${error.message}`);
   return (data ?? []).map(rowToCampo);
+}
+
+// =============================================================================
+// Campañas reproductivas (migration 0030)
+// =============================================================================
+
+function rowToCampaniaReproductiva(r: any): CampaniaReproductiva {
+  return mapRow<CampaniaReproductivaCanonical>(r, CAMPANIA_REPRODUCTIVA_SCHEMA);
+}
+
+export async function fetchCampaniasReproductivas(): Promise<CampaniaReproductiva[]> {
+  const { data, error } = await supabase
+    .from('campanias_reproductivas')
+    .select('id, nombre, servicio_anio, fecha_inicio, fecha_fin, activa')
+    .order('activa', { ascending: false })
+    .order('fecha_inicio', { ascending: false });
+
+  if (error) {
+    const msg = String(error.message ?? error).toLowerCase();
+    if (msg.includes('does not exist') || msg.includes('relation') || error.code === '42P01') {
+      console.warn('Tabla campanias_reproductivas no existe todavía — aplicá migration 0030');
+      return [];
+    }
+    throw new Error(`fetchCampaniasReproductivas: ${error.message}`);
+  }
+  return (data ?? []).map(rowToCampaniaReproductiva);
 }
 
 /**
@@ -395,6 +424,8 @@ function rowToTacto(r: any): Tacto {
     id: r.id,
     rodeo: r.rodeo,
     campo: r.campo ?? undefined,
+    campoId: r.campo_id ?? undefined,
+    campaniaId: r.campania_id ?? undefined,
     fecha: r.fecha ?? undefined,
     origenTotal:    Number(r.origen_total ?? 0),
     prenezCabeza:   Number(r.prenez_cabeza ?? 0),

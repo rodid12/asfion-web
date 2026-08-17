@@ -52,10 +52,14 @@ export interface ResumenTotales {
  * @param campoNombre      Nombre del campo a filtrar, o null/undefined para "todos los campos".
  *                         Si se pasa, solo se agregan las tropas de ese campo
  *                         (caso de uso: filtro de campo en ParicionesPage).
+ * @param servicioAnio     Campaña/año de servicio explícito. Cuando se pasa y
+ *                         todavía no existe un cierre para ese año, devuelve
+ *                         null para que la página calcule desde eventos + Preñez.
  */
 export function computeResumenTotales(
   resumenServicio: ResumenServicio[] | undefined,
   campoNombre?: string | null,
+  servicioAnio?: number | null,
 ): ResumenTotales | null {
   if (!resumenServicio || resumenServicio.length === 0) return null;
 
@@ -75,8 +79,9 @@ export function computeResumenTotales(
     .filter((x): x is number => Number.isFinite(x));
   if (aniosValidos.length === 0) return null;
 
-  const ultimoAnio = Math.max(...aniosValidos);
+  const ultimoAnio = servicioAnio ?? Math.max(...aniosValidos);
   const rows = filtradosPorCampo.filter(r => r.servicioAnio === ultimoAnio);
+  if (rows.length === 0) return null;
 
   const sum = (pick: (r: ResumenServicio) => number | undefined) =>
     rows.reduce<number>((s, r) => s + (pick(r) ?? 0), 0);

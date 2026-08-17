@@ -12,9 +12,10 @@
 // que el UI muestre el badge "Sin conexión — datos del DD/MM HH:MM".
 
 import { useEffect, useState } from 'react';
-import type { Campo, Circuito, Compra, Corral, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto } from './types';
+import type { CampaniaReproductiva, Campo, Circuito, Compra, Corral, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto } from './types';
 import {
   fetchCampos,
+  fetchCampaniasReproductivas,
   fetchCircuitos,
   fetchCompras,
   fetchLluvias,
@@ -31,6 +32,7 @@ import { loadCache, saveCache } from './offlineCache';
 
 export interface DashboardData {
   campos: Campo[];
+  campaniasReproductivas: CampaniaReproductiva[];
   circuitos: Circuito[];
   pariciones: Paricion[];
   lluvias: Lluvia[];
@@ -59,6 +61,7 @@ export interface UseDataResult {
 
 const EMPTY: DashboardData = {
   campos: [],
+  campaniasReproductivas: [],
   circuitos: [],
   pariciones: [],
   lluvias: [],
@@ -109,9 +112,10 @@ export function useDashboardData(): UseDataResult {
 
       // 2-4. Fetch online en paralelo (o secuencial si no había cache).
       try {
-        const [campos, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales] =
+        const [campos, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales] =
           await Promise.all([
             fetchCampos(),
+            fetchCampaniasReproductivas(),
             fetchCircuitos(),
             fetchPariciones(),
             fetchLluvias(),
@@ -125,7 +129,7 @@ export function useDashboardData(): UseDataResult {
             fetchCorrales(),
           ]);
         if (cancelled) return;
-        const fresh: DashboardData = { campos, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales };
+        const fresh: DashboardData = { campos, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales };
         setData(fresh);
         setOffline(false);
         setCachedAt(null);

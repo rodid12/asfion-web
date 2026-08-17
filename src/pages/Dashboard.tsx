@@ -209,6 +209,8 @@ export function Dashboard() {
             pariciones={d.pariciones}
             campos={d.campos}
             resumenServicio={d.resumenServicio}
+            tactos={d.tactos}
+            campaniasReproductivas={d.campaniasReproductivas}
           />
         )}
         {view === 'modules' && data && modulo === 'lluvias' && (

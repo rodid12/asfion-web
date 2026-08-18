@@ -228,6 +228,7 @@ export function Dashboard() {
           <PastoreoModule
             pastoreo={d.pastoreo}
             pastoreoCiclos={d.pastoreoCiclos}
+            mortandad={d.mortandad}
             campos={d.campos}
             circuitos={d.circuitos}
             corrales={d.corrales}

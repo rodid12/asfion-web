@@ -267,6 +267,14 @@ export interface PastoreoCiclo {
 // En el dashboard NO necesitamos extender — usamos el canónico directo.
 export type { CompraCanonical as Compra } from './types.canonical';
 
+// -----------------------------------------------------------------------------
+// Venta (migration 0031)
+// -----------------------------------------------------------------------------
+export type {
+  VentaCanonical as Venta,
+  VentaGrupoCanonical as VentaGrupo,
+} from './types.canonical';
+
 // Circuito (+ Campo, Lote, Pluviometro, Parcela) se re-exportan desde el
 // canonical en el bloque de catálogos arriba del archivo. Dejamos este
 // comentario por si alguien busca "Circuito" con grep.

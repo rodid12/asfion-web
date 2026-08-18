@@ -31,7 +31,14 @@ type View = 'modules' | 'billing' | 'admin';
 
 export function Dashboard() {
   const { user, signOut } = useAuth();
-  const { data, loading, error, refresh, offline, cachedAt } = useDashboardData();
+  // Usuario + cliente forman el namespace del cache offline. Nunca compartimos
+  // IndexedDB entre dos sesiones ni conservamos datos si el usuario cambia de
+  // tenant. El claim puede vivir en app_metadata o user_metadata según el alta.
+  const clienteScope = String(
+    user?.app_metadata?.cliente_id ?? user?.user_metadata?.cliente_id ?? 'sin-cliente',
+  );
+  const cacheScope = `${user?.id ?? 'sin-sesion'}:${clienteScope}`;
+  const { data, loading, error, refresh, offline, cachedAt } = useDashboardData(cacheScope);
   // Inicializamos el state leyendo la URL actual — así si el operario
   // entra directo a /mortandad o refresca la pestaña, arranca en el
   // módulo que estaba. Default: pariciones (también para "/").
@@ -154,13 +161,6 @@ export function Dashboard() {
         <ModuleTabs
           active={modulo}
           onChange={setModulo}
-          counts={{
-            pariciones: d.pariciones.length,
-            lluvias:    d.lluvias.length,
-            mortandad:  d.mortandad.length,
-            pastoreo:   d.pastoreo.length,
-            compras:    d.compras.length,
-          }}
         />
       )}
 
@@ -231,7 +231,6 @@ export function Dashboard() {
             campos={d.campos}
             circuitos={d.circuitos}
             corrales={d.corrales}
-            mortandad={d.mortandad}
           />
         )}
         {view === 'modules' && data && modulo === 'compras' && (
@@ -239,9 +238,7 @@ export function Dashboard() {
           <ComprasPage compras={d.compras} campos={d.campos} />
         )}
         {view === 'modules' && data && modulo === 'ventas' && (
-          // Ventas = salidas de hacienda (a frigorífico u otro productor).
-          // Por ahora con empty state hasta enchufar fuente.
-          <VentasPage ventas={[]} />
+          <VentasPage ventas={d.ventas} campos={d.campos} />
         )}
         {view === 'modules' && data && modulo === 'prenez' && (
           // Tactos vienen de Supabase (tabla `tactos`, migration 0012).

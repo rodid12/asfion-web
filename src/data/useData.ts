@@ -1,5 +1,5 @@
 // Hook único que carga TODOS los módulos del dashboard en paralelo:
-// campos + circuitos + pariciones + lluvias + mortandad + pastoreo + compras + ndvi.
+// catálogos + pariciones + lluvias + mortandad + pastoreo + compras + ventas + NDVI.
 //
 // Es deliberadamente eager — la app real maneja <10k filas totales por
 // cliente, y traer todo de una vez evita "click → spinner" cada vez que
@@ -12,7 +12,7 @@
 // que el UI muestre el badge "Sin conexión — datos del DD/MM HH:MM".
 
 import { useEffect, useState } from 'react';
-import type { CampaniaReproductiva, Campo, Circuito, Compra, Corral, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto } from './types';
+import type { CampaniaReproductiva, Campo, Circuito, Compra, Corral, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto, Venta } from './types';
 import {
   fetchCampos,
   fetchCampaniasReproductivas,
@@ -27,6 +27,7 @@ import {
   fetchResumenServicio,
   fetchTactos,
   fetchCorrales,
+  fetchVentas,
 } from './supabase';
 import { loadCache, saveCache } from './offlineCache';
 
@@ -44,6 +45,7 @@ export interface DashboardData {
   ndvi: NdviPastura[];
   tactos: Tacto[];
   corrales: Corral[];
+  ventas: Venta[];
 }
 
 export interface UseDataResult {
@@ -73,9 +75,10 @@ const EMPTY: DashboardData = {
   ndvi: [],
   tactos: [],
   corrales: [],
+  ventas: [],
 };
 
-export function useDashboardData(): UseDataResult {
+export function useDashboardData(cacheScope: string): UseDataResult {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +105,7 @@ export function useDashboardData(): UseDataResult {
       setError(null);
 
       // 1. Cache primero — pintamos pantalla rápido aunque sea con data vieja.
-      const cached = await loadCache();
+      const cached = await loadCache(cacheScope);
       if (!cancelled && cached) {
         setData(cached.data);
         setOffline(true);          // se va a apagar si el fetch online tiene éxito
@@ -112,7 +115,7 @@ export function useDashboardData(): UseDataResult {
 
       // 2-4. Fetch online en paralelo (o secuencial si no había cache).
       try {
-        const [campos, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales] =
+        const [campos, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales, ventas] =
           await Promise.all([
             fetchCampos(),
             fetchCampaniasReproductivas(),
@@ -127,14 +130,15 @@ export function useDashboardData(): UseDataResult {
             fetchNdvi(),
             fetchTactos(),
             fetchCorrales(),
+            fetchVentas(),
           ]);
         if (cancelled) return;
-        const fresh: DashboardData = { campos, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales };
+        const fresh: DashboardData = { campos, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales, ventas };
         setData(fresh);
         setOffline(false);
         setCachedAt(null);
         // Guardar para la próxima vez — fire & forget.
-        void saveCache(fresh);
+        void saveCache(fresh, cacheScope);
       } catch (err: any) {
         if (cancelled) return;
         // El fetch online falló. Hay 2 sub-casos:
@@ -151,7 +155,7 @@ export function useDashboardData(): UseDataResult {
     })();
 
     return () => { cancelled = true; };
-  }, [nonce]);
+  }, [nonce, cacheScope]);
 
   return {
     data,

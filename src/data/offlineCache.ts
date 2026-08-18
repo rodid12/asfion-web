@@ -6,7 +6,7 @@
 // un badge "Sin conexión — datos del DD/MM HH:MM".
 //
 // Implementación con `idb-keyval`: key/value store sobre IndexedDB,
-// sin schema ni migrations. Está pensado para 1 sólo registro grande
+// sin schema ni migrations. Guarda un registro grande por usuario+cliente
 // (la `DashboardData` completa serializada como JSON).
 //
 // Por qué IndexedDB y no localStorage:
@@ -33,10 +33,15 @@
 import { get, set, del } from 'idb-keyval';
 import type { DashboardData } from './useData';
 
-const CACHE_KEY = 'asfion:dashboard-data';
+const LEGACY_CACHE_KEY = 'asfion:dashboard-data';
+const CACHE_KEY_PREFIX = 'asfion:dashboard-data:';
 // Bump esto cuando cambies el shape de DashboardData (ej. agregás un
 // nuevo módulo). El cache viejo se descarta y se regenera.
-const CACHE_VERSION = 3; // agrega campaniasReproductivas (mig 0030)
+const CACHE_VERSION = 5; // suma módulo Ventas; sigue aislado por usuario
+
+function cacheKey(scope: string): string {
+  return `${CACHE_KEY_PREFIX}${scope}`;
+}
 
 interface CacheEntry {
   savedAt: string;
@@ -45,14 +50,14 @@ interface CacheEntry {
 }
 
 /** Guarda la data en IndexedDB. Falla silenciosa (no rompe la app). */
-export async function saveCache(data: DashboardData): Promise<void> {
+export async function saveCache(data: DashboardData, scope: string): Promise<void> {
   try {
     const entry: CacheEntry = {
       savedAt: new Date().toISOString(),
       data,
       version: CACHE_VERSION,
     };
-    await set(CACHE_KEY, entry);
+    await set(cacheKey(scope), entry);
   } catch (err) {
     // IndexedDB puede fallar en modo incógnito de Safari, o cuando el
     // browser está sin espacio. No es crítico — el dashboard sigue
@@ -63,13 +68,18 @@ export async function saveCache(data: DashboardData): Promise<void> {
 
 /** Lee la data cacheada. Devuelve null si no existe o si la versión
  *  guardada no matchea con la actual. */
-export async function loadCache(): Promise<{ data: DashboardData; savedAt: string } | null> {
+export async function loadCache(scope: string): Promise<{ data: DashboardData; savedAt: string } | null> {
   try {
-    const entry = await get<CacheEntry>(CACHE_KEY);
+    // El cache v1-v3 no estaba aislado por usuario y podía mostrar brevemente
+    // los datos del usuario anterior en una computadora compartida. Nunca lo
+    // leemos; lo borramos al migrar al esquema scoped.
+    void del(LEGACY_CACHE_KEY);
+    const key = cacheKey(scope);
+    const entry = await get<CacheEntry>(key);
     if (!entry) return null;
     if (entry.version !== CACHE_VERSION) {
       // Cache de versión vieja — ignoramos y borramos para liberar espacio.
-      void del(CACHE_KEY);
+      void del(key);
       return null;
     }
     return { data: entry.data, savedAt: entry.savedAt };
@@ -80,9 +90,9 @@ export async function loadCache(): Promise<{ data: DashboardData; savedAt: strin
 }
 
 /** Borra el cache (útil para debug o cuando el usuario cierra sesión). */
-export async function clearCache(): Promise<void> {
+export async function clearCache(scope: string): Promise<void> {
   try {
-    await del(CACHE_KEY);
+    await del(cacheKey(scope));
   } catch (err) {
     console.warn('[offlineCache] no se pudo limpiar:', err);
   }

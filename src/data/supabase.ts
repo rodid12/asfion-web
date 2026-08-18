@@ -23,6 +23,7 @@ import type {
   ResumenServicio,
   Tacto,
   Corral,
+  Venta,
 } from './types';
 import {
   mapRow,
@@ -32,6 +33,7 @@ import {
   MORTANDAD_SCHEMA,
   PASTOREO_SCHEMA,
   COMPRA_SCHEMA,
+  VENTA_SCHEMA,
   CIRCUITO_SCHEMA,
   CAMPANIA_REPRODUCTIVA_SCHEMA,
 } from './mapRow.canonical';
@@ -41,6 +43,7 @@ import type {
   MortandadCanonical,
   PastoreoCanonical,
   CompraCanonical,
+  VentaCanonical,
   CampaniaReproductivaCanonical,
 } from './types.canonical';
 
@@ -171,7 +174,7 @@ export async function fetchCampaniasReproductivas(): Promise<CampaniaReproductiv
 export async function fetchPariciones(): Promise<Paricion[]> {
   try {
     const rows = await fetchAllPaginated<any>('pariciones',
-      q => q.order('fecha', { ascending: false }) as QueryBuilder);
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
     return rows.map(rowToParicion);
   } catch (err: any) {
     throw new Error(`fetchPariciones: ${err?.message ?? err}`);
@@ -195,7 +198,7 @@ function rowToLluvia(r: any): Lluvia {
 export async function fetchLluvias(): Promise<Lluvia[]> {
   try {
     const rows = await fetchAllPaginated<any>('lluvias',
-      q => q.order('fecha', { ascending: false }) as QueryBuilder);
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
     return rows.map(rowToLluvia);
   } catch (err: any) {
     throw new Error(`fetchLluvias: ${err?.message ?? err}`);
@@ -220,7 +223,7 @@ function rowToMortandad(r: any): Mortandad {
 export async function fetchMortandad(): Promise<Mortandad[]> {
   try {
     const rows = await fetchAllPaginated<any>('mortandad',
-      q => q.order('fecha', { ascending: false }) as QueryBuilder);
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
     return rows.map(rowToMortandad);
   } catch (err: any) {
     throw new Error(`fetchMortandad: ${err?.message ?? err}`);
@@ -238,7 +241,7 @@ function rowToPastoreo(r: any): Pastoreo {
 export async function fetchPastoreo(): Promise<Pastoreo[]> {
   try {
     const rows = await fetchAllPaginated<any>('pastoreo',
-      q => q.order('fecha_entrada', { ascending: false }) as QueryBuilder);
+      q => q.order('fecha_entrada', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
     return rows.map(rowToPastoreo);
   } catch (err: any) {
     throw new Error(`fetchPastoreo: ${err?.message ?? err}`);
@@ -329,7 +332,7 @@ function rowToResumenServicio(r: any): ResumenServicio {
 export async function fetchResumenServicio(): Promise<ResumenServicio[]> {
   try {
     const rows = await fetchAllPaginated<any>('pariciones_resumen_servicio',
-      q => q.order('servicio_anio', { ascending: false }) as QueryBuilder);
+      q => q.order('servicio_anio', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
     return rows.map(rowToResumenServicio);
   } catch (err: any) {
     if (/relation "pariciones_resumen_servicio" does not exist/i.test(err?.message ?? '')) {
@@ -343,7 +346,7 @@ export async function fetchResumenServicio(): Promise<ResumenServicio[]> {
 export async function fetchPastoreoCiclos(): Promise<PastoreoCiclo[]> {
   try {
     const rows = await fetchAllPaginated<any>('pastoreo_ciclos',
-      q => q.order('fecha_ingreso', { ascending: false }) as QueryBuilder);
+      q => q.order('fecha_ingreso', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
     return rows.map(rowToPastoreoCiclo);
   } catch (err: any) {
     // Fallback graceful si la tabla todavía no existe en la DB del cliente
@@ -368,10 +371,36 @@ function rowToCompra(r: any): Compra {
 export async function fetchCompras(): Promise<Compra[]> {
   try {
     const rows = await fetchAllPaginated<any>('compras',
-      q => q.order('fecha', { ascending: false }) as QueryBuilder);
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
     return rows.map(rowToCompra);
   } catch (err: any) {
     throw new Error(`fetchCompras: ${err?.message ?? err}`);
+  }
+}
+
+// =============================================================================
+// Ventas (migration 0031)
+// =============================================================================
+
+function rowToVenta(r: any): Venta {
+  return mapRow<VentaCanonical>(r, VENTA_SCHEMA);
+}
+
+export async function fetchVentas(): Promise<Venta[]> {
+  try {
+    const rows = await fetchAllPaginated<any>('ventas',
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
+    return rows.map(rowToVenta);
+  } catch (err: any) {
+    const msg = String(err?.message ?? err).toLowerCase();
+    if (
+      msg.includes('does not exist') || msg.includes('relation') || msg.includes('schema cache') ||
+      err?.code === '42P01' || err?.code === 'PGRST205'
+    ) {
+      console.warn('Tabla ventas no existe todavía — aplicá migration 0031');
+      return [];
+    }
+    throw new Error(`fetchVentas: ${err?.message ?? err}`);
   }
 }
 
@@ -441,7 +470,7 @@ function rowToTacto(r: any): Tacto {
 export async function fetchTactos(): Promise<Tacto[]> {
   try {
     const rows = await fetchAllPaginated<any>('tactos',
-      q => q.order('rodeo', { ascending: true }) as QueryBuilder);
+      q => q.order('rodeo', { ascending: true }).order('id', { ascending: true }) as QueryBuilder);
     return rows.map(rowToTacto);
   } catch (err: any) {
     // La tabla se crea en migration 0012. Si todavía no aplicó, devolvemos
@@ -459,7 +488,7 @@ export async function fetchTactos(): Promise<Tacto[]> {
 export async function fetchNdvi(): Promise<NdviPastura[]> {
   try {
     const rows = await fetchAllPaginated<any>('ndvi_pasturas',
-      q => q.order('fecha', { ascending: false }) as QueryBuilder);
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
     return rows.map(rowToNdvi);
   } catch (err: any) {
     // La tabla recién se crea en migration 0009. Si todavía no aplicó,
@@ -505,7 +534,8 @@ export async function fetchCorrales(): Promise<Corral[]> {
     const rows = await fetchAllPaginated<any>('cierre_corrales',
       q => q.order('etapa', { ascending: true })
             .order('categoria', { ascending: true })
-            .order('tropa', { ascending: true }) as QueryBuilder);
+            .order('tropa', { ascending: true })
+            .order('id', { ascending: true }) as QueryBuilder);
     return rows.map(rowToCorral);
   } catch (err: any) {
     // Tabla se crea en migration 0029 — si no aplicó, devolvemos array

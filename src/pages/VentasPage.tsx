@@ -1,21 +1,12 @@
-// Página del módulo Ventas.
+// Ventas — operaciones con 1 a 4 grupos/categorías.
 //
-// Concepto: salidas de hacienda — animales que se venden a frigorífico,
-// remates o productores. Es la otra cara de Compras (que registra las
-// entradas al sistema). Cada venta tiene cliente / frigorífico, cantidad
-// de cabezas, kg vendidos, precio por kilo y monto total.
+// Regla confirmada por el cliente (17/08/2026):
+//   kg netos    = kg brutos × 0,92
+//   kg promedio = kg netos / primer número de CANT CAB Y CAT
 //
-// Estado actual: el form de carga todavía no existe en la app móvil.
-// Cuando se enchufe la fuente (form propio o sync de planilla), llega
-// data poblada via prop `ventas` y todo se calcula automático. Por ahora
-// la página renderiza empty state.
-//
-// KPIs target (cuando haya data):
-//   - Cabezas vendidas
-//   - Monto recaudado total
-//   - Peso total vendido
-//   - Precio promedio $/kg (ponderado por kg)
-//   - Venta más reciente
+// La denominación se conserva literal. Para agrupar en el visualizador solo
+// quitamos la cantidad inicial en una copia de lectura; nunca modificamos lo
+// que escribió el administrador ni sus separadores.
 
 import React, { useMemo, useState } from 'react';
 import {
@@ -29,127 +20,206 @@ import {
   YAxis,
 } from 'recharts';
 import {
-  CalendarDaysIcon,
   CoinsIcon,
-  PackageIcon,
-  TrendingUpIcon,
+  ReceiptTextIcon,
+  ScaleIcon,
   UsersIcon,
   WeightIcon,
 } from 'lucide-react';
+
 import { Card } from '@/components/Card';
 import { Kpi } from '@/components/Kpi';
 import { PageHeader } from '@/components/PageHeader';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import {
-  enPeriodo,
+  SimpleFilterBar,
+  SIMPLE_FILTROS_DEFAULT,
   añosEnData,
+  enPeriodo,
   type SimpleFiltros,
 } from '@/components/SimpleFilterBar';
-import { cn, formatNumber } from '@/lib/utils';
+import type { Campo, Venta, VentaGrupo } from '@/data/types';
+import { formatNumber, formatPercent } from '@/lib/utils';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
-
-/**
- * Shape de un row de venta. Cuando se enchufe la fuente real, exportar
- * desde data/types.ts y reemplazar en la prop.
- */
-export interface Venta {
-  id: string;
-  fecha: string;
-  cliente: string;           // ej: "Frigorífico Rioplatense", "Remate Las Lajas"
-  campo?: string;
-  categoria: string;         // ej: "Novillo", "Vaquillona", "Vaca descarte"
-  cabezas: number;
-  pesoTotal: number;         // kg totales vendidos
-  precioPorKg: number;       // $/kg
-  monto: number;             // $ totales
-  observaciones?: string;
-}
+import { fechaCorta } from '@/lib/fechas';
 
 interface Props {
   ventas?: Venta[];
+  campos: Campo[];
 }
 
-export function VentasPage({ ventas = [] }: Props) {
-  const [cliente, setCliente] = useState<string>('todos');
-  // Filtros de período — mismo patrón que el resto del dashboard.
-  const [filtrosPeriodo, setFiltrosPeriodo] = useState<SimpleFiltros>({
-    rango: '12m',
-    campoId: 'todos',  // no se usa acá pero la interfaz lo requiere
-  });
+interface GrupoConVenta extends VentaGrupo {
+  ventaId: string;
+  fecha: string;
+  correlativo: string;
+}
 
-  const clientesUnicos = useMemo(() => {
-    const s = new Set(ventas.map(v => v.cliente));
-    return ['todos', ...Array.from(s).sort()];
-  }, [ventas]);
+type SexoDetectado = 'macho' | 'hembra' | undefined;
 
-  const añosDisponibles = useMemo(
-    () => añosEnData(ventas.map(v => v.fecha)),
+const SELECT_CLS =
+  'bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy ' +
+  'hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange transition cursor-pointer';
+
+function normalizar(texto: string): string {
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+/** Copia para métricas: saca solo el primer número; el original queda intacto. */
+function etiquetaCategoria(texto: string): string {
+  return texto.replace(/^\s*\d+(?:[.,]\d+)?\s*/, '').trim() || texto.trim();
+}
+
+/** Clasificación conservadora: si hay señales de ambos sexos, no adivina. */
+function detectarSexo(texto: string): SexoDetectado {
+  const t = normalizar(texto);
+  const macho = /(^|[^a-z])(macho|machos|novillo|novillos|novillito|novillitos|toro|toros|tm\d*)($|[^a-z0-9])/.test(t);
+  const hembra = /(^|[^a-z])(hembra|hembras|vaquillona|vaquillonas|vaca|vacas|ternera|terneras|th\d*)($|[^a-z0-9])/.test(t);
+  if (macho === hembra) return undefined;
+  return macho ? 'macho' : 'hembra';
+}
+
+export function VentasPage({ ventas = [], campos }: Props) {
+  const [filtros, setFiltros] = useState<SimpleFiltros>({ ...SIMPLE_FILTROS_DEFAULT, rango: '12m' });
+  const [consignado, setConsignado] = useState('todos');
+  const [frigorifico, setFrigorifico] = useState('todos');
+  const [busqueda, setBusqueda] = useState('');
+
+  const añosDisponibles = useMemo(() => añosEnData(ventas.map(v => v.fecha)), [ventas]);
+  const consignados = useMemo(
+    () => [...new Set(ventas.map(v => v.consignado).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [ventas],
+  );
+  const frigorificos = useMemo(
+    () => [...new Set(ventas.map(v => v.frigorifico).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [ventas],
   );
 
   const filtradas = useMemo(() => {
+    const q = normalizar(busqueda.trim());
     return ventas.filter(v => {
-      if (!enPeriodo(v.fecha, filtrosPeriodo)) return false;
-      if (cliente !== 'todos' && v.cliente !== cliente) return false;
+      if (!enPeriodo(v.fecha, filtros)) return false;
+      if (filtros.campoId !== 'todos' && v.campoId !== filtros.campoId) return false;
+      if (consignado !== 'todos' && v.consignado !== consignado) return false;
+      if (frigorifico !== 'todos' && v.frigorifico !== frigorifico) return false;
+      if (q) {
+        const hay = normalizar([
+          v.correlativo, v.numeroDte, v.tropa, v.titular, v.consignado,
+          v.frigorifico, v.observaciones, ...v.grupos.map(g => g.cantCabYCat),
+        ].join(' '));
+        if (!hay.includes(q)) return false;
+      }
       return true;
     });
-  }, [ventas, cliente, filtrosPeriodo]);
+  }, [ventas, filtros, consignado, frigorifico, busqueda]);
+
+  const grupos = useMemo<GrupoConVenta[]>(
+    () => filtradas.flatMap(v => v.grupos.map(g => ({
+      ...g, ventaId: v.id, fecha: v.fecha, correlativo: v.correlativo,
+    }))),
+    [filtradas],
+  );
 
   const kpis = useMemo(() => {
-    if (filtradas.length === 0) {
-      return {
-        cabezas: 0, pesoTotal: 0, monto: 0,
-        precioPromedio: 0, fechaUltima: '—',
-      };
-    }
-    let cabezas = 0, pesoTotal = 0, monto = 0;
-    let maxFecha = '';
-    filtradas.forEach(v => {
-      cabezas += v.cabezas;
-      pesoTotal += v.pesoTotal;
-      monto += v.monto;
-      if (v.fecha > maxFecha) maxFecha = v.fecha;
-    });
-    // Precio promedio = ponderado por kg vendidos (matchea con cómo
-    // se calcula el costo de hacienda en libros agropecuarios).
-    const precioPromedio = pesoTotal > 0 ? monto / pesoTotal : 0;
-    return {
-      cabezas,
-      pesoTotal,
-      monto,
-      precioPromedio,
-      fechaUltima: maxFecha || '—',
-    };
-  }, [filtradas]);
+    let cabezas = 0;
+    let kgNetos = 0;
+    let precioPorKg = 0;
+    let machos = 0;
+    let hembras = 0;
+    let sinDiscriminar = 0;
+    let importeTotal = 0;
+    let ventasConImporte = 0;
 
-  // Ventas por mes (cuando haya data).
-  const porMes = useMemo(() => {
-    const map = new Map<string, { cabezas: number; monto: number }>();
+    grupos.forEach(g => {
+      cabezas += g.cabezas;
+      kgNetos += g.kgNetos;
+      precioPorKg += g.precio * g.kgNetos;
+      const sexo = detectarSexo(g.cantCabYCat);
+      if (sexo === 'macho') machos += g.cabezas;
+      else if (sexo === 'hembra') hembras += g.cabezas;
+      else sinDiscriminar += g.cabezas;
+    });
     filtradas.forEach(v => {
-      const key = v.fecha.slice(0, 7);
-      const cur = map.get(key) ?? { cabezas: 0, monto: 0 };
-      cur.cabezas += v.cabezas;
-      cur.monto   += v.monto;
+      if (v.importeTotal != null && Number.isFinite(v.importeTotal)) {
+        importeTotal += v.importeTotal;
+        ventasConImporte++;
+      }
+    });
+    const clasificados = machos + hembras;
+    return {
+      ventas: filtradas.length,
+      cabezas,
+      kgNetos,
+      kgPromedio: cabezas > 0 ? kgNetos / cabezas : 0,
+      precioPromedio: kgNetos > 0 ? precioPorKg / kgNetos : 0,
+      machos,
+      hembras,
+      sinDiscriminar,
+      pctMachos: clasificados > 0 ? machos / clasificados : 0,
+      pctHembras: clasificados > 0 ? hembras / clasificados : 0,
+      importeTotal,
+      ventasConImporte,
+      fechaUltima: filtradas.reduce((max, v) => v.fecha > max ? v.fecha : max, ''),
+    };
+  }, [filtradas, grupos]);
+
+  const porCategoria = useMemo(() => {
+    const map = new Map<string, {
+      categoria: string; grupos: number; cabezas: number; kgBrutos: number;
+      kgNetos: number; precioKg: number;
+    }>();
+    grupos.forEach(g => {
+      const categoria = etiquetaCategoria(g.cantCabYCat) || 'Sin categoría';
+      const cur = map.get(categoria) ?? {
+        categoria, grupos: 0, cabezas: 0, kgBrutos: 0, kgNetos: 0, precioKg: 0,
+      };
+      cur.grupos++;
+      cur.cabezas += g.cabezas;
+      cur.kgBrutos += g.kgBrutos;
+      cur.kgNetos += g.kgNetos;
+      cur.precioKg += g.precio * g.kgNetos;
+      map.set(categoria, cur);
+    });
+    return [...map.values()]
+      .map(r => ({
+        ...r,
+        kgPromedio: r.cabezas > 0 ? r.kgNetos / r.cabezas : 0,
+        precioPromedio: r.kgNetos > 0 ? r.precioKg / r.kgNetos : 0,
+      }))
+      .sort((a, b) => b.cabezas - a.cabezas || a.categoria.localeCompare(b.categoria));
+  }, [grupos]);
+
+  const porMes = useMemo(() => {
+    const map = new Map<string, { cabezas: number; kgNetos: number }>();
+    grupos.forEach(g => {
+      const key = g.fecha.slice(0, 7);
+      const cur = map.get(key) ?? { cabezas: 0, kgNetos: 0 };
+      cur.cabezas += g.cabezas;
+      cur.kgNetos += g.kgNetos;
       map.set(key, cur);
     });
     const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    return [...map.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-12)
-      .map(([key, v]) => {
-        const [y, m] = key.split('-');
-        const idx = Math.max(0, Math.min(11, parseInt(m ?? '1', 10) - 1));
-        return { mes: `${MESES[idx]} ${(y ?? '').slice(2)}`, cabezas: v.cabezas, monto: v.monto };
-      });
-  }, [filtradas]);
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([key, v]) => {
+      const [year, month] = key.split('-');
+      const index = Math.max(0, Math.min(11, Number(month) - 1));
+      return { mes: `${MESES[index]} ${(year ?? '').slice(2)}`, ...v };
+    });
+  }, [grupos]);
+
+  const limpiar = () => {
+    setFiltros({ ...SIMPLE_FILTROS_DEFAULT, rango: '12m' });
+    setConsignado('todos');
+    setFrigorifico('todos');
+    setBusqueda('');
+  };
+  const hayFiltrosExtra = consignado !== 'todos' || frigorifico !== 'todos' || busqueda.trim() !== '';
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Ventas"
-        subtitle="Salidas de hacienda — cabezas vendidas a frigorífico, remates u otros productores."
-        count={{ value: filtradas.length, label: 'ventas' }}
-        lastDate={kpis.fechaUltima !== '—' ? kpis.fechaUltima : undefined}
+        subtitle="Operaciones de venta con hasta cuatro categorías y desbaste fijo del 8%."
+        count={{ value: kpis.ventas, label: kpis.ventas === 1 ? 'venta' : 'ventas' }}
+        lastDate={kpis.fechaUltima || undefined}
         actions={
           <ExportCsvButton
             onClick={() => exportVentas(filtradas)}
@@ -159,151 +229,138 @@ export function VentasPage({ ventas = [] }: Props) {
         }
       />
 
-      {/* Filtros — rango + año + cliente. Mismo patrón que el resto del
-          dashboard. Cuando hay año seteado, los pills de rango quedan opacos. */}
-      <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 flex flex-wrap items-center gap-3">
-        <div className={cn('flex items-center gap-1 flex-wrap', filtrosPeriodo.año != null && 'opacity-40')}>
-          <span className="text-xs uppercase font-semibold text-asfion-muted mr-2">Rango</span>
-          {([['7d', '7d'], ['30d', '30d'], ['90d', '90d'], ['12m', '12m'], ['todo', 'Todo']] as const).map(([val, label]) => (
-            <button
-              key={val}
-              onClick={() => setFiltrosPeriodo({ ...filtrosPeriodo, rango: val, año: undefined })}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-sm font-semibold transition',
-                filtrosPeriodo.rango === val && filtrosPeriodo.año == null
-                  ? 'bg-asfion-navy text-white'
-                  : 'bg-asfion-bg text-asfion-navy hover:bg-asfion-orangeSoft/25',
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="h-8 w-px bg-asfion-borderSoft" />
-        <div className="flex items-center gap-2">
-          <span className="text-xs uppercase font-semibold text-asfion-muted">Año</span>
-          <select
-            value={filtrosPeriodo.año ?? ''}
-            onChange={e => {
-              const v = e.target.value;
-              setFiltrosPeriodo({ ...filtrosPeriodo, año: v === '' ? undefined : parseInt(v, 10) });
-            }}
-            className="bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange transition cursor-pointer"
-          >
-            <option value="">— Por rango —</option>
-            {(añosDisponibles.length > 0 ? añosDisponibles : [new Date().getFullYear()]).map(a => (
-              <option key={a} value={a}>{a}</option>
-            ))}
+      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
+
+      <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 min-w-[180px] flex-1 sm:flex-none">
+          <span className="text-[10px] uppercase font-bold tracking-wide text-asfion-muted">Consignado</span>
+          <select value={consignado} onChange={e => setConsignado(e.target.value)} className={SELECT_CLS}>
+            <option value="todos">Todos</option>
+            {consignados.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
-        </div>
-        <div className="h-8 w-px bg-asfion-borderSoft" />
-        <div className="flex items-center gap-2">
-          <span className="text-xs uppercase font-semibold text-asfion-muted">Cliente</span>
-          <select
-            value={cliente}
-            onChange={e => setCliente(e.target.value)}
-            className="bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange transition cursor-pointer"
-          >
-            {clientesUnicos.map(c => (
-              <option key={c} value={c}>{c === 'todos' ? 'Todos los clientes' : c}</option>
-            ))}
+        </label>
+        <label className="flex flex-col gap-1 min-w-[180px] flex-1 sm:flex-none">
+          <span className="text-[10px] uppercase font-bold tracking-wide text-asfion-muted">Frigorífico</span>
+          <select value={frigorifico} onChange={e => setFrigorifico(e.target.value)} className={SELECT_CLS}>
+            <option value="todos">Todos</option>
+            {frigorificos.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
-        </div>
+        </label>
+        <label className="flex flex-col gap-1 min-w-[220px] flex-[2]">
+          <span className="text-[10px] uppercase font-bold tracking-wide text-asfion-muted">Buscar</span>
+          <input
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            placeholder="Correlativo, DTE, tropa, categoría…"
+            className={SELECT_CLS + ' w-full'}
+          />
+        </label>
+        {hayFiltrosExtra && (
+          <button onClick={limpiar} className="px-3 py-2 text-sm font-semibold text-asfion-orange hover:underline">
+            Limpiar filtros
+          </button>
+        )}
       </div>
 
       {ventas.length === 0 ? (
-        <Card title="Sin ventas cargadas" subtitle="El módulo todavía no está conectado a la fuente">
+        <Card title="Sin ventas cargadas" subtitle="El módulo está listo para recibir cargas desde la app o desde Excel">
           <div className="py-10 flex flex-col items-center justify-center gap-3 text-center px-6">
             <div className="w-16 h-16 rounded-full bg-asfion-orangeSoft flex items-center justify-center">
-              <CoinsIcon size={28} className="text-asfion-navyDeep" />
+              <ReceiptTextIcon size={28} className="text-asfion-navyDeep" />
             </div>
-            <p className="text-sm font-semibold text-asfion-navy">
-              Todavía no hay ventas cargadas.
+            <p className="text-sm font-semibold text-asfion-navy">Todavía no hay operaciones de venta.</p>
+            <p className="text-xs text-asfion-muted max-w-xl">
+              Cada venta admite de una a cuatro categorías. El administrador carga kg brutos y la plataforma aplica
+              automáticamente el 8% para obtener kg netos y el promedio por cabeza. Los identificadores, la tropa y
+              el importe permanecen manuales.
             </p>
-            <p className="text-xs text-asfion-muted max-w-md">
-              Cuando se enchufe la fuente (form de venta en app móvil o sync
-              periódico de planilla del administrador), acá vas a ver: cabezas
-              vendidas · monto recaudado · peso total · precio promedio
-              ponderado por kg · ranking por cliente · evolución mensual ·
-              tabla detallada de cada venta con frigorífico, categoría,
-              precio y observaciones.
-            </p>
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[10px] uppercase text-asfion-muted">
-              <div className="bg-asfion-bg px-3 py-2 rounded-lg border border-asfion-borderSoft">
-                <p className="font-bold text-asfion-navyDeep">Cabezas</p>
-                <p>SUM(cabezas)</p>
-              </div>
-              <div className="bg-asfion-bg px-3 py-2 rounded-lg border border-asfion-borderSoft">
-                <p className="font-bold text-asfion-navyDeep">Monto</p>
-                <p>SUM(monto)</p>
-              </div>
-              <div className="bg-asfion-bg px-3 py-2 rounded-lg border border-asfion-borderSoft">
-                <p className="font-bold text-asfion-navyDeep">$/kg prom</p>
-                <p>monto / kg total</p>
-              </div>
-              <div className="bg-asfion-bg px-3 py-2 rounded-lg border border-asfion-borderSoft">
-                <p className="font-bold text-asfion-navyDeep">Top cliente</p>
-                <p>Ranking $</p>
-              </div>
-            </div>
+          </div>
+        </Card>
+      ) : filtradas.length === 0 ? (
+        <Card title="Sin resultados" subtitle="No hay ventas que coincidan con los filtros aplicados">
+          <div className="py-8 text-center">
+            <button onClick={limpiar} className="text-sm font-bold text-asfion-orange hover:underline">Limpiar filtros</button>
           </div>
         </Card>
       ) : (
         <>
-          {/* KPIs principales */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+            <Kpi label="Ventas realizadas" value={formatNumber(kpis.ventas)} accent="orange" icon={<ReceiptTextIcon size={18} />} />
             <Kpi
               label="Cabezas vendidas"
               value={formatNumber(kpis.cabezas)}
+              sublabel={kpis.sinDiscriminar > 0 ? `${formatNumber(kpis.sinDiscriminar)} sin sexo identificable` : ''}
               accent="orange"
               icon={<UsersIcon size={18} />}
             />
+            <Kpi label="Kg netos vendidos" value={`${formatNumber(Math.round(kpis.kgNetos))} kg`} accent="navy" icon={<WeightIcon size={18} />} />
+            <Kpi label="Kg promedio ponderado" value={kpis.kgPromedio.toFixed(2)} sublabel="Kg netos / cabezas" accent="navy" icon={<ScaleIcon size={18} />} />
             <Kpi
-              label="Monto"
-              value={`$${formatNumber(Math.round(kpis.monto))}`}
-              sublabel="Recaudado total"
-              accent="orange"
+              label="Machos"
+              value={`${formatNumber(kpis.machos)} (${formatPercent(kpis.pctMachos, 0)})`}
+              sublabel="Sobre categorías con sexo identificable"
+              accent="navy"
+              icon={<UsersIcon size={18} />}
+            />
+            <Kpi
+              label="Hembras"
+              value={`${formatNumber(kpis.hembras)} (${formatPercent(kpis.pctHembras, 0)})`}
+              sublabel="Sobre categorías con sexo identificable"
+              accent="navy"
+              icon={<UsersIcon size={18} />}
+            />
+            <Kpi
+              label="Precio promedio"
+              value={kpis.precioPromedio > 0 ? `$${formatNumber(Number(kpis.precioPromedio.toFixed(2)))}` : '—'}
+              sublabel="Ponderado por kg netos"
+              accent="terracota"
               icon={<CoinsIcon size={18} />}
             />
             <Kpi
-              label="Peso total"
-              value={`${formatNumber(Math.round(kpis.pesoTotal))} kg`}
-              accent="navy"
-              icon={<WeightIcon size={18} />}
-            />
-            <Kpi
-              label="$/kg promedio"
-              value={kpis.precioPromedio > 0 ? kpis.precioPromedio.toFixed(2) : '—'}
-              sublabel="Ponderado por kg"
-              accent="navy"
-              icon={<TrendingUpIcon size={18} />}
-            />
-            <Kpi
-              label="Última venta"
-              value={kpis.fechaUltima}
+              label="Importe informado"
+              value={kpis.ventasConImporte > 0 ? `$${formatNumber(Math.round(kpis.importeTotal))}` : '—'}
+              sublabel={kpis.ventasConImporte > 0 ? `${kpis.ventasConImporte} de ${kpis.ventas} ventas con importe` : 'Carga manual; no se calcula'}
               accent="terracota"
-              icon={<CalendarDaysIcon size={18} />}
+              icon={<CoinsIcon size={18} />}
             />
           </div>
 
-          {/* Charts */}
-          <Card title="Ventas por mes" subtitle="Evolución temporal — cabezas y monto recaudado">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={porMes} margin={{ top: 24, right: 8, left: -16, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" vertical={false} />
-                <XAxis dataKey="mes" stroke="#6B7280" fontSize={12} />
-                <YAxis stroke="#6B7280" fontSize={12} />
-                <Tooltip />
-                <Bar dataKey="cabezas" fill="#FF8409" radius={[4, 4, 0, 0]} name="Cabezas">
-                  <LabelList dataKey="cabezas" position="top" fontSize={11} fill="#163349" />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card title="Cabezas por categoría" subtitle="Agrupadas por la denominación escrita después de la cantidad">
+              <ResponsiveContainer width="100%" height={Math.max(280, Math.min(520, porCategoria.slice(0, 12).length * 38))}>
+                <BarChart data={porCategoria.slice(0, 12)} layout="vertical" margin={{ top: 8, right: 48, left: 28, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" horizontal={false} />
+                  <XAxis type="number" stroke="#6B7280" fontSize={11} />
+                  <YAxis type="category" dataKey="categoria" width={130} stroke="#6B7280" fontSize={10} tick={{ width: 125 }} />
+                  <Tooltip formatter={(value: number) => [formatNumber(value), 'Cabezas']} />
+                  <Bar dataKey="cabezas" name="Cabezas" fill="#FF8409" radius={[0, 4, 4, 0]}>
+                    <LabelList dataKey="cabezas" position="right" fontSize={11} fill="#163349" formatter={(v: number) => formatNumber(v)} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+
+            <Card title="Ventas por mes" subtitle="Cabezas vendidas; el detalle de kg se muestra al pasar el cursor">
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={porMes} margin={{ top: 24, right: 8, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E2DD" vertical={false} />
+                  <XAxis dataKey="mes" stroke="#6B7280" fontSize={12} />
+                  <YAxis stroke="#6B7280" fontSize={11} />
+                  <Tooltip formatter={(value: number, name: string) => [formatNumber(Math.round(value)), name === 'kgNetos' ? 'Kg netos' : 'Cabezas']} />
+                  <Bar dataKey="cabezas" name="Cabezas" fill="#163349" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="cabezas" position="top" fontSize={11} fill="#163349" formatter={(v: number) => formatNumber(v)} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+          </div>
+
+          <Card title="Totales por categoría" subtitle="No se calculan totales por venta; se consolidan las categorías como pidió el cliente">
+            <CategoriaTable rows={porCategoria} />
           </Card>
 
-          {/* Tabla detallada */}
-          <Card title="Detalle de ventas" subtitle="Cada venta individual — fecha, cliente, cabezas, peso, precio">
-            <VentasTabla rows={filtradas} />
+          <Card title="Detalle de ventas" subtitle="Identificación comercial y denominaciones originales, sin alterar separadores">
+            <VentasTabla rows={filtradas} campos={campos} />
           </Card>
         </>
       )}
@@ -311,38 +368,78 @@ export function VentasPage({ ventas = [] }: Props) {
   );
 }
 
-// === Tabla detallada ===
-
-function VentasTabla({ rows }: { rows: Venta[] }) {
-  if (rows.length === 0) {
-    return <p className="text-sm text-asfion-muted py-6 text-center italic">Sin ventas con los filtros aplicados.</p>;
-  }
-  const ordenadas = [...rows].sort((a, b) => b.fecha.localeCompare(a.fecha));
+function CategoriaTable({ rows }: { rows: Array<{
+  categoria: string; grupos: number; cabezas: number; kgBrutos: number; kgNetos: number;
+  kgPromedio: number; precioPromedio: number;
+}> }) {
   return (
-    <div className="overflow-x-auto -mx-2 sm:mx-0">
-      <table className="w-full text-sm min-w-[720px]">
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm min-w-[760px]">
         <thead>
           <tr className="text-left text-xs uppercase text-asfion-muted border-b border-asfion-borderSoft">
-            <th className="py-2 px-2 font-semibold whitespace-nowrap">Fecha</th>
-            <th className="py-2 px-2 font-semibold whitespace-nowrap">Cliente</th>
-            <th className="py-2 px-2 font-semibold whitespace-nowrap">Categoría</th>
-            <th className="py-2 px-2 font-semibold text-right tabular-nums whitespace-nowrap">Cabezas</th>
-            <th className="py-2 px-2 font-semibold text-right tabular-nums whitespace-nowrap">Peso (kg)</th>
-            <th className="py-2 px-2 font-semibold text-right tabular-nums whitespace-nowrap">$/kg</th>
-            <th className="py-2 px-2 font-semibold text-right tabular-nums whitespace-nowrap">Monto</th>
+            <th className="py-2 px-2 font-semibold">Categoría</th>
+            <th className="py-2 px-2 font-semibold text-right">Grupos</th>
+            <th className="py-2 px-2 font-semibold text-right">Cabezas</th>
+            <th className="py-2 px-2 font-semibold text-right">Kg brutos</th>
+            <th className="py-2 px-2 font-semibold text-right">Kg netos</th>
+            <th className="py-2 px-2 font-semibold text-right">Kg promedio</th>
+            <th className="py-2 px-2 font-semibold text-right">Precio prom.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.categoria} className="border-b border-asfion-borderSoft/50 hover:bg-asfion-bg/60">
+              <td className="py-2 px-2 font-semibold text-asfion-navyDeep">{r.categoria}</td>
+              <td className="py-2 px-2 text-right tabular-nums">{formatNumber(r.grupos)}</td>
+              <td className="py-2 px-2 text-right tabular-nums font-bold">{formatNumber(r.cabezas)}</td>
+              <td className="py-2 px-2 text-right tabular-nums">{formatNumber(Number(r.kgBrutos.toFixed(2)))}</td>
+              <td className="py-2 px-2 text-right tabular-nums">{formatNumber(Number(r.kgNetos.toFixed(2)))}</td>
+              <td className="py-2 px-2 text-right tabular-nums">{r.kgPromedio.toFixed(2)}</td>
+              <td className="py-2 px-2 text-right tabular-nums">${formatNumber(Number(r.precioPromedio.toFixed(2)))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function VentasTabla({ rows, campos }: { rows: Venta[]; campos: Campo[] }) {
+  const campoMap = new Map(campos.map(c => [c.id, c.nombre]));
+  const ordenadas = [...rows].sort((a, b) => b.fecha.localeCompare(a.fecha) || b.createdAt.localeCompare(a.createdAt));
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm min-w-[980px]">
+        <thead>
+          <tr className="text-left text-xs uppercase text-asfion-muted border-b border-asfion-borderSoft">
+            <th className="py-2 px-2 font-semibold">Fecha</th>
+            <th className="py-2 px-2 font-semibold">Correlativo</th>
+            <th className="py-2 px-2 font-semibold">Campo</th>
+            <th className="py-2 px-2 font-semibold">CANT CAB Y CAT</th>
+            <th className="py-2 px-2 font-semibold">Consignado</th>
+            <th className="py-2 px-2 font-semibold">Frigorífico</th>
+            <th className="py-2 px-2 font-semibold">DTE</th>
+            <th className="py-2 px-2 font-semibold">Tropa</th>
+            <th className="py-2 px-2 font-semibold text-right">Importe manual</th>
           </tr>
         </thead>
         <tbody>
           {ordenadas.map(v => (
-            <tr key={v.id} className="border-b border-asfion-borderSoft/50 hover:bg-asfion-bg/60 transition">
-              <td className="py-2 px-2 tabular-nums text-asfion-navy whitespace-nowrap">{v.fecha}</td>
-              <td className="py-2 px-2 font-semibold text-asfion-navyDeep">{v.cliente}</td>
-              <td className="py-2 px-2 text-asfion-muted">{v.categoria}</td>
-              <td className="py-2 px-2 tabular-nums text-right">{formatNumber(v.cabezas)}</td>
-              <td className="py-2 px-2 tabular-nums text-right">{formatNumber(Math.round(v.pesoTotal))}</td>
-              <td className="py-2 px-2 tabular-nums text-right">{v.precioPorKg.toFixed(2)}</td>
-              <td className="py-2 px-2 tabular-nums text-right font-bold text-asfion-orange">
-                ${formatNumber(Math.round(v.monto))}
+            <tr key={v.id} className="border-b border-asfion-borderSoft/50 align-top hover:bg-asfion-bg/60">
+              <td className="py-2 px-2 tabular-nums whitespace-nowrap">{fechaCorta(v.fecha)}</td>
+              <td className="py-2 px-2 font-bold text-asfion-orange whitespace-nowrap">{v.correlativo}</td>
+              <td className="py-2 px-2 whitespace-nowrap">{campoMap.get(v.campoId) ?? v.campoId}</td>
+              <td className="py-2 px-2 min-w-[260px]">
+                <ol className="space-y-1">
+                  {v.grupos.map(g => <li key={g.orden}><span className="text-asfion-muted mr-1">{g.orden}.</span>{g.cantCabYCat}</li>)}
+                </ol>
+              </td>
+              <td className="py-2 px-2">{v.consignado}</td>
+              <td className="py-2 px-2">{v.frigorifico}</td>
+              <td className="py-2 px-2 whitespace-nowrap">{v.numeroDte}</td>
+              <td className="py-2 px-2 whitespace-nowrap">{v.tropa}</td>
+              <td className="py-2 px-2 text-right tabular-nums font-semibold whitespace-nowrap">
+                {v.importeTotal != null ? `$${formatNumber(Number(v.importeTotal.toFixed(2)))}` : '—'}
               </td>
             </tr>
           ))}
@@ -352,19 +449,40 @@ function VentasTabla({ rows }: { rows: Venta[] }) {
   );
 }
 
-// Export CSV de Ventas — un row por venta filtrada (período + cliente).
 function exportVentas(rows: Venta[]): void {
+  const grupo = (v: Venta, index: number): VentaGrupo | undefined => v.grupos[index];
   const cols: CsvColumn<Venta>[] = [
-    { header: 'Fecha',         value: r => r.fecha },
-    { header: 'Cliente',       value: r => r.cliente },
-    { header: 'Campo',         value: r => r.campo ?? '' },
-    { header: 'Categoría',     value: r => r.categoria },
-    { header: 'Cabezas',       value: r => r.cabezas },
-    { header: 'Peso total',    value: r => r.pesoTotal },
-    { header: 'Precio $/kg',   value: r => r.precioPorKg },
-    { header: 'Monto',         value: r => r.monto },
-    { header: 'Observaciones', value: r => r.observaciones ?? '' },
+    { header: 'ID_Venta',       value: r => r.id },
+    { header: 'FECHA',          value: r => r.fecha },
+    { header: 'CANT CAB Y CAT', value: r => grupo(r, 0)?.cantCabYCat ?? '' },
+    { header: 'KG Brutos',      value: r => grupo(r, 0)?.kgBrutos ?? '' },
+    { header: 'KG Netos',       value: r => grupo(r, 0)?.kgNetos ?? '' },
+    { header: 'Kg Promedio',    value: r => grupo(r, 0)?.kgPromedio ?? '' },
+    { header: 'Precio',         value: r => grupo(r, 0)?.precio ?? '' },
+    { header: 'CANT CAB Y CAT2',value: r => grupo(r, 1)?.cantCabYCat ?? '' },
+    { header: 'KG Brutos2',     value: r => grupo(r, 1)?.kgBrutos ?? '' },
+    { header: 'KG Netos2',      value: r => grupo(r, 1)?.kgNetos ?? '' },
+    { header: 'Kg Promedio2',   value: r => grupo(r, 1)?.kgPromedio ?? '' },
+    { header: 'Precio2',        value: r => grupo(r, 1)?.precio ?? '' },
+    { header: 'CANT CAB Y CAT3',value: r => grupo(r, 2)?.cantCabYCat ?? '' },
+    { header: 'KG Brutos3',     value: r => grupo(r, 2)?.kgBrutos ?? '' },
+    { header: 'KG Netos3',      value: r => grupo(r, 2)?.kgNetos ?? '' },
+    { header: 'Kg Promedio3',   value: r => grupo(r, 2)?.kgPromedio ?? '' },
+    { header: 'Precio3',        value: r => grupo(r, 2)?.precio ?? '' },
+    { header: 'CANT CAB Y CAT4',value: r => grupo(r, 3)?.cantCabYCat ?? '' },
+    { header: 'KG Brutos4',     value: r => grupo(r, 3)?.kgBrutos ?? '' },
+    { header: 'KG Netos4',      value: r => grupo(r, 3)?.kgNetos ?? '' },
+    { header: 'Kg Promedio4',   value: r => grupo(r, 3)?.kgPromedio ?? '' },
+    { header: 'Precio4',        value: r => grupo(r, 3)?.precio ?? '' },
+    { header: 'Consignado',     value: r => r.consignado },
+    { header: 'Titular',        value: r => r.titular },
+    { header: 'Pago',           value: r => r.pago },
+    { header: 'Frigorifico',    value: r => r.frigorifico },
+    { header: 'Numero DTE',     value: r => r.numeroDte },
+    { header: 'Correlativo',    value: r => r.correlativo },
+    { header: 'Tropa',          value: r => r.tropa },
+    { header: 'Observaciones',  value: r => r.observaciones },
+    { header: 'Importe Total',  value: r => r.importeTotal ?? '' },
   ];
-  const csv = rowsToCsv(rows, cols);
-  void downloadCsv(csv, csvFilename('ventas'));
+  void downloadCsv(rowsToCsv(rows, cols), csvFilename('ventas'));
 }

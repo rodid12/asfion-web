@@ -119,27 +119,56 @@ export function MortandadPage({ mortandad, campos }: Props) {
     [mortandad],
   );
 
+  // Evidencia subida desde la app. Solo mostramos URLs remotas: un file://
+  // antiguo no existe fuera del celular que sacó la foto y produciría una
+  // miniatura rota en el dashboard.
+  const fotosFiltradas = useMemo(() => filtradas.flatMap(m =>
+    (m.fotos ?? [])
+      .filter(url => /^https?:\/\//i.test(url))
+      .map((url, index) => ({
+        id: `${m.id}-${index}`,
+        url,
+        fecha: m.fecha,
+        campo: campoNombreLookup(m.campoId),
+        categoria: m.categoria,
+        causa: normalizarCausa(m.causaDetalle ?? m.causaTipo),
+      })),
+  ), [filtradas, campoNombreLookup]);
+
   // ---------- KPIs + chart data ----------
   const { porCampo, porCategoria, porActividad, porCausa, porMes, porDia, topCampo, topCategoria, topCausa, totalMuertesDistinct } = useMemo(() => {
-    const byCampo = new Map<string, number>();
-    const byCat = new Map<string, number>();
-    const byAct = new Map<string, number>();
-    const byCausa = new Map<string, number>();
-    const byMes = new Map<string, number>();
-    const byDia = new Map<string, number>();
+    // Todas las visuales usan la MISMA medida que el Power BI:
+    // DISTINCTCOUNT(N° Caravana) dentro de cada contexto de filtro. Antes el
+    // tile era DISTINCTCOUNT pero los gráficos contaban filas, por lo que sus
+    // números no cerraban entre sí cuando había re-registros.
+    const byCampo = new Map<string, Set<string>>();
+    const byCat = new Map<string, Set<string>>();
+    const byAct = new Map<string, Set<string>>();
+    const byCausa = new Map<string, Set<string>>();
+    const byMes = new Map<string, Set<string>>();
+    const byDia = new Map<string, Set<string>>();
+    const addDistinct = (map: Map<string, Set<string>>, group: string, animal: string) => {
+      const set = map.get(group) ?? new Set<string>();
+      set.add(animal);
+      map.set(group, set);
+    };
     // DISTINCTCOUNT(N° Caravana) — replica la fórmula DAX del Power BI.
     // Cada caravana distinta es 1 muerte, sin importar cuántas rows tenga
     // (a veces hay rows duplicadas por re-registro del síntoma vs causa).
     const caravanasUnicas = new Set<string>();
 
     filtradas.forEach(m => {
-      byCampo.set(m.campoId, (byCampo.get(m.campoId) ?? 0) + 1);
+      // DAX DISTINCTCOUNT cuenta BLANK como un valor. Por eso todos los rows
+      // sin caravana comparten una sola clave, en vez de inventar un animal
+      // distinto por id.
+      const key = m.caravanaNumero?.trim() || '__SIN_CARAVANA__';
+      addDistinct(byCampo, m.campoId, key);
       const cat = m.categoria || 'Sin categoría';
-      byCat.set(cat, (byCat.get(cat) ?? 0) + 1);
+      addDistinct(byCat, cat, key);
       // Replica el chart "Total Muertes by Actividad" del Power BI del cliente.
       // actividad es texto libre del catálogo (Cria, Destete Precoz, Recria P, etc.).
       const act = m.actividad?.trim() || 'Sin actividad';
-      byAct.set(act, (byAct.get(act) ?? 0) + 1);
+      addDistinct(byAct, act, key);
       // Normalizamos la causa para agrupar abreviaciones y typos comunes:
       // los operarios cargan a mano y aparecen "Neumo" / "Neumonía" como dos
       // causas distintas. También consolidamos las variantes de "sin info"
@@ -152,41 +181,39 @@ export function MortandadPage({ mortandad, campos }: Props) {
       // Muerto' / 'Desconocido') que casi nunca se usa. Probamos detalle
       // primero, después tipo, y por último "Sin identificar".
       const causa = normalizarCausa(m.causaDetalle ?? m.causaTipo);
-      byCausa.set(causa, (byCausa.get(causa) ?? 0) + 1);
+      addDistinct(byCausa, causa, key);
       const mes = m.fecha.slice(0, 7);
-      byMes.set(mes, (byMes.get(mes) ?? 0) + 1);
+      addDistinct(byMes, mes, key);
       // Time series por día — para que Agus vea qué día murió cada animal
       // (picos de eventos = chequear qué pasó). El bar chart mensual oculta
       // este detalle.
       const dia = m.fecha.slice(0, 10);
-      byDia.set(dia, (byDia.get(dia) ?? 0) + 1);
-      // Caravana única para el conteo total. Sin caravana → trackeamos por id.
-      const key = m.caravanaNumero?.trim() || `__noid__:${m.id}`;
+      addDistinct(byDia, dia, key);
       caravanasUnicas.add(key);
     });
 
     const porCampo = campos
-      .map(c => ({ campo: c.nombre, n: byCampo.get(c.id) ?? 0 }))
+      .map(c => ({ campo: c.nombre, n: byCampo.get(c.id)?.size ?? 0 }))
       .filter(r => r.n > 0)
       .sort((a, b) => b.n - a.n);
     const porCategoria = [...byCat.entries()]
-      .map(([categoria, n]) => ({ categoria, n }))
+      .map(([categoria, ids]) => ({ categoria, n: ids.size }))
       .sort((a, b) => b.n - a.n);
     const porActividad = [...byAct.entries()]
-      .map(([actividad, n]) => ({ actividad, n }))
+      .map(([actividad, ids]) => ({ actividad, n: ids.size }))
       .sort((a, b) => b.n - a.n);
     const porCausa = [...byCausa.entries()]
-      .map(([causa, n]) => ({ causa, n }))
+      .map(([causa, ids]) => ({ causa, n: ids.size }))
       .sort((a, b) => b.n - a.n);
 
     const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const porMes = [...byMes.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .slice(-12)
-      .map(([key, n]) => {
+      .map(([key, ids]) => {
         const [y, m] = key.split('-');
         const idx = Math.max(0, Math.min(11, parseInt(m ?? '1', 10) - 1));
-        return { mes: `${MESES[idx]} ${(y ?? '').slice(2)}`, n };
+        return { mes: `${MESES[idx]} ${(y ?? '').slice(2)}`, n: ids.size };
       });
 
     // Serie diaria — rellenamos los días sin muertes con n=0 para que la
@@ -209,7 +236,7 @@ export function MortandadPage({ mortandad, campos }: Props) {
           porDia.push({
             fecha: key,
             label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
-            n: byDia.get(key) ?? 0,
+            n: byDia.get(key)?.size ?? 0,
           });
         }
       } else {
@@ -218,7 +245,7 @@ export function MortandadPage({ mortandad, campos }: Props) {
           porDia.push({
             fecha: key,
             label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
-            n: byDia.get(key) ?? 0,
+            n: byDia.get(key)?.size ?? 0,
           });
         }
       }
@@ -242,7 +269,7 @@ export function MortandadPage({ mortandad, campos }: Props) {
       <PageHeader
         title="Mortandad"
         subtitle="Animales muertos (fuera de parto) — agrupado por categoría, causa y campo."
-        count={{ value: filtradas.length, label: 'eventos' }}
+        count={{ value: totalMuertesDistinct, label: 'animales muertos' }}
         lastDate={filtradas[0]?.fecha}
         actions={
           <ExportCsvButton
@@ -267,23 +294,23 @@ export function MortandadPage({ mortandad, campos }: Props) {
           icon={<SkullIcon size={18} />}
         />
         <Kpi
-          label="Categoría top"
+          label="Categoría más afectada"
           value={topCategoria?.categoria ?? '—'}
           sublabel={topCategoria ? `${formatNumber(topCategoria.n)} animales` : ''}
           accent="navy"
           icon={<TagIcon size={18} />}
         />
         <Kpi
-          label="Causa top"
+          label="Causa principal"
           value={topCausa?.causa ?? '—'}
           sublabel={topCausa ? `${formatNumber(topCausa.n)} casos` : ''}
           accent="navy"
           icon={<AlertTriangleIcon size={18} />}
         />
         <Kpi
-          label="Campo top"
+          label="Campo más afectado"
           value={topCampo?.campo ?? '—'}
-          sublabel={topCampo ? `${formatNumber(topCampo.n)} eventos` : ''}
+          sublabel={topCampo ? `${formatNumber(topCampo.n)} animales` : ''}
           accent="orange"
           icon={<MapPinIcon size={18} />}
         />
@@ -367,6 +394,38 @@ export function MortandadPage({ mortandad, campos }: Props) {
         />
       </Card>
 
+      {fotosFiltradas.length > 0 && (
+        <Card
+          title="Evidencia fotográfica"
+          subtitle={`${fotosFiltradas.length} ${fotosFiltradas.length === 1 ? 'foto asociada' : 'fotos asociadas'} a la mortandad filtrada`}
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+            {fotosFiltradas.map(f => (
+              <a
+                key={f.id}
+                href={f.url}
+                target="_blank"
+                rel="noreferrer"
+                className="group overflow-hidden rounded-xl border border-asfion-borderSoft bg-asfion-bg hover:border-asfion-orange transition"
+                title="Abrir foto completa"
+              >
+                <img
+                  src={f.url}
+                  alt={`Mortandad ${f.categoria} · ${f.campo}`}
+                  loading="lazy"
+                  className="h-32 w-full object-cover group-hover:scale-[1.02] transition-transform"
+                />
+                <div className="p-2">
+                  <p className="text-xs font-bold text-asfion-navy truncate">{f.categoria}</p>
+                  <p className="text-[11px] text-asfion-muted truncate">{f.campo} · {f.fecha}</p>
+                  <p className="text-[11px] text-asfion-muted truncate">{f.causa}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card title="Por categoría" subtitle="Animales más afectados" className="lg:col-span-2">
           <ResponsiveContainer width="100%" height={300}>
@@ -439,6 +498,7 @@ function exportMortandad(rows: Mortandad[], campos: Campo[]): void {
     { header: 'Caravana color',  value: r => r.caravanaColor ?? '' },
     { header: 'Caravana número', value: r => r.caravanaNumero ?? '' },
     { header: 'Observaciones',   value: r => r.observaciones ?? '' },
+    { header: 'Fotos',           value: r => (r.fotos ?? []).join(' | ') },
     { header: 'Cargado por',     value: r => r.usuarioEmail },
     { header: 'Fecha de carga',  value: r => r.createdAt },
   ];
@@ -568,4 +628,3 @@ function CausaMuerteDonut({ data }: { data: Array<{ causa: string; n: number }> 
     </div>
   );
 }
-

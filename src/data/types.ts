@@ -157,6 +157,8 @@ export interface Mortandad extends MortandadCanonical {
   gpsLat?: number;
   gpsLon?: number;
   gpsAccuracyM?: number;
+  /** URLs públicas de evidencia cargadas desde la app móvil. */
+  fotos?: string[];
 }
 
 // -----------------------------------------------------------------------------

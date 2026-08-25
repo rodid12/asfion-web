@@ -217,6 +217,7 @@ function rowToMortandad(r: any): Mortandad {
     gpsLat:        r.gps_lat        != null ? Number(r.gps_lat)        : undefined,
     gpsLon:        r.gps_lon        != null ? Number(r.gps_lon)        : undefined,
     gpsAccuracyM:  r.gps_accuracy_m != null ? Number(r.gps_accuracy_m) : undefined,
+    fotos:         Array.isArray(r.fotos) ? r.fotos.map(String) : undefined,
   };
 }
 

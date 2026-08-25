@@ -1,8 +1,8 @@
 // Bar chart vertical de Causa de muerte SOBRE PARICIONES.
 //
 // Replica el chart "Causa de Muerte" del Power BI (imagen 2 del cliente):
-// barras de Muerte Señalado / Nacido Muerto / Desconocido, contando solo
-// eventos de tipo Muerte/Aborto/Nacimiento que tengan causa_tipo.
+// barras de Muerte Señalado / Nacido Muerto / Desconocido, contando
+// exclusivamente eventos cuyo tipo sea Muerte y tengan causa_tipo.
 //
 // Difiere del donut de Mortandad porque acá usamos los registros de
 // PARICIONES (donde la causa de muerte viene en `causaTipo`), no la
@@ -39,7 +39,10 @@ export function CausaDeMuertePariciones({ data }: Props) {
   const serie = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const p of data) {
-      if (!p.causaTipo) continue;
+      // Registros históricos de Aborto podían conservar causa_tipo porque el
+      // form antiguo mostraba el selector también para abortos. No deben
+      // contaminar un gráfico que explícitamente representa muertes.
+      if (p.evento !== 'Muerte' || !p.causaTipo) continue;
       counts[p.causaTipo] = (counts[p.causaTipo] ?? 0) + 1;
     }
     // Orden fijo (Muerte Señalado primero) + sumar cualquier causa que

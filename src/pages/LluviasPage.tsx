@@ -33,7 +33,7 @@ import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyModule } from '@/components/EmptyModule';
 import { formatNumber } from '@/lib/utils';
-import { fechaISOaLocal, dateAISO } from '@/lib/fechas';
+import { fechaISOaLocal, dateAISO, fechaCorta } from '@/lib/fechas';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
 import type { Campo, Lluvia } from '@/data/types';
 import { campoNombreFn } from '@/lib/campoMap';
@@ -88,12 +88,41 @@ export function LluviasPage({ lluvias, campos }: Props) {
     return m;
   }, [campos]);
   const lecturasPrincipales = useMemo(() => {
-    return filtradas.filter(l => {
-      const campoName = (campoNombreById.get(l.campoId) ?? '').toUpperCase().trim();
-      const expected = PLUVIOMETRO_PRINCIPAL[campoName];
-      if (!expected) return true; // Campo sin mapeo definido → no filtramos (incluimos todo)
-      return (l.pluviometro ?? '').toUpperCase().trim() === expected;
-    });
+    // Una sola lectura representativa por campo y día:
+    //   • campos de Ganaderas: usa el pluviómetro principal acordado;
+    //   • campos nuevos sin configuración: promedio de sus pluviómetros.
+    // Antes el fallback sumaba todas las estaciones y multiplicaba la lluvia
+    // de un campo por la cantidad de pluviómetros instalados.
+    const grupos = new Map<string, Lluvia[]>();
+    for (const l of filtradas) {
+      if (!l.fecha || !Number.isFinite(l.milimetros)) continue;
+      const key = `${l.campoId}|${l.fecha}`;
+      const rows = grupos.get(key) ?? [];
+      rows.push(l);
+      grupos.set(key, rows);
+    }
+
+    const out: Array<{ campoId: string; fecha: string; milimetros: number }> = [];
+    for (const rows of grupos.values()) {
+      const first = rows[0];
+      if (!first) continue;
+      const campoName = (campoNombreById.get(first.campoId) ?? '').toUpperCase().trim();
+      const principal = PLUVIOMETRO_PRINCIPAL[campoName];
+      const coincidenciasPrincipal = principal
+        ? rows.filter(l => (l.pluviometro ?? '').toUpperCase().trim() === principal)
+        : [];
+      // Si el cliente todavía no cargó la estación con el nombre histórico
+      // configurado (p. ej. Margarita llega como "Lote 10" en vez de
+      // "CASCO"), no descartamos el campo/día completo. Conservamos la regla
+      // Power BI cuando existe el principal y, en caso contrario, usamos el
+      // promedio de las lecturas efectivamente cargadas para ese campo/día.
+      const elegidas = principal && coincidenciasPrincipal.length > 0
+        ? coincidenciasPrincipal
+        : rows;
+      const promedio = elegidas.reduce((s, l) => s + l.milimetros, 0) / elegidas.length;
+      out.push({ campoId: first.campoId, fecha: first.fecha, milimetros: promedio });
+    }
+    return out.sort((a, b) => b.fecha.localeCompare(a.fecha));
   }, [filtradas, campoNombreById]);
 
   // ---------- KPIs (sobre lecturas del pluviómetro principal) ----------
@@ -234,12 +263,12 @@ export function LluviasPage({ lluvias, campos }: Props) {
         <Kpi
           label="Máximo en un día"
           value={`${formatNumber(kpis.maxDia.mm)} mm`}
-          sublabel={kpis.maxDia.fecha || '—'}
+          sublabel={fechaCorta(kpis.maxDia.fecha)}
           accent="terracota"
           icon={<DropletIcon size={18} />}
         />
         <Kpi
-          label="Campo top"
+          label="Campo con más lluvia"
           value={kpis.topCampo}
           sublabel={`${formatNumber(kpis.topMM)} mm`}
           accent="navy"
@@ -346,4 +375,3 @@ function exportLluvias(rows: Lluvia[], campos: Campo[]): void {
   const csv = rowsToCsv(rows, cols);
   downloadCsv(csv, csvFilename('lluvias'));
 }
-

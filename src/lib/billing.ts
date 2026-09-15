@@ -56,6 +56,20 @@ export function isSuperAdminCached(email: string | undefined | null): boolean {
 }
 
 /**
+ * Igual que isSuperAdminCached(), pero conserva el estado "todavía no sé".
+ * Es importante para el selector multi-cliente: mientras resolvemos si la
+ * sesión es super-admin no debemos lanzar queries sin cliente explícito,
+ * porque las policies de lectura administrativa permiten ver varios tenants.
+ */
+export function superAdminCachedStatus(
+  email: string | undefined | null,
+): boolean | null {
+  if (!email) return false;
+  const e = email.toLowerCase().trim();
+  return superAdminCache?.email === e ? superAdminCache.isAdmin : null;
+}
+
+/**
  * Hook React-friendly. Devuelve `false` mientras todavía no resolvió
  * el round-trip (fail closed — no flashea UI de admin para usuarios
  * normales). Cachea, así si varios componentes lo llaman con el mismo
@@ -74,6 +88,34 @@ export function useIsSuperAdmin(email: string | undefined | null): boolean {
   }, [email]);
 
   return isAdmin;
+}
+
+/**
+ * Variante tri-state para pantallas que deben esperar la autorización antes
+ * de consultar datos: null = verificando, false = usuario normal,
+ * true = super-administrador.
+ */
+export function useSuperAdminStatus(
+  email: string | undefined | null,
+): boolean | null {
+  const [status, setStatus] = useState<boolean | null>(() => superAdminCachedStatus(email));
+
+  useEffect(() => {
+    let cancelado = false;
+    if (!email) {
+      setStatus(false);
+      return;
+    }
+
+    setStatus(superAdminCachedStatus(email));
+    isSuperAdmin(email).then(result => {
+      if (!cancelado) setStatus(result);
+    });
+
+    return () => { cancelado = true; };
+  }, [email]);
+
+  return status;
 }
 
 // === Tipos ===

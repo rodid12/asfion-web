@@ -12,9 +12,10 @@
 // que el UI muestre el badge "Sin conexión — datos del DD/MM HH:MM".
 
 import { useEffect, useState } from 'react';
-import type { CampaniaReproductiva, Campo, Circuito, Compra, Corral, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto, Venta } from './types';
+import type { CampaniaOperativa, CampaniaReproductiva, Campo, Circuito, Compra, Corral, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto, Venta } from './types';
 import {
   fetchCampos,
+  fetchCampaniasOperativas,
   fetchCampaniasReproductivas,
   fetchCircuitos,
   fetchCompras,
@@ -33,6 +34,7 @@ import { loadCache, saveCache } from './offlineCache';
 
 export interface DashboardData {
   campos: Campo[];
+  campaniasOperativas: CampaniaOperativa[];
   campaniasReproductivas: CampaniaReproductiva[];
   circuitos: Circuito[];
   pariciones: Paricion[];
@@ -63,6 +65,7 @@ export interface UseDataResult {
 
 const EMPTY: DashboardData = {
   campos: [],
+  campaniasOperativas: [],
   campaniasReproductivas: [],
   circuitos: [],
   pariciones: [],
@@ -78,7 +81,11 @@ const EMPTY: DashboardData = {
   ventas: [],
 };
 
-export function useDashboardData(cacheScope: string): UseDataResult {
+export function useDashboardData(
+  cacheScope: string,
+  clienteId?: string,
+  enabled = true,
+): UseDataResult {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +95,17 @@ export function useDashboardData(cacheScope: string): UseDataResult {
 
   useEffect(() => {
     let cancelled = false;
+
+    // Un super-admin todavía sin tenant elegido no debe consultar "todo".
+    // Esperamos a tener un cliente explícito antes de tocar cache o Supabase.
+    if (!enabled) {
+      setData(null);
+      setLoading(true);
+      setError(null);
+      setOffline(false);
+      setCachedAt(null);
+      return () => { cancelled = true; };
+    }
 
     (async () => {
       // ESTRATEGIA "stale-while-revalidate":
@@ -101,8 +119,14 @@ export function useDashboardData(cacheScope: string): UseDataResult {
       //   4. Si el fetch falla (sin internet, Supabase caído) →
       //      mantenemos la data del cache y mostramos error solo si
       //      tampoco había cache (= primer load del usuario sin red).
+      // Al cambiar de tenant limpiamos primero la data anterior. Así nunca se
+      // muestran durante unos milisegundos métricas del cliente previo bajo el
+      // nombre del nuevo cliente.
+      setData(null);
       setLoading(true);
       setError(null);
+      setOffline(false);
+      setCachedAt(null);
 
       // 1. Cache primero — pintamos pantalla rápido aunque sea con data vieja.
       const cached = await loadCache(cacheScope);
@@ -115,25 +139,26 @@ export function useDashboardData(cacheScope: string): UseDataResult {
 
       // 2-4. Fetch online en paralelo (o secuencial si no había cache).
       try {
-        const [campos, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales, ventas] =
+        const [campos, campaniasOperativas, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales, ventas] =
           await Promise.all([
-            fetchCampos(),
-            fetchCampaniasReproductivas(),
-            fetchCircuitos(),
-            fetchPariciones(),
-            fetchLluvias(),
-            fetchMortandad(),
-            fetchPastoreo(),
-            fetchPastoreoCiclos(),
-            fetchResumenServicio(),
-            fetchCompras(),
-            fetchNdvi(),
-            fetchTactos(),
-            fetchCorrales(),
-            fetchVentas(),
+            fetchCampos(clienteId),
+            fetchCampaniasOperativas(clienteId),
+            fetchCampaniasReproductivas(clienteId),
+            fetchCircuitos(clienteId),
+            fetchPariciones(clienteId),
+            fetchLluvias(clienteId),
+            fetchMortandad(clienteId),
+            fetchPastoreo(clienteId),
+            fetchPastoreoCiclos(clienteId),
+            fetchResumenServicio(clienteId),
+            fetchCompras(clienteId),
+            fetchNdvi(clienteId),
+            fetchTactos(clienteId),
+            fetchCorrales(clienteId),
+            fetchVentas(clienteId),
           ]);
         if (cancelled) return;
-        const fresh: DashboardData = { campos, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales, ventas };
+        const fresh: DashboardData = { campos, campaniasOperativas, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales, ventas };
         setData(fresh);
         setOffline(false);
         setCachedAt(null);
@@ -155,7 +180,7 @@ export function useDashboardData(cacheScope: string): UseDataResult {
     })();
 
     return () => { cancelled = true; };
-  }, [nonce, cacheScope]);
+  }, [nonce, cacheScope, clienteId, enabled]);
 
   return {
     data,

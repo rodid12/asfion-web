@@ -1,8 +1,10 @@
 // Fetchers de Supabase para el dashboard.
 //
 // El dashboard solo LEE — no escribe nada. Por eso este módulo es chico:
-// solo selects con orden y limit. RLS de Supabase se encarga de filtrar
-// por cliente_id automáticamente (basado en el JWT del usuario logueado).
+// solo selects con orden y limit. Para usuarios normales, RLS de Supabase
+// filtra por cliente_id automáticamente. Para super-administradores, cada
+// fetch recibe además el cliente elegido y agrega un `.eq('cliente_id', ...)`
+// explícito: tener permiso multi-tenant nunca implica mezclar sus datos.
 //
 // Los mappers convierten snake_case del DB al camelCase de los tipos UI,
 // que son los mismos que usaba el mock data — así el resto del dashboard
@@ -11,6 +13,7 @@
 import { supabase } from '@/lib/supabase';
 import type {
   Campo,
+  CampaniaOperativa,
   CampaniaReproductiva,
   Circuito,
   Compra,
@@ -36,6 +39,7 @@ import {
   VENTA_SCHEMA,
   CIRCUITO_SCHEMA,
   CAMPANIA_REPRODUCTIVA_SCHEMA,
+  CAMPANIA_OPERATIVA_SCHEMA,
 } from './mapRow.canonical';
 import type {
   ParicionCanonical,
@@ -45,6 +49,7 @@ import type {
   CompraCanonical,
   VentaCanonical,
   CampaniaReproductivaCanonical,
+  CampaniaOperativaCanonical,
 } from './types.canonical';
 
 // ----------------------------------------------------------------------------
@@ -67,6 +72,7 @@ type QueryBuilder = ReturnType<ReturnType<typeof supabase.from>['select']>;
 async function fetchAllPaginated<T = any>(
   table: string,
   applyOrder: (q: QueryBuilder) => QueryBuilder,
+  clienteId?: string,
 ): Promise<T[]> {
   // PRIMERA round-trip: usamos `count: 'exact'` para que Postgres devuelva
   // el total de filas junto con la primera página. Eso nos permite calcular
@@ -76,7 +82,10 @@ async function fetchAllPaginated<T = any>(
   //
   // Si la tabla cabe en una página (count <= PAGE_SIZE) ahorrramos la
   // segunda round-trip directamente y devolvemos.
-  const baseFirst = supabase.from(table).select('*', { count: 'exact' });
+  const baseFirst = withClienteScope(
+    supabase.from(table).select('*', { count: 'exact' }),
+    clienteId,
+  );
   const orderedFirst = applyOrder(baseFirst) as ReturnType<typeof baseFirst.range>;
   const { data: firstData, error: firstErr, count } = await orderedFirst.range(0, PAGE_SIZE - 1);
   if (firstErr) throw firstErr;
@@ -97,7 +106,7 @@ async function fetchAllPaginated<T = any>(
   const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 1);
   const restResults = await Promise.all(
     remainingPages.map(async (pageIdx) => {
-      const base = supabase.from(table).select('*');
+      const base = withClienteScope(supabase.from(table).select('*'), clienteId);
       const ordered = applyOrder(base);
       const start = pageIdx * PAGE_SIZE;
       const { data, error } = await ordered.range(start, start + PAGE_SIZE - 1);
@@ -108,6 +117,18 @@ async function fetchAllPaginated<T = any>(
 
   // Concatenar manteniendo orden: primera página + páginas siguientes.
   return [first, ...restResults].flat();
+}
+
+/**
+ * Aplica el tenant elegido por un super-admin directamente en PostgREST.
+ * Para usuarios normales clienteId queda undefined y RLS continúa siendo la
+ * fuente de verdad. Nunca filtramos en memoria: ninguna fila de otro cliente
+ * debe viajar al browser cuando se está visualizando un tenant concreto.
+ */
+function withClienteScope<T>(query: T, clienteId?: string): T {
+  return clienteId
+    ? (query as T & { eq: (column: string, value: string) => T }).eq('cliente_id', clienteId)
+    : query;
 }
 
 // Mappers de DB → tipo TS. Ahora son one-liners gracias a mapRow + SCHEMAs
@@ -130,10 +151,12 @@ function rowToParicion(r: any): Paricion {
   };
 }
 
-export async function fetchCampos(): Promise<Campo[]> {
-  const { data, error } = await supabase
-    .from('campos')
-    .select('id, nombre, stock_inicial_vacas')
+export async function fetchCampos(clienteId?: string): Promise<Campo[]> {
+  const query = withClienteScope(
+    supabase.from('campos').select('id, nombre, stock_inicial_vacas'),
+    clienteId,
+  );
+  const { data, error } = await query
     .order('nombre');
   if (error) throw new Error(`fetchCampos: ${error.message}`);
   return (data ?? []).map(rowToCampo);
@@ -147,10 +170,12 @@ function rowToCampaniaReproductiva(r: any): CampaniaReproductiva {
   return mapRow<CampaniaReproductivaCanonical>(r, CAMPANIA_REPRODUCTIVA_SCHEMA);
 }
 
-export async function fetchCampaniasReproductivas(): Promise<CampaniaReproductiva[]> {
-  const { data, error } = await supabase
-    .from('campanias_reproductivas')
-    .select('id, nombre, servicio_anio, fecha_inicio, fecha_fin, activa')
+export async function fetchCampaniasReproductivas(clienteId?: string): Promise<CampaniaReproductiva[]> {
+  const query = withClienteScope(
+    supabase.from('campanias_reproductivas').select('id, nombre, servicio_anio, fecha_inicio, fecha_fin, activa'),
+    clienteId,
+  );
+  const { data, error } = await query
     .order('activa', { ascending: false })
     .order('fecha_inicio', { ascending: false });
 
@@ -165,16 +190,39 @@ export async function fetchCampaniasReproductivas(): Promise<CampaniaReproductiv
   return (data ?? []).map(rowToCampaniaReproductiva);
 }
 
+function rowToCampaniaOperativa(r: any): CampaniaOperativa {
+  return mapRow<CampaniaOperativaCanonical>(r, CAMPANIA_OPERATIVA_SCHEMA);
+}
+
+export async function fetchCampaniasOperativas(clienteId?: string): Promise<CampaniaOperativa[]> {
+  const query = withClienteScope(
+    supabase.from('campanias_operativas').select('id, nombre, fecha_inicio, fecha_fin, activa'),
+    clienteId,
+  );
+  const { data, error } = await query
+    .order('activa', { ascending: false })
+    .order('fecha_inicio', { ascending: false });
+
+  if (error) {
+    const msg = String(error.message ?? error).toLowerCase();
+    // Permite desplegar el frontend antes de ejecutar migration 0036.
+    if (msg.includes('does not exist') || msg.includes('relation') || error.code === '42P01' || error.code === 'PGRST205') {
+      return [];
+    }
+    throw new Error(`fetchCampaniasOperativas: ${error.message}`);
+  }
+  return (data ?? []).map(rowToCampaniaOperativa);
+}
+
 /**
- * Trae TODAS las pariciones visibles al usuario logueado (RLS las filtra
- * por cliente_id). Sin paginación todavía — la app real tiene ~3.5k filas
- * en 8 meses, perfectamente cargable de una. Si crece a 20k+, agregamos
- * paginación o un view materializado con agregados.
+ * Trae todas las pariciones visibles al usuario logueado, paginadas. RLS
+ * filtra usuarios normales; el scope explícito filtra super-administradores.
  */
-export async function fetchPariciones(): Promise<Paricion[]> {
+export async function fetchPariciones(clienteId?: string): Promise<Paricion[]> {
   try {
     const rows = await fetchAllPaginated<any>('pariciones',
-      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder,
+      clienteId);
     return rows.map(rowToParicion);
   } catch (err: any) {
     throw new Error(`fetchPariciones: ${err?.message ?? err}`);
@@ -195,10 +243,11 @@ function rowToLluvia(r: any): Lluvia {
   );
 }
 
-export async function fetchLluvias(): Promise<Lluvia[]> {
+export async function fetchLluvias(clienteId?: string): Promise<Lluvia[]> {
   try {
     const rows = await fetchAllPaginated<any>('lluvias',
-      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder,
+      clienteId);
     return rows.map(rowToLluvia);
   } catch (err: any) {
     throw new Error(`fetchLluvias: ${err?.message ?? err}`);
@@ -221,10 +270,11 @@ function rowToMortandad(r: any): Mortandad {
   };
 }
 
-export async function fetchMortandad(): Promise<Mortandad[]> {
+export async function fetchMortandad(clienteId?: string): Promise<Mortandad[]> {
   try {
     const rows = await fetchAllPaginated<any>('mortandad',
-      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder,
+      clienteId);
     return rows.map(rowToMortandad);
   } catch (err: any) {
     throw new Error(`fetchMortandad: ${err?.message ?? err}`);
@@ -239,10 +289,11 @@ function rowToPastoreo(r: any): Pastoreo {
   return mapRow<Pastoreo>(r, PASTOREO_SCHEMA);
 }
 
-export async function fetchPastoreo(): Promise<Pastoreo[]> {
+export async function fetchPastoreo(clienteId?: string): Promise<Pastoreo[]> {
   try {
     const rows = await fetchAllPaginated<any>('pastoreo',
-      q => q.order('fecha_entrada', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
+      q => q.order('fecha_entrada', { ascending: false }).order('id', { ascending: true }) as QueryBuilder,
+      clienteId);
     return rows.map(rowToPastoreo);
   } catch (err: any) {
     throw new Error(`fetchPastoreo: ${err?.message ?? err}`);
@@ -330,10 +381,11 @@ function rowToResumenServicio(r: any): ResumenServicio {
   };
 }
 
-export async function fetchResumenServicio(): Promise<ResumenServicio[]> {
+export async function fetchResumenServicio(clienteId?: string): Promise<ResumenServicio[]> {
   try {
     const rows = await fetchAllPaginated<any>('pariciones_resumen_servicio',
-      q => q.order('servicio_anio', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
+      q => q.order('servicio_anio', { ascending: false }).order('id', { ascending: true }) as QueryBuilder,
+      clienteId);
     return rows.map(rowToResumenServicio);
   } catch (err: any) {
     if (/relation "pariciones_resumen_servicio" does not exist/i.test(err?.message ?? '')) {
@@ -344,10 +396,11 @@ export async function fetchResumenServicio(): Promise<ResumenServicio[]> {
   }
 }
 
-export async function fetchPastoreoCiclos(): Promise<PastoreoCiclo[]> {
+export async function fetchPastoreoCiclos(clienteId?: string): Promise<PastoreoCiclo[]> {
   try {
     const rows = await fetchAllPaginated<any>('pastoreo_ciclos',
-      q => q.order('fecha_ingreso', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
+      q => q.order('fecha_ingreso', { ascending: false }).order('id', { ascending: true }) as QueryBuilder,
+      clienteId);
     return rows.map(rowToPastoreoCiclo);
   } catch (err: any) {
     // Fallback graceful si la tabla todavía no existe en la DB del cliente
@@ -369,10 +422,11 @@ function rowToCompra(r: any): Compra {
   return mapRow<Compra>(r, COMPRA_SCHEMA);
 }
 
-export async function fetchCompras(): Promise<Compra[]> {
+export async function fetchCompras(clienteId?: string): Promise<Compra[]> {
   try {
     const rows = await fetchAllPaginated<any>('compras',
-      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder,
+      clienteId);
     return rows.map(rowToCompra);
   } catch (err: any) {
     throw new Error(`fetchCompras: ${err?.message ?? err}`);
@@ -387,10 +441,11 @@ function rowToVenta(r: any): Venta {
   return mapRow<VentaCanonical>(r, VENTA_SCHEMA);
 }
 
-export async function fetchVentas(): Promise<Venta[]> {
+export async function fetchVentas(clienteId?: string): Promise<Venta[]> {
   try {
     const rows = await fetchAllPaginated<any>('ventas',
-      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder,
+      clienteId);
     return rows.map(rowToVenta);
   } catch (err: any) {
     const msg = String(err?.message ?? err).toLowerCase();
@@ -413,12 +468,14 @@ function rowToCircuito(r: any): Circuito {
   return mapRow<Circuito>(r, CIRCUITO_SCHEMA);
 }
 
-export async function fetchCircuitos(): Promise<Circuito[]> {
+export async function fetchCircuitos(clienteId?: string): Promise<Circuito[]> {
   // select() explícito (Q1 audit) — antes select('*') traía columnas que no
   // usamos (created_at, updated_at, etc). Ahorra ~30% bytes en transit.
-  const { data, error } = await supabase
-    .from('circuitos')
-    .select('id, campo_id, nombre, hectareas')
+  const query = withClienteScope(
+    supabase.from('circuitos').select('id, campo_id, nombre, hectareas'),
+    clienteId,
+  );
+  const { data, error } = await query
     .order('nombre');
   if (error) throw new Error(`fetchCircuitos: ${error.message}`);
   return (data ?? []).map(rowToCircuito);
@@ -468,10 +525,11 @@ function rowToTacto(r: any): Tacto {
   };
 }
 
-export async function fetchTactos(): Promise<Tacto[]> {
+export async function fetchTactos(clienteId?: string): Promise<Tacto[]> {
   try {
     const rows = await fetchAllPaginated<any>('tactos',
-      q => q.order('rodeo', { ascending: true }).order('id', { ascending: true }) as QueryBuilder);
+      q => q.order('rodeo', { ascending: true }).order('id', { ascending: true }) as QueryBuilder,
+      clienteId);
     return rows.map(rowToTacto);
   } catch (err: any) {
     // La tabla se crea en migration 0012. Si todavía no aplicó, devolvemos
@@ -486,10 +544,11 @@ export async function fetchTactos(): Promise<Tacto[]> {
   }
 }
 
-export async function fetchNdvi(): Promise<NdviPastura[]> {
+export async function fetchNdvi(clienteId?: string): Promise<NdviPastura[]> {
   try {
     const rows = await fetchAllPaginated<any>('ndvi_pasturas',
-      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder);
+      q => q.order('fecha', { ascending: false }).order('id', { ascending: true }) as QueryBuilder,
+      clienteId);
     return rows.map(rowToNdvi);
   } catch (err: any) {
     // La tabla recién se crea en migration 0009. Si todavía no aplicó,
@@ -530,13 +589,14 @@ function rowToCorral(r: any): Corral {
   };
 }
 
-export async function fetchCorrales(): Promise<Corral[]> {
+export async function fetchCorrales(clienteId?: string): Promise<Corral[]> {
   try {
     const rows = await fetchAllPaginated<any>('cierre_corrales',
       q => q.order('etapa', { ascending: true })
             .order('categoria', { ascending: true })
             .order('tropa', { ascending: true })
-            .order('id', { ascending: true }) as QueryBuilder);
+            .order('id', { ascending: true }) as QueryBuilder,
+      clienteId);
     return rows.map(rowToCorral);
   } catch (err: any) {
     // Tabla se crea en migration 0029 — si no aplicó, devolvemos array

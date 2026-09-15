@@ -2,12 +2,13 @@
 // por módulo + contenido. La página activa se decide por el state local
 // `modulo`. No hay router — el dashboard es single-page por diseño.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { LogOutIcon, RefreshCwIcon, ShieldIcon } from 'lucide-react';
 import { useDashboardData, EMPTY_DATA } from '@/data/useData';
 import { useAuth } from '@/lib/auth';
-import { useIsSuperAdmin } from '@/lib/billing';
+import { useSuperAdminStatus } from '@/lib/billing';
 import { ModuleTabs, type ModuleKey } from '@/components/ModuleTabs';
+import { ClienteScopeSelector } from '@/components/ClienteScopeSelector';
 import { parseCurrentPath, pushPath } from '@/lib/routing';
 import { ParicionesPage } from './ParicionesPage';
 import { LluviasPage } from './LluviasPage';
@@ -26,26 +27,110 @@ import { BillingAdminPage } from './BillingAdminPage';
 import { Logo } from '@/components/Logo';
 import { ClientesAdminPage } from './ClientesAdminPage';
 import { UsersIcon } from 'lucide-react';
+import { adminListClientes, type ClienteAdminRow } from '@/data/admin';
+import { CampaniaOperativaBar } from '@/components/CampaniaOperativaBar';
+import {
+  campaniasOperativasFallback,
+  asegurarCampaniaDeHoy,
+  completarCampaniasDesdeFechas,
+  elegirCampaniaActual,
+  enCampania,
+  finReproductivo,
+  reproductivaParaOperativa,
+  solapaCampania,
+} from '@/lib/campanias';
 
 type View = 'modules' | 'billing' | 'admin';
 
 export function Dashboard() {
   const { user, signOut } = useAuth();
-  // Usuario + cliente forman el namespace del cache offline. Nunca compartimos
-  // IndexedDB entre dos sesiones ni conservamos datos si el usuario cambia de
-  // tenant. El claim puede vivir en app_metadata o user_metadata según el alta.
-  const clienteScope = String(
+  // El claim sirve como namespace para usuarios normales. Los super-admins
+  // eligen un tenant explícito más abajo; jamás consultan todos a la vez.
+  const clienteClaim = String(
     user?.app_metadata?.cliente_id ?? user?.user_metadata?.cliente_id ?? 'sin-cliente',
   );
-  const cacheScope = `${user?.id ?? 'sin-sesion'}:${clienteScope}`;
-  const { data, loading, error, refresh, offline, cachedAt } = useDashboardData(cacheScope);
+  const adminStatus = useSuperAdminStatus(user?.email);
+  const showAdmin = adminStatus === true;
+  const [clientesDisponibles, setClientesDisponibles] = useState<ClienteAdminRow[]>([]);
+  const [clienteSeleccionadoId, setClienteSeleccionadoId] = useState<string | null>(null);
+  const [clientesLoading, setClientesLoading] = useState(false);
+  const [clientesError, setClientesError] = useState<string | null>(null);
+  const [clientesNonce, setClientesNonce] = useState(0);
+
+  // Carga el catálogo de tenants únicamente para dueños/super-admins. La
+  // prioridad inicial es: URL compartida → selección anterior → claim del JWT
+  // → Ganaderas → primer cliente disponible.
+  useEffect(() => {
+    if (adminStatus !== true) {
+      if (adminStatus === false) {
+        setClientesDisponibles([]);
+        setClienteSeleccionadoId(null);
+        setClientesError(null);
+      }
+      return;
+    }
+
+    let cancelado = false;
+    setClientesLoading(true);
+    setClientesError(null);
+
+    adminListClientes()
+      .then(clientes => {
+        if (cancelado) return;
+        setClientesDisponibles(clientes);
+        const ids = new Set(clientes.map(cliente => cliente.id));
+        const urlCliente = new URLSearchParams(window.location.search).get('cliente');
+        const guardado = window.localStorage.getItem(adminScopeStorageKey(user?.email));
+
+        setClienteSeleccionadoId(anterior => {
+          const elegido = [urlCliente, anterior, guardado, clienteClaim, 'ganaderas', clientes[0]?.id]
+            .find((id): id is string => Boolean(id && ids.has(id))) ?? null;
+          if (elegido) {
+            window.localStorage.setItem(adminScopeStorageKey(user?.email), elegido);
+            writeClienteToUrl(elegido);
+          }
+          return elegido;
+        });
+      })
+      .catch((err: any) => {
+        if (!cancelado) {
+          setClientesError(err?.message ?? 'No se pudo cargar la lista de clientes.');
+          setClienteSeleccionadoId(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelado) setClientesLoading(false);
+      });
+
+    return () => { cancelado = true; };
+  }, [adminStatus, clienteClaim, clientesNonce, user?.email]);
+
+  const cambiarCliente = (clienteId: string) => {
+    if (!clientesDisponibles.some(cliente => cliente.id === clienteId)) return;
+    setClienteSeleccionadoId(clienteId);
+    window.localStorage.setItem(adminScopeStorageKey(user?.email), clienteId);
+    writeClienteToUrl(clienteId);
+  };
+
+  // Usuario + tenant forman el namespace del cache offline. Para un
+  // super-admin el scope seleccionado también viaja en TODAS las queries.
+  const dataClienteId = showAdmin ? (clienteSeleccionadoId ?? undefined) : undefined;
+  const dashboardEnabled = adminStatus === false || (showAdmin && Boolean(clienteSeleccionadoId));
+  const cacheTenant = showAdmin ? (clienteSeleccionadoId ?? 'seleccionando') : clienteClaim;
+  const cacheScope = `${user?.id ?? 'sin-sesion'}:${cacheTenant}`;
+  const { data, loading, error, refresh, offline, cachedAt } = useDashboardData(
+    cacheScope,
+    dataClienteId,
+    dashboardEnabled,
+  );
   // Inicializamos el state leyendo la URL actual — así si el operario
   // entra directo a /mortandad o refresca la pestaña, arranca en el
   // módulo que estaba. Default: pariciones (también para "/").
   const initial = parseCurrentPath();
   const [modulo, setModulo] = useState<ModuleKey>(initial.modulo);
   const [view, setView] = useState<View>(initial.view);
-  const showAdmin = useIsSuperAdmin(user?.email);
+  const fallbackCampanias = useMemo(() => campaniasOperativasFallback(), []);
+  const [campaniaId, setCampaniaId] = useState(() => elegirCampaniaActual(fallbackCampanias)!.id);
 
   // Sincroniza URL → state cuando el usuario usa back/forward del browser.
   // Sin esto, click en "atrás" cambiaría la URL pero el state quedaría
@@ -67,6 +152,62 @@ export function Dashboard() {
   }, [view, modulo]);
 
   const d = data ?? EMPTY_DATA;
+  const campaniasBase = useMemo(() => asegurarCampaniaDeHoy(
+    d.campaniasOperativas?.length ? d.campaniasOperativas : fallbackCampanias,
+    fallbackCampanias,
+  ), [d.campaniasOperativas, fallbackCampanias]);
+  const campaniasOperativas = useMemo(() => completarCampaniasDesdeFechas(campaniasBase, [
+    ...d.pariciones.map(x => x.fecha),
+    ...d.lluvias.map(x => x.fecha),
+    ...d.mortandad.map(x => x.fecha),
+    ...d.pastoreo.flatMap(x => [x.fecha, x.fechaSalida]),
+    ...d.pastoreoCiclos.flatMap(x => [x.fechaIngreso, x.fechaControl, x.fechaEncierre]),
+    ...d.compras.map(x => x.fecha),
+    ...d.ventas.map(x => x.fecha),
+    ...d.ndvi.map(x => x.fecha),
+    ...d.corrales.map(x => x.fechaEncierre),
+  ]), [campaniasBase, d]);
+
+  // Al llegar la respuesta de Supabase reemplazamos el ID fallback por el row
+  // real. Una selección histórica válida se conserva incluso tras refresh.
+  useEffect(() => {
+    setCampaniaId(prev => campaniasOperativas.some(c => c.id === prev)
+      ? prev
+      : (elegirCampaniaActual(campaniasOperativas)?.id ?? campaniasOperativas[0]!.id));
+  }, [campaniasOperativas]);
+
+  const campaniaSeleccionada = campaniasOperativas.find(c => c.id === campaniaId)
+    ?? elegirCampaniaActual(campaniasOperativas)
+    ?? fallbackCampanias[0]!;
+  const reproductivaSeleccionada = reproductivaParaOperativa(
+    campaniaSeleccionada,
+    d.campaniasReproductivas ?? [],
+  );
+
+  // Todos los módulos reciben data ya acotada. Sus filtros internos (campo,
+  // categoría, 7d/30d, etc.) son refinamientos dentro de esta campaña.
+  const scoped = useMemo(() => {
+    const paricionesHasta = finReproductivo(campaniaSeleccionada);
+    const pariciones = d.pariciones.filter(p =>
+      p.fecha >= campaniaSeleccionada.fechaInicio && p.fecha <= paricionesHasta);
+    const tactos = d.tactos.filter(t => t.campaniaId === reproductivaSeleccionada.id);
+    return {
+      pariciones,
+      lluvias: d.lluvias.filter(x => enCampania(x.fecha, campaniaSeleccionada)),
+      mortandad: d.mortandad.filter(x => enCampania(x.fecha, campaniaSeleccionada)),
+      pastoreo: d.pastoreo.filter(x => solapaCampania(x.fecha, x.fechaSalida, campaniaSeleccionada)),
+      pastoreoCiclos: d.pastoreoCiclos.filter(x => {
+        const fechas = [x.fechaIngreso, x.fechaControl, x.fechaEncierre].filter((f): f is string => Boolean(f)).sort();
+        return solapaCampania(fechas[0], fechas[fechas.length - 1], campaniaSeleccionada);
+      }),
+      resumenServicio: d.resumenServicio.filter(x => x.servicioAnio === reproductivaSeleccionada.servicioAnio),
+      compras: d.compras.filter(x => enCampania(x.fecha, campaniaSeleccionada)),
+      ventas: d.ventas.filter(x => enCampania(x.fecha, campaniaSeleccionada)),
+      ndvi: d.ndvi.filter(x => enCampania(x.fecha, campaniaSeleccionada)),
+      tactos,
+      corrales: d.corrales.filter(x => enCampania(x.fechaEncierre, campaniaSeleccionada)),
+    };
+  }, [campaniaSeleccionada, d, reproductivaSeleccionada.id, reproductivaSeleccionada.servicioAnio]);
   const initials = (user?.email ?? '?').charAt(0).toUpperCase();
 
   return (
@@ -155,13 +296,33 @@ export function Dashboard() {
         </div>
       </header>
 
+      {/* Selector global de tenant. Solo aparece para super-administradores y
+          nunca ofrece una vista "Todos", para impedir KPIs mezclados. */}
+      {showAdmin && view === 'modules' && (
+        <ClienteScopeSelector
+          clientes={clientesDisponibles.map(cliente => ({ id: cliente.id, nombre: cliente.nombre }))}
+          clienteId={clienteSeleccionadoId}
+          loading={clientesLoading}
+          error={clientesError}
+          onChange={cambiarCliente}
+          onRetry={() => setClientesNonce(n => n + 1)}
+        />
+      )}
+
       {/* Tabs por módulo — solo en la vista de operaciones (la de billing
           es una página independiente sin tabs). */}
       {view === 'modules' && (
-        <ModuleTabs
-          active={modulo}
-          onChange={setModulo}
-        />
+        <>
+          <ModuleTabs
+            active={modulo}
+            onChange={setModulo}
+          />
+          <CampaniaOperativaBar
+            campanias={campaniasOperativas}
+            seleccionada={campaniaSeleccionada}
+            onChange={setCampaniaId}
+          />
+        </>
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
@@ -206,18 +367,19 @@ export function Dashboard() {
         {/* Vista operativa: página activa según tab */}
         {view === 'modules' && data && modulo === 'pariciones' && (
           <ParicionesPage
-            pariciones={d.pariciones}
+            key={campaniaSeleccionada.id}
+            pariciones={scoped.pariciones}
             campos={d.campos}
-            resumenServicio={d.resumenServicio}
-            tactos={d.tactos}
-            campaniasReproductivas={d.campaniasReproductivas}
+            resumenServicio={scoped.resumenServicio}
+            tactos={scoped.tactos}
+            campaniasReproductivas={[reproductivaSeleccionada]}
           />
         )}
         {view === 'modules' && data && modulo === 'lluvias' && (
-          <LluviasPage lluvias={d.lluvias} campos={d.campos} />
+          <LluviasPage key={campaniaSeleccionada.id} lluvias={scoped.lluvias} campos={d.campos} />
         )}
         {view === 'modules' && data && modulo === 'mortandad' && (
-          <MortandadPage mortandad={d.mortandad} campos={d.campos} />
+          <MortandadPage key={campaniaSeleccionada.id} mortandad={scoped.mortandad} campos={d.campos} />
         )}
         {view === 'modules' && data && modulo === 'pastoreo' && (
           // PastoreoModule maneja internamente los 3 sub-tabs:
@@ -226,33 +388,34 @@ export function Dashboard() {
           // conceptualmente es parte del ciclo de pastoreo (la última etapa
           // antes de la venta).
           <PastoreoModule
-            pastoreo={d.pastoreo}
-            pastoreoCiclos={d.pastoreoCiclos}
-            mortandad={d.mortandad}
+            key={campaniaSeleccionada.id}
+            pastoreo={scoped.pastoreo}
+            pastoreoCiclos={scoped.pastoreoCiclos}
+            mortandad={scoped.mortandad}
             campos={d.campos}
             circuitos={d.circuitos}
-            corrales={d.corrales}
+            corrales={scoped.corrales}
           />
         )}
         {view === 'modules' && data && modulo === 'compras' && (
           // Compras = entradas de hacienda al sistema (proveedores).
-          <ComprasPage compras={d.compras} campos={d.campos} />
+          <ComprasPage key={campaniaSeleccionada.id} compras={scoped.compras} campos={d.campos} />
         )}
         {view === 'modules' && data && modulo === 'ventas' && (
-          <VentasPage ventas={d.ventas} campos={d.campos} />
+          <VentasPage key={campaniaSeleccionada.id} ventas={scoped.ventas} campos={d.campos} />
         )}
         {view === 'modules' && data && modulo === 'prenez' && (
           // Tactos vienen de Supabase (tabla `tactos`, migration 0012).
           // RLS por cliente_id garantiza que cada tenant vea solo los
           // suyos. Si la tabla no existe todavía, fetchTactos devuelve
           // [] y PrenezPage muestra su empty state.
-          <PrenezPage tactos={d.tactos} />
+          <PrenezPage key={campaniaSeleccionada.id} tactos={scoped.tactos} />
         )}
         {view === 'modules' && data && modulo === 'ndvi' && (
           // NDVI/Materia Seca — data real desde Supabase tabla ndvi_pasturas.
           // Si la migración 0009 todavía no se aplicó, viene array vacío y
           // la página muestra el empty state.
-          <NdviPage mediciones={d.ndvi} campos={d.campos.map(c => c.nombre)} />
+          <NdviPage key={campaniaSeleccionada.id} mediciones={scoped.ndvi} campos={d.campos.map(c => c.nombre)} />
         )}
 
         <footer className="text-center text-xs text-asfion-muted py-6">
@@ -280,6 +443,17 @@ function formatCachedAt(iso: string): string {
   // Si fue HOY, solo la hora. Si fue otro día, DD/MM HH:MM.
   const esHoy = d.toDateString() === now.toDateString();
   return esHoy ? `hoy ${hh}:${mn}` : `${dd}/${mm} ${hh}:${mn}`;
+}
+
+function adminScopeStorageKey(email: string | undefined | null): string {
+  return `asfion:admin-cliente:${(email ?? 'sin-email').toLowerCase().trim()}`;
+}
+
+/** Conserva el módulo actual y deja el tenant visible/compartible en la URL. */
+function writeClienteToUrl(clienteId: string): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set('cliente', clienteId);
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
 function LoadingSkeleton() {

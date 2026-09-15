@@ -44,7 +44,8 @@ export type { CampoCanonical as Campo,
               PluviometroCanonical as Pluviometro,
               CircuitoCanonical as Circuito,
               ParcelaCanonical as Parcela,
-              CampaniaReproductivaCanonical as CampaniaReproductiva } from './types.canonical';
+              CampaniaReproductivaCanonical as CampaniaReproductiva,
+              CampaniaOperativaCanonical as CampaniaOperativa } from './types.canonical';
 
 // SyncState es SOLO para el sync flow del app móvil (offline → cloud),
 // pero el dashboard también lo lee de los rows ya sincados. Lo dejamos

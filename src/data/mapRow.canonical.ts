@@ -29,6 +29,7 @@ import type {
   CircuitoCanonical,
   ParcelaCanonical,
   CampaniaReproductivaCanonical,
+  CampaniaOperativaCanonical,
   ParicionCanonical,
   LluviaCanonical,
   MortandadCanonical,
@@ -168,6 +169,14 @@ export const CAMPANIA_REPRODUCTIVA_SCHEMA: Schema<CampaniaReproductivaCanonical>
   fechaInicio:  { from: 'fecha_inicio',   type: 'string'  },
   fechaFin:     { from: 'fecha_fin',      type: 'string'  },
   activa:       { from: 'activa',         type: 'boolean' },
+};
+
+export const CAMPANIA_OPERATIVA_SCHEMA: Schema<CampaniaOperativaCanonical> = {
+  id:          { from: 'id',           type: 'string'  },
+  nombre:      { from: 'nombre',       type: 'string'  },
+  fechaInicio: { from: 'fecha_inicio', type: 'string'  },
+  fechaFin:    { from: 'fecha_fin',    type: 'string'  },
+  activa:      { from: 'activa',       type: 'boolean' },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

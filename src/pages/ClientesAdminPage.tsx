@@ -383,7 +383,7 @@ function ClienteDetalle({ cliente, onVolver }: { cliente: ClienteAdminRow; onVol
   const onDeleteCampo = async (id: string) => {
     if (!confirm(`¿Borrar campo "${id}"?`)) return;
     try {
-      await adminDeleteCampo(id);
+      await adminDeleteCampo(id, cliente.id);
       await reloadCampos();
     } catch (e: any) {
       alert(e?.message ?? 'Error al borrar');
@@ -511,7 +511,7 @@ function UsuariosSection({ clienteId, campos }: { clienteId: string; campos: Cam
     )) return;
     try {
       setBusyEmail(email);
-      await adminDeleteUsuario(email);
+      await adminDeleteUsuario(email, clienteId);
       await reload();
     } catch (e: any) {
       alert(e?.message ?? 'Error al borrar usuario');

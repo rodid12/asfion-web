@@ -31,6 +31,7 @@ import {
   fetchVentas,
 } from './supabase';
 import { loadCache, saveCache } from './offlineCache';
+import { setAdminClienteRequestScope } from '@/lib/supabase';
 
 export interface DashboardData {
   campos: Campo[];
@@ -99,6 +100,7 @@ export function useDashboardData(
     // Un super-admin todavía sin tenant elegido no debe consultar "todo".
     // Esperamos a tener un cliente explícito antes de tocar cache o Supabase.
     if (!enabled) {
+      setAdminClienteRequestScope(null);
       setData(null);
       setLoading(true);
       setError(null);
@@ -106,6 +108,11 @@ export function useDashboardData(
       setCachedAt(null);
       return () => { cancelled = true; };
     }
+
+    // Debe definirse antes de crear cualquiera de las consultas paralelas.
+    // Para usuarios normales clienteId es undefined y la RLS usa el tenant del
+    // JWT. Para super-admins identifica el único tenant elegido en el selector.
+    setAdminClienteRequestScope(clienteId ?? null);
 
     (async () => {
       // ESTRATEGIA "stale-while-revalidate":

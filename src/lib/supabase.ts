@@ -15,6 +15,39 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export const envOk = Boolean(url && anonKey);
 
+// Alcance explícito para consultas multi-cliente del dashboard.
+//
+// El valor viaja dentro del header estándar `x-client-info`, que Supabase ya
+// permite. La RLS valida este mismo valor antes de habilitar a un super-admin
+// a leer o administrar filas de un tenant distinto al de su JWT. Una APK vieja
+// no envía `asfion-tenant=...`, por lo que conserva el aislamiento de su tenant.
+let adminClienteRequestScope: string | null = null;
+
+export function setAdminClienteRequestScope(clienteId?: string | null): void {
+  if (clienteId && !/^[a-z0-9-]+$/.test(clienteId)) {
+    throw new Error('Alcance de cliente inválido');
+  }
+  adminClienteRequestScope = clienteId || null;
+}
+
+const scopedFetch: typeof fetch = (input, init) => {
+  const inheritedHeaders = input instanceof Request ? input.headers : undefined;
+  const headers = new Headers(init?.headers ?? inheritedHeaders);
+  const currentClientInfo = headers.get('x-client-info') ?? 'asfion-web';
+  const cleanClientInfo = currentClientInfo
+    .replace(/;?asfion-tenant=[a-z0-9-]+/g, '')
+    .replace(/;+$/g, '');
+
+  headers.set(
+    'x-client-info',
+    adminClienteRequestScope
+      ? `${cleanClientInfo};asfion-tenant=${adminClienteRequestScope}`
+      : cleanClientInfo,
+  );
+
+  return fetch(input, { ...init, headers });
+};
+
 if (!envOk) {
   // Log en consola (visible en DevTools) pero NO tiramos — sino la página
   // se queda en blanco y el usuario no entiende qué pasó. El árbol React
@@ -35,7 +68,12 @@ export const supabase = createClient(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: false,
+      // Necesario para consumir el callback de Google OAuth al volver al
+      // dashboard. El login email/contraseña sigue funcionando igual.
+      detectSessionInUrl: true,
+    },
+    global: {
+      fetch: scopedFetch,
     },
   },
 );

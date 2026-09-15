@@ -7,7 +7,7 @@
 // Si un usuario regular llamara a estas funciones, RLS bloquearía la
 // operación con `new row violates row-level security policy`.
 
-import { supabase } from '@/lib/supabase';
+import { setAdminClienteRequestScope, supabase } from '@/lib/supabase';
 
 // =============================================================================
 // URL canónica para magic links — evita que invitaciones se manden a deploys
@@ -123,6 +123,7 @@ export async function adminUpdateCliente(id: string, input: UpdateClienteInput):
 
 /** Lista TODOS los campos de un cliente (super-admin only). */
 export async function adminListCampos(clienteId: string): Promise<CampoAdminRow[]> {
+  setAdminClienteRequestScope(clienteId);
   const { data, error } = await supabase
     .from('campos')
     .select('id, cliente_id, nombre, organizacion_id, stock_inicial_vacas')
@@ -147,6 +148,7 @@ export async function adminCreateCampo(input: CreateCampoInput): Promise<void> {
   if (!input.nombre.trim()) {
     throw new Error('El nombre del campo es obligatorio');
   }
+  setAdminClienteRequestScope(input.clienteId);
   const { error } = await supabase.from('campos').insert({
     id: input.id,
     cliente_id: input.clienteId,
@@ -161,18 +163,24 @@ export async function adminCreateCampo(input: CreateCampoInput): Promise<void> {
 }
 
 /** Edita el stock_inicial_vacas o el nombre de un campo. */
-export async function adminUpdateCampo(id: string, patch: { nombre?: string; stockInicialVacas?: number | null }): Promise<void> {
+export async function adminUpdateCampo(
+  id: string,
+  clienteId: string,
+  patch: { nombre?: string; stockInicialVacas?: number | null },
+): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const dbPatch: any = {};
   if (patch.nombre !== undefined) dbPatch.nombre = patch.nombre.trim();
   if (patch.stockInicialVacas !== undefined) dbPatch.stock_inicial_vacas = patch.stockInicialVacas;
   if (Object.keys(dbPatch).length === 0) return;
+  setAdminClienteRequestScope(clienteId);
   const { error } = await supabase.from('campos').update(dbPatch).eq('id', id);
   if (error) throw new Error(`adminUpdateCampo: ${error.message}`);
 }
 
 /** Borra un campo. Falla si tiene eventos asociados (FK RESTRICT). */
-export async function adminDeleteCampo(id: string): Promise<void> {
+export async function adminDeleteCampo(id: string, clienteId: string): Promise<void> {
+  setAdminClienteRequestScope(clienteId);
   const { error } = await supabase.from('campos').delete().eq('id', id);
   if (error) {
     if (error.code === '23503') {
@@ -200,6 +208,7 @@ export interface UsuarioAdminRow {
 
 /** Lista los usuarios de un cliente (super-admin only). */
 export async function adminListUsuarios(clienteId: string): Promise<UsuarioAdminRow[]> {
+  setAdminClienteRequestScope(clienteId);
   const { data, error } = await supabase
     .from('usuarios')
     .select('email, cliente_id, nombre, apellido, rol, campo_asignado_id, created_at')
@@ -242,6 +251,8 @@ export async function adminInviteUsuario(input: InviteUsuarioInput): Promise<voi
     throw new Error('Email inválido');
   }
   const emailNorm = input.email.trim().toLowerCase();
+
+  setAdminClienteRequestScope(input.clienteId);
 
   // PASO 1: insertar en tabla `usuarios` PRIMERO. Si esto falla (email
   // duplicado, cliente_id inválido), no mandamos el magic link.
@@ -287,7 +298,11 @@ export interface UpdateUsuarioInput {
   campoAsignadoId?: string | null;
 }
 
-export async function adminUpdateUsuario(email: string, input: UpdateUsuarioInput): Promise<void> {
+export async function adminUpdateUsuario(
+  email: string,
+  clienteId: string,
+  input: UpdateUsuarioInput,
+): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const patch: any = {};
   if (input.nombre !== undefined)          patch.nombre = input.nombre?.trim() || null;
@@ -295,6 +310,7 @@ export async function adminUpdateUsuario(email: string, input: UpdateUsuarioInpu
   if (input.rol !== undefined)             patch.rol = input.rol;
   if (input.campoAsignadoId !== undefined) patch.campo_asignado_id = input.campoAsignadoId;
   if (Object.keys(patch).length === 0) return;
+  setAdminClienteRequestScope(clienteId);
   const { error } = await supabase.from('usuarios').update(patch).eq('email', email);
   if (error) throw new Error(`adminUpdateUsuario: ${error.message}`);
 }
@@ -306,7 +322,8 @@ export async function adminUpdateUsuario(email: string, input: UpdateUsuarioInpu
  * loguearse no va a poder entrar a ningún dashboard. Si querés hard
  * delete, hay que borrarlo desde Supabase Console.
  */
-export async function adminDeleteUsuario(email: string): Promise<void> {
+export async function adminDeleteUsuario(email: string, clienteId: string): Promise<void> {
+  setAdminClienteRequestScope(clienteId);
   const { error } = await supabase.from('usuarios').delete().eq('email', email);
   if (error) throw new Error(`adminDeleteUsuario: ${error.message}`);
 }

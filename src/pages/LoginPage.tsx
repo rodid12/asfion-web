@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 
 export function LoginPage() {
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle, accessError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -28,6 +28,17 @@ export function LoginPage() {
     } catch (err: any) {
       setError(err?.message ?? 'No se pudo iniciar sesión');
     } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const onGoogle = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      setError(err?.message ?? 'No se pudo iniciar sesión con Google');
       setSubmitting(false);
     }
   };
@@ -86,9 +97,9 @@ export function LoginPage() {
             />
           </div>
 
-          {error && (
+          {(error || accessError) && (
             <div className="text-sm text-asfion-danger bg-asfion-danger/10 border border-asfion-danger/30 rounded-lg px-3 py-2">
-              {error}
+              {error || accessError}
             </div>
           )}
 
@@ -98,6 +109,22 @@ export function LoginPage() {
             className="w-full px-4 py-3 rounded-lg bg-asfion-navy text-white font-bold hover:bg-asfion-navyDeep transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? 'Ingresando…' : 'Entrar'}
+          </button>
+
+          <div className="flex items-center gap-3" aria-hidden="true">
+            <div className="h-px flex-1 bg-asfion-borderSoft" />
+            <span className="text-xs text-asfion-muted">o</span>
+            <div className="h-px flex-1 bg-asfion-borderSoft" />
+          </div>
+
+          <button
+            type="button"
+            onClick={onGoogle}
+            disabled={submitting}
+            className="w-full px-4 py-3 rounded-lg border border-asfion-borderSoft bg-white text-asfion-navy font-bold hover:bg-asfion-cream transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+          >
+            <span className="text-lg font-black text-[#4285F4]" aria-hidden="true">G</span>
+            Continuar con Google
           </button>
         </form>
 

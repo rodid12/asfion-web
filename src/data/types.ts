@@ -177,6 +177,8 @@ export type Pastoreo = PastoreoCanonical;
 // es el ÚNICO número que importa para % destete real).
 export interface ResumenServicio {
   id: string;
+  /** Campaña reproductiva real a la que pertenece el cierre consolidado. */
+  campaniaId?: string;
   servicioAnio: number;
   campo: string;
   tropa: string;

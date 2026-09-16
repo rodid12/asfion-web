@@ -95,8 +95,13 @@ export function reproductivaParaOperativa(
   disponibles: CampaniaReproductiva[],
 ): CampaniaReproductiva {
   const servicioAnio = Number(operativa.fechaInicio.slice(0, 4));
-  const existente = disponibles.find(c => c.servicioAnio === servicioAnio)
-    ?? disponibles.find(c => c.fechaInicio >= operativa.fechaInicio && c.fechaInicio <= operativa.fechaFin);
+  // La fecha es la relación autoritativa. `servicioAnio` identifica el cierre
+  // productivo y puede ser anterior al año de los partos (p. ej. Servicio 2024
+  // corresponde a nacimientos Sep-2025–Mar-2026). Buscar primero por ese año
+  // hacía que el cierre apareciera un ciclo antes y dejaba los gráficos vacíos.
+  const existente = disponibles.find(c =>
+    c.fechaInicio >= operativa.fechaInicio && c.fechaInicio <= operativa.fechaFin,
+  );
   if (existente) return { ...existente, activa: true };
   return {
     id: `campania-reproductiva-visual-${operativa.id}`,

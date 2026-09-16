@@ -195,6 +195,14 @@ export function ParicionesPage({
     [resumenTotales, filtrados, camposParaKpis, vinculadaAPrenez],
   );
 
+  const diferenciaNacimientos = useMemo(() => {
+    if (!resumenTotales) return null;
+    const detalle = filtrados.filter(p => p.evento === 'Nacimiento').length;
+    const cierre = resumenTotales.nacidos;
+    if (detalle === 0 || detalle === cierre) return null;
+    return { detalle, cierre, diferencia: detalle - cierre };
+  }, [filtrados, resumenTotales]);
+
   // Texto del título: si hay un campo seleccionado, lo nombramos.
   // Reusa `campoNombreFiltro` calculado arriba (DRY).
   const tituloCampo = campoNombreFiltro;
@@ -231,6 +239,16 @@ export function ParicionesPage({
       {resumenTotales
         ? <KpisDesdeResumen totales={resumenTotales} />
         : kpisLegacy && <KpisLegacy kpis={kpisLegacy} vinculadaAPrenez={vinculadaAPrenez} />}
+
+      {diferenciaNacimientos && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          <strong>Control de consistencia:</strong>{' '}
+          el detalle individual contiene {diferenciaNacimientos.detalle.toLocaleString('es-AR')} nacimientos,
+          mientras que el cierre Excel informa {diferenciaNacimientos.cierre.toLocaleString('es-AR')}
+          {' '}({diferenciaNacimientos.diferencia > 0 ? '+' : ''}{diferenciaNacimientos.diferencia}).
+          Los KPI conservan el cierre oficial y los gráficos muestran el detalle cargado.
+        </div>
+      )}
 
       {/* Charts row A: 2 donuts (eventos + nacimientos segmentados) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

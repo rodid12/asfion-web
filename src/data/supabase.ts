@@ -355,6 +355,7 @@ function rowToPastoreoCiclo(r: any): PastoreoCiclo {
 function rowToResumenServicio(r: any): ResumenServicio {
   return {
     id: r.id,
+    campaniaId: r.campania_id ?? undefined,
     servicioAnio: r.servicio_anio,
     campo: r.campo,
     tropa: r.tropa,

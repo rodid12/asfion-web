@@ -200,7 +200,11 @@ export function Dashboard() {
         const fechas = [x.fechaIngreso, x.fechaControl, x.fechaEncierre].filter((f): f is string => Boolean(f)).sort();
         return solapaCampania(fechas[0], fechas[fechas.length - 1], campaniaSeleccionada);
       }),
-      resumenServicio: d.resumenServicio.filter(x => x.servicioAnio === reproductivaSeleccionada.servicioAnio),
+      resumenServicio: d.resumenServicio.filter(x =>
+        x.campaniaId
+          ? x.campaniaId === reproductivaSeleccionada.id
+          : x.servicioAnio === reproductivaSeleccionada.servicioAnio,
+      ),
       compras: d.compras.filter(x => enCampania(x.fecha, campaniaSeleccionada)),
       ventas: d.ventas.filter(x => enCampania(x.fecha, campaniaSeleccionada)),
       ndvi: d.ndvi.filter(x => enCampania(x.fecha, campaniaSeleccionada)),

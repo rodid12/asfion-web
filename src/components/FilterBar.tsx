@@ -9,6 +9,9 @@ interface Props {
   filtros: Filtros;
   campos: Campo[];
   onChange: (f: Filtros) => void;
+  /** Oculta los controles temporales cuando la campaña superior ya define
+   *  el período. Evita presentar dos selectores que compitan entre sí. */
+  showDateControls?: boolean;
   /** Años con data — para alimentar el dropdown "Año". Si no se pasa,
    *  el dropdown muestra los últimos 5 años hasta el actual. */
   añosDisponibles?: number[];
@@ -31,7 +34,13 @@ const SELECT_CLS =
   'bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy ' +
   'hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange transition cursor-pointer';
 
-export function FilterBar({ filtros, campos, onChange, añosDisponibles }: Props) {
+export function FilterBar({
+  filtros,
+  campos,
+  onChange,
+  añosDisponibles,
+  showDateControls = true,
+}: Props) {
   const añoActual = new Date().getFullYear();
   const años = añosDisponibles && añosDisponibles.length > 0
     ? [...añosDisponibles].sort((a, b) => b - a)
@@ -90,69 +99,77 @@ export function FilterBar({ filtros, campos, onChange, añosDisponibles }: Props
 
   return (
     <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 flex flex-wrap items-center gap-3">
-      <div className={cn('flex items-center gap-1 flex-wrap', rangoDisabled && 'opacity-40')}>
-        <span className="text-xs uppercase font-semibold text-asfion-muted mr-2">Rango</span>
-        {RANGOS.map(([val, label]) => (
-          <button
-            key={val}
-            onClick={() => onChange({ ...filtros, rango: val, año: undefined, desde: undefined, hasta: undefined })}
-            className={cn(
-              'px-3 py-1.5 rounded-lg text-sm font-semibold transition',
-              filtros.rango === val && !rangoDisabled
-                ? 'bg-asfion-navy text-white'
-                : 'bg-asfion-bg text-asfion-navy hover:bg-asfion-orangeSoft/25',
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {showDateControls ? (
+        <>
+          <div className={cn('flex items-center gap-1 flex-wrap', rangoDisabled && 'opacity-40')}>
+            <span className="text-xs uppercase font-semibold text-asfion-muted mr-2">Rango</span>
+            {RANGOS.map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => onChange({ ...filtros, rango: val, año: undefined, desde: undefined, hasta: undefined })}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-sm font-semibold transition',
+                  filtros.rango === val && !rangoDisabled
+                    ? 'bg-asfion-navy text-white'
+                    : 'bg-asfion-bg text-asfion-navy hover:bg-asfion-orangeSoft/25',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-      <div className="h-8 w-px bg-asfion-borderSoft" />
+          <div className="h-8 w-px bg-asfion-borderSoft" />
 
-      <div className="flex items-center gap-2">
-        <span className="text-xs uppercase font-semibold text-asfion-muted">Período</span>
-        <select
-          value={periodoSeleccionado}
-          onChange={e => onChangePeriodo(e.target.value)}
-          className={SELECT_CLS}
-        >
-          <option value="">— Por rango —</option>
-          {campañas.length > 0 && (
-            <optgroup label="Campaña ganadera">
-              {campañas.map(c => (
-                <option key={c.id} value={`camp:${c.id}`}>{c.label}</option>
-              ))}
-            </optgroup>
+          <div className="flex items-center gap-2">
+            <span className="text-xs uppercase font-semibold text-asfion-muted">Período</span>
+            <select
+              value={periodoSeleccionado}
+              onChange={e => onChangePeriodo(e.target.value)}
+              className={SELECT_CLS}
+            >
+              <option value="">— Por rango —</option>
+              {campañas.length > 0 && (
+                <optgroup label="Campaña ganadera">
+                  {campañas.map(c => (
+                    <option key={c.id} value={`camp:${c.id}`}>{c.label}</option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="Año calendario">
+                {años.map(a => <option key={a} value={`año:${a}`}>{a}</option>)}
+              </optgroup>
+              <option value="custom">Personalizado (desde – hasta)…</option>
+            </select>
+          </div>
+
+          {hayCustomRange && (
+            <div className="flex items-center gap-2 bg-asfion-bg/60 rounded-lg px-2 py-1">
+              <input
+                type="date"
+                value={filtros.desde ?? ''}
+                onChange={e => onChange({ ...filtros, desde: e.target.value || undefined })}
+                className="bg-white border border-asfion-borderSoft rounded px-2 py-1 text-sm font-semibold text-asfion-navy focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange"
+                max={filtros.hasta}
+              />
+              <span className="text-xs text-asfion-muted">–</span>
+              <input
+                type="date"
+                value={filtros.hasta ?? ''}
+                onChange={e => onChange({ ...filtros, hasta: e.target.value || undefined })}
+                className="bg-white border border-asfion-borderSoft rounded px-2 py-1 text-sm font-semibold text-asfion-navy focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange"
+                min={filtros.desde}
+              />
+            </div>
           )}
-          <optgroup label="Año calendario">
-            {años.map(a => <option key={a} value={`año:${a}`}>{a}</option>)}
-          </optgroup>
-          <option value="custom">Custom (desde – hasta)…</option>
-        </select>
-      </div>
 
-      {hayCustomRange && (
-        <div className="flex items-center gap-2 bg-asfion-bg/60 rounded-lg px-2 py-1">
-          <input
-            type="date"
-            value={filtros.desde ?? ''}
-            onChange={e => onChange({ ...filtros, desde: e.target.value || undefined })}
-            className="bg-white border border-asfion-borderSoft rounded px-2 py-1 text-sm font-semibold text-asfion-navy focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange"
-            max={filtros.hasta}
-          />
-          <span className="text-xs text-asfion-muted">–</span>
-          <input
-            type="date"
-            value={filtros.hasta ?? ''}
-            onChange={e => onChange({ ...filtros, hasta: e.target.value || undefined })}
-            className="bg-white border border-asfion-borderSoft rounded px-2 py-1 text-sm font-semibold text-asfion-navy focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange"
-            min={filtros.desde}
-          />
+          <div className="h-8 w-px bg-asfion-borderSoft" />
+        </>
+      ) : (
+        <div className="rounded-lg bg-asfion-orangeSoft/25 px-3 py-2 text-xs font-semibold text-asfion-muted">
+          Período definido por la campaña seleccionada arriba
         </div>
       )}
-
-      <div className="h-8 w-px bg-asfion-borderSoft" />
 
       <div className="flex items-center gap-2">
         <span className="text-xs uppercase font-semibold text-asfion-muted">Campo</span>

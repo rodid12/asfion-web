@@ -231,7 +231,13 @@ export function ParicionesPage({
         }
       />
 
-      <FilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
+      <FilterBar
+        filtros={filtros}
+        campos={campos}
+        onChange={setFiltros}
+        añosDisponibles={añosDisponibles}
+        showDateControls={false}
+      />
 
       {/* KPIs principales — Excel-faithful cuando hay resumen, DAX legacy
           como fallback. La preferencia por el resumen está documentada en

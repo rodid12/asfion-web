@@ -80,45 +80,14 @@ export function ParicionesPage({
     [pariciones, filtros],
   );
 
-  // Resolver qué campaña representa el filtro actual. Los rangos custom
-  // contenidos dentro de una campaña también usan su misma foto de Preñez.
-  // Para rangos relativos, inferimos por los eventos que ya tengan campaña.
-  const campaniaSeleccionada = useMemo(() => {
-    if (filtros.desde && filtros.hasta) {
-      const porRango = campaniasReproductivas.find(c =>
-        filtros.desde! >= c.fechaInicio && filtros.hasta! <= c.fechaFin,
-      );
-      if (porRango) return porRango;
-    }
-    if (filtros.año != null) {
-      const porAnio = campaniasReproductivas.find(c => c.servicioAnio === filtros.año);
-      if (porAnio) return porAnio;
-    }
-
-    const ids = new Set(
-      filtradosPorControles
-        .map(p => p.campaniaId)
-        .filter((id): id is string => Boolean(id)),
-    );
-    const activa = campaniasReproductivas.find(c => c.activa);
-    if (activa && ids.has(activa.id)) return activa;
-    if (ids.size === 1) {
-      const [id] = ids;
-      return campaniasReproductivas.find(c => c.id === id);
-    }
-    return undefined;
-  }, [filtros, campaniasReproductivas, filtradosPorControles]);
-
-  // Además del rango de fechas, cuando conocemos la campaña exigimos que el
-  // evento pertenezca a ella. El fallback por fecha cubre eventos offline que
-  // todavía no recibieron `campania_id` del trigger de Supabase.
-  const filtrados = useMemo(() => {
-    if (!campaniaSeleccionada) return filtradosPorControles;
-    return filtradosPorControles.filter(p =>
-      p.campaniaId === campaniaSeleccionada.id ||
-      (!p.campaniaId && p.fecha >= campaniaSeleccionada.fechaInicio && p.fecha <= campaniaSeleccionada.fechaFin),
-    );
-  }, [filtradosPorControles, campaniaSeleccionada]);
+  // El selector superior del Dashboard ya entrega una única campaña y data
+  // acotada a sus fechas. Volver a exigir aquí que cada row tenga exactamente
+  // el mismo `campania_id` descartaba eventos históricos válidos cuando su
+  // vínculo todavía estaba desactualizado, dejando vacíos los gráficos aunque
+  // los KPI consolidados sí existieran. Dentro del módulo solo refinamos por
+  // campo y tipo de evento; la campaña seleccionada es la recibida por props.
+  const campaniaSeleccionada = campaniaInicial;
+  const filtrados = filtradosPorControles;
 
   // Años con data — para alimentar el dropdown del filtro.
   const añosDisponibles = useMemo(() => {

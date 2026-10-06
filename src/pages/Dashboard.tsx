@@ -7,7 +7,7 @@ import { LogOutIcon, RefreshCwIcon, ShieldIcon } from 'lucide-react';
 import { useDashboardData, EMPTY_DATA } from '@/data/useData';
 import { useAuth } from '@/lib/auth';
 import { useSuperAdminStatus } from '@/lib/billing';
-import { ModuleTabs, type ModuleKey } from '@/components/ModuleTabs';
+import { dashboardModulesFor, ModuleTabs, type ModuleKey } from '@/components/ModuleTabs';
 import { ClienteScopeSelector } from '@/components/ClienteScopeSelector';
 import { parseCurrentPath, pushPath } from '@/lib/routing';
 import { ParicionesPage } from './ParicionesPage';
@@ -28,6 +28,7 @@ import { Logo } from '@/components/Logo';
 import { ClientesAdminPage } from './ClientesAdminPage';
 import { UsersIcon } from 'lucide-react';
 import { adminListClientes, type ClienteAdminRow } from '@/data/admin';
+import { DEFAULT_CLIENT_MODULES, fetchOwnClientModules } from '@/data/clientModules';
 import { CampaniaOperativaBar } from '@/components/CampaniaOperativaBar';
 import {
   campaniasOperativasFallback,
@@ -56,6 +57,8 @@ export function Dashboard() {
   const [clientesLoading, setClientesLoading] = useState(false);
   const [clientesError, setClientesError] = useState<string | null>(null);
   const [clientesNonce, setClientesNonce] = useState(0);
+  const [modulosUsuario, setModulosUsuario] = useState<string[] | null>(() =>
+    readModulesCache(user?.email));
 
   // Carga el catálogo de tenants únicamente para dueños/super-admins. La
   // prioridad inicial es: URL compartida → selección anterior → claim del JWT
@@ -105,6 +108,35 @@ export function Dashboard() {
     return () => { cancelado = true; };
   }, [adminStatus, clienteClaim, clientesNonce, user?.email]);
 
+  // Para usuarios normales la propia RLS de `clientes` devuelve un único row.
+  // Conservamos la última configuración en localStorage para que el dashboard
+  // offline no vuelva a mostrar módulos que el cliente ya no tiene habilitados.
+  useEffect(() => {
+    if (adminStatus !== false) {
+      setModulosUsuario(null);
+      return;
+    }
+
+    const cached = readModulesCache(user?.email);
+    if (cached) setModulosUsuario(cached);
+
+    let cancelado = false;
+    fetchOwnClientModules()
+      .then(modulos => {
+        if (cancelado) return;
+        const normalized = modulos.length > 0 ? modulos : ['pariciones'];
+        setModulosUsuario(normalized);
+        writeModulesCache(user?.email, normalized);
+      })
+      .catch(() => {
+        // Sin red usamos el cache. En un primer acceso sin cache dejamos el
+        // mínimo seguro (Pariciones) en vez de exponer todos los módulos.
+        if (!cancelado && !cached) setModulosUsuario(['pariciones']);
+      });
+
+    return () => { cancelado = true; };
+  }, [adminStatus, user?.email]);
+
   const cambiarCliente = (clienteId: string) => {
     if (!clientesDisponibles.some(cliente => cliente.id === clienteId)) return;
     setClienteSeleccionadoId(clienteId);
@@ -129,6 +161,18 @@ export function Dashboard() {
   const initial = parseCurrentPath();
   const [modulo, setModulo] = useState<ModuleKey>(initial.modulo);
   const [view, setView] = useState<View>(initial.view);
+  const modulosConfigurados = useMemo(() => {
+    if (showAdmin) {
+      return clientesDisponibles.find(cliente => cliente.id === clienteSeleccionadoId)
+        ?.modulos_habilitados ?? ['pariciones'];
+    }
+    return modulosUsuario ?? [...DEFAULT_CLIENT_MODULES];
+  }, [clientesDisponibles, clienteSeleccionadoId, modulosUsuario, showAdmin]);
+  const modulosDashboard = useMemo(() => {
+    const mapped = dashboardModulesFor(modulosConfigurados);
+    return mapped.length > 0 ? mapped : (['pariciones'] as ModuleKey[]);
+  }, [modulosConfigurados]);
+  const moduloHabilitado = modulosDashboard.includes(modulo);
   const fallbackCampanias = useMemo(() => campaniasOperativasFallback(), []);
   const [campaniaId, setCampaniaId] = useState(() => elegirCampaniaActual(fallbackCampanias)!.id);
 
@@ -150,6 +194,14 @@ export function Dashboard() {
   useEffect(() => {
     pushPath(view, modulo);
   }, [view, modulo]);
+
+  // Un link directo a /lluvias no debe saltear la configuración comercial.
+  // Si el módulo no está habilitado, volvemos al primero disponible.
+  useEffect(() => {
+    if (view === 'modules' && !moduloHabilitado) {
+      setModulo(modulosDashboard[0] ?? 'pariciones');
+    }
+  }, [moduloHabilitado, modulosDashboard, view]);
 
   const d = data ?? EMPTY_DATA;
   const campaniasBase = useMemo(() => asegurarCampaniaDeHoy(
@@ -320,6 +372,7 @@ export function Dashboard() {
           <ModuleTabs
             active={modulo}
             onChange={setModulo}
+            enabledModules={modulosDashboard}
           />
           <CampaniaOperativaBar
             campanias={campaniasOperativas}
@@ -369,7 +422,7 @@ export function Dashboard() {
         {view === 'admin'   && showAdmin && <ClientesAdminPage />}
 
         {/* Vista operativa: página activa según tab */}
-        {view === 'modules' && data && modulo === 'pariciones' && (
+        {view === 'modules' && data && moduloHabilitado && modulo === 'pariciones' && (
           <ParicionesPage
             key={campaniaSeleccionada.id}
             pariciones={scoped.pariciones}
@@ -379,13 +432,13 @@ export function Dashboard() {
             campaniasReproductivas={[reproductivaSeleccionada]}
           />
         )}
-        {view === 'modules' && data && modulo === 'lluvias' && (
+        {view === 'modules' && data && moduloHabilitado && modulo === 'lluvias' && (
           <LluviasPage key={campaniaSeleccionada.id} lluvias={scoped.lluvias} campos={d.campos} />
         )}
-        {view === 'modules' && data && modulo === 'mortandad' && (
+        {view === 'modules' && data && moduloHabilitado && modulo === 'mortandad' && (
           <MortandadPage key={campaniaSeleccionada.id} mortandad={scoped.mortandad} campos={d.campos} />
         )}
-        {view === 'modules' && data && modulo === 'pastoreo' && (
+        {view === 'modules' && data && moduloHabilitado && modulo === 'pastoreo' && (
           // PastoreoModule maneja internamente los 3 sub-tabs:
           //   Pastoreo (vista actual) · Entradas · Cierre Corrales.
           // Antes Corrales era tab top-level — se movió adentro porque
@@ -401,21 +454,21 @@ export function Dashboard() {
             corrales={scoped.corrales}
           />
         )}
-        {view === 'modules' && data && modulo === 'compras' && (
+        {view === 'modules' && data && moduloHabilitado && modulo === 'compras' && (
           // Compras = entradas de hacienda al sistema (proveedores).
           <ComprasPage key={campaniaSeleccionada.id} compras={scoped.compras} campos={d.campos} />
         )}
-        {view === 'modules' && data && modulo === 'ventas' && (
+        {view === 'modules' && data && moduloHabilitado && modulo === 'ventas' && (
           <VentasPage key={campaniaSeleccionada.id} ventas={scoped.ventas} campos={d.campos} />
         )}
-        {view === 'modules' && data && modulo === 'prenez' && (
+        {view === 'modules' && data && moduloHabilitado && modulo === 'prenez' && (
           // Tactos vienen de Supabase (tabla `tactos`, migration 0012).
           // RLS por cliente_id garantiza que cada tenant vea solo los
           // suyos. Si la tabla no existe todavía, fetchTactos devuelve
           // [] y PrenezPage muestra su empty state.
           <PrenezPage key={campaniaSeleccionada.id} tactos={scoped.tactos} />
         )}
-        {view === 'modules' && data && modulo === 'ndvi' && (
+        {view === 'modules' && data && moduloHabilitado && modulo === 'ndvi' && (
           // NDVI/Materia Seca — data real desde Supabase tabla ndvi_pasturas.
           // Si la migración 0009 todavía no se aplicó, viene array vacío y
           // la página muestra el empty state.
@@ -451,6 +504,31 @@ function formatCachedAt(iso: string): string {
 
 function adminScopeStorageKey(email: string | undefined | null): string {
   return `asfion:admin-cliente:${(email ?? 'sin-email').toLowerCase().trim()}`;
+}
+
+function modulesStorageKey(email: string | undefined | null): string {
+  return `asfion:cliente-modulos:${(email ?? 'sin-email').toLowerCase().trim()}`;
+}
+
+function readModulesCache(email: string | undefined | null): string[] | null {
+  try {
+    const raw = window.localStorage.getItem(modulesStorageKey(email));
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === 'string')
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeModulesCache(email: string | undefined | null, modules: readonly string[]): void {
+  try {
+    window.localStorage.setItem(modulesStorageKey(email), JSON.stringify(modules));
+  } catch {
+    // El dashboard sigue funcionando aunque el navegador bloquee storage.
+  }
 }
 
 /** Conserva el módulo actual y deja el tenant visible/compartible en la URL. */

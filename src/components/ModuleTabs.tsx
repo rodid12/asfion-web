@@ -16,6 +16,7 @@ interface Props {
   active: ModuleKey;
   onChange: (k: ModuleKey) => void;
   counts?: Partial<Record<ModuleKey, number>>;
+  enabledModules?: readonly ModuleKey[];
 }
 
 // `disabled` marca tabs teaser (módulos en roadmap, todavía no implementados).
@@ -33,7 +34,31 @@ const TABS: { key: ModuleKey; label: string; disabled?: boolean }[] = [
   { key: 'prenez',     label: 'Preñez'     },
 ];
 
-export function ModuleTabs({ active, onChange, counts }: Props) {
+const CORE_MODULES = [
+  'pariciones', 'lluvias', 'mortandad', 'pastoreo', 'compras', 'ventas',
+] as const;
+
+export function dashboardModulesFor(configured: readonly string[]): ModuleKey[] {
+  const enabled = new Set(configured);
+  // Compatibilidad: los clientes históricos con los seis módulos continúan
+  // viendo Preñez y NDVI/MS. Un cliente limitado (por ejemplo La Hoyada con
+  // solo Pariciones) ve literalmente solo los módulos contratados. Las vistas
+  // complementarias también pueden habilitarse de forma explícita en DB.
+  const hasAllCoreModules = CORE_MODULES.every(module => enabled.has(module));
+  return TABS
+    .filter(tab => {
+      if (tab.key === 'prenez' || tab.key === 'ndvi') {
+        return enabled.has(tab.key) || hasAllCoreModules;
+      }
+      return enabled.has(tab.key);
+    })
+    .map(tab => tab.key);
+}
+
+export function ModuleTabs({ active, onChange, counts, enabledModules }: Props) {
+  const enabled = enabledModules ? new Set(enabledModules) : null;
+  const visibleTabs = enabled ? TABS.filter(tab => enabled.has(tab.key)) : TABS;
+
   return (
     <div className="border-b border-asfion-borderSoft bg-white relative">
       {/* overflow-x-auto + overflow-y-hidden: por spec CSS, setear
@@ -49,7 +74,7 @@ export function ModuleTabs({ active, onChange, counts }: Props) {
       <div
         className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto overflow-y-hidden touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {TABS.map(t => {
+        {visibleTabs.map(t => {
           const isActive = !t.disabled && t.key === active;
           const n = !t.disabled ? counts?.[t.key as ModuleKey] : undefined;
           return (

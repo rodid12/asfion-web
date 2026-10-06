@@ -81,15 +81,15 @@
       font-size: 13px;
       color: var(--navy);
     }
-    .placeholder {
-      background: #FFF7E6;
-      border-left: 3px solid var(--orange);
+    .responsible {
+      background: white;
+      border-left: 3px solid var(--navy);
       padding: 12px 16px;
       margin: 12px 0;
       font-size: 14px;
       border-radius: 4px;
     }
-    .placeholder strong { color: var(--orange); }
+    .responsible strong { color: var(--navy); }
     a { color: var(--orange); text-decoration: none; font-weight: 600; }
     a:hover { text-decoration: underline; }
     footer {
@@ -129,7 +129,7 @@
 
   <main>
     <h1>Política de Privacidad</h1>
-    <p class="updated">Última actualización: 2 de junio de 2026 · Versión 1.0</p>
+    <p class="updated">Última actualización: 5 de octubre de 2026 · Versión 1.1</p>
 
     <p>
       Esta Política de Privacidad explica cómo <strong>ASFION</strong> (en adelante,
@@ -163,10 +163,9 @@
     <p>
       ASFION es un servicio operado por:
     </p>
-    <div class="placeholder">
-      <strong>Razón social:</strong> [COMPLETAR RAZÓN SOCIAL DE LA SAS/SRL]<br>
-      <strong>CUIT:</strong> [COMPLETAR CUIT]<br>
-      <strong>Domicilio:</strong> [COMPLETAR DOMICILIO FISCAL]<br>
+    <div class="responsible">
+      <strong>Titular y responsable:</strong> María del Rosario Didziulis<br>
+      <strong>País:</strong> Argentina<br>
       <strong>Email de contacto:</strong> <a href="mailto:rosariodidziulis8@gmail.com">rosariodidziulis8@gmail.com</a>
     </div>
     <p>
@@ -190,7 +189,7 @@
     <h3>2.2 Datos productivos del campo</h3>
     <p>
       ASFION está pensado para registrar la operación ganadera. Cuando cargás un
-      evento (parición, lluvia, mortandad, pastoreo, compra de hacienda),
+      evento (parición, lluvia, mortandad, pastoreo, compra o venta de hacienda),
       almacenamos los datos que vos mismo ingresás, por ejemplo:
     </p>
     <ul>
@@ -198,7 +197,8 @@
       <li>Categoría animal, lote, caravana</li>
       <li>Kilogramos, cantidades, precios, observaciones</li>
       <li>Causa de muerte (en mortandad)</li>
-      <li>Datos comerciales de compras (titular, plazo, N° DTE)</li>
+      <li>Datos comerciales de compras y ventas (titular, pago, precio, N° DTE y consignado)</li>
+      <li>Fotografías que decidís adjuntar a un evento</li>
     </ul>
     <p>
       Estos datos pertenecen a la organización que contrató los Servicios. ASFION
@@ -206,11 +206,10 @@
       organización.
     </p>
 
-    <h3>2.3 Datos técnicos automáticos</h3>
+    <h3>2.3 Datos técnicos</h3>
     <ul>
-      <li><span class="field">Identificador de dispositivo</span> (anónimo) para sincronización offline</li>
-      <li><span class="field">Versión de la app y SO</span> para diagnóstico de bugs</li>
-      <li><span class="field">Logs de errores</span> sin información personal identificable</li>
+      <li><span class="field">Estado de sincronización</span> para guardar cargas pendientes cuando no hay conexión</li>
+      <li><span class="field">Datos de sesión</span> necesarios para mantener tu cuenta autenticada de forma segura</li>
     </ul>
 
     <h3>2.4 Ubicación (opcional)</h3>
@@ -223,7 +222,7 @@
 
     <h3>2.5 Datos que NO recopilamos</h3>
     <ul>
-      <li>No recopilamos contactos, mensajes, fotos personales</li>
+      <li>No recopilamos contactos ni mensajes personales</li>
       <li>No accedemos al micrófono ni a la cámara salvo que explícitamente subas una foto</li>
       <li>No usamos cookies de tracking ni publicidad de terceros</li>
       <li>No vendemos datos a terceros, jamás</li>
@@ -268,7 +267,8 @@
       <li><strong>Supabase Inc.</strong> — almacenamiento de base de datos y autenticación</li>
       <li><strong>Expo Inc.</strong> — distribución de actualizaciones over-the-air a la app móvil</li>
       <li><strong>Vercel Inc.</strong> — hosting del panel web</li>
-      <li><strong>Apple Inc. / Google LLC</strong> — distribución de la app vía App Store / Google Play</li>
+      <li><strong>Google LLC</strong> — autenticación opcional con Google y distribución en Google Play</li>
+      <li><strong>Apple Inc.</strong> — distribución de la app mediante App Store y TestFlight</li>
     </ul>
     <p>
       <strong>No vendemos, alquilamos ni intercambiamos tu información</strong>
@@ -342,8 +342,7 @@
       tratamiento de tus datos personales:
     </p>
     <p>
-      📧 <a href="mailto:rosariodidziulis8@gmail.com">rosariodidziulis8@gmail.com</a><br>
-      <em>(En breve estará disponible <a href="mailto:hola@asfion.com">hola@asfion.com</a>)</em>
+      📧 <a href="mailto:rosariodidziulis8@gmail.com">rosariodidziulis8@gmail.com</a>
     </p>
 
     <footer>

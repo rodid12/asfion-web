@@ -429,6 +429,7 @@ export function Dashboard() {
             campos={d.campos}
             resumenServicio={scoped.resumenServicio}
             tactos={scoped.tactos}
+            mortandad={d.mortandad}
             campaniasReproductivas={[reproductivaSeleccionada]}
           />
         )}

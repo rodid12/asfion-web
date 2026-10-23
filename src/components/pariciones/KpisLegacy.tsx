@@ -64,7 +64,7 @@ export function KpisLegacy({ kpis, vinculadaAPrenez = false }: Props) {
           label="Vacas sin Parir"
           value={kpis.stockBase > 0 ? formatNumber(kpis.vacasSinParir) : '—'}
           sublabel={vinculadaAPrenez
-            ? 'Preñez inicial − partos − abortos'
+            ? `Stock − ${formatNumber(kpis.vacasParidas)} nac. − ${formatNumber(kpis.ternerosMuertosTotales)} muertes − ${formatNumber(kpis.vacasMuertas)} vientres − ${formatNumber(kpis.abortos)} abortos`
             : 'Stock − Partos − Retactos − Abortos'}
           accent="navy"
           icon={<ShieldOffIcon size={18} />}

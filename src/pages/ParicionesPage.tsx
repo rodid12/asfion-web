@@ -34,7 +34,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { EmptyModule } from '@/components/EmptyModule';
 import { aplicarFiltros, FILTROS_DEFAULT, type Filtros } from '@/data/filters';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
-import type { CampaniaReproductiva, Campo, Paricion, ResumenServicio, Tacto } from '@/data/types';
+import type { CampaniaReproductiva, Campo, Mortandad, Paricion, ResumenServicio, Tacto } from '@/data/types';
 import { ResumenServicioTable } from '@/components/ResumenServicioTable';
 import { campoNombreFn } from '@/lib/campoMap';
 import { KpisDesdeResumen } from '@/components/pariciones/KpisDesdeResumen';
@@ -50,6 +50,8 @@ interface Props {
   resumenServicio?: ResumenServicio[];
   /** Foto inicial de Preñez, agrupable por campaña y campo (mig 0030). */
   tactos?: Tacto[];
+  /** Mortandad de vientres que también descuenta Vacas por parir. */
+  mortandad?: Mortandad[];
   /** Define el período activo y evita mezclar campañas reproductivas. */
   campaniasReproductivas?: CampaniaReproductiva[];
 }
@@ -59,6 +61,7 @@ export function ParicionesPage({
   campos,
   resumenServicio = [],
   tactos = [],
+  mortandad = [],
   campaniasReproductivas = [],
 }: Props) {
   // La campaña activa abre seleccionada. Así, al comenzar septiembre se ve
@@ -160,8 +163,13 @@ export function ParicionesPage({
   const kpisLegacy = useMemo(
     () => resumenTotales
       ? null
-      : computeKpisLegacy(filtrados, camposParaKpis, vinculadaAPrenez),
-    [resumenTotales, filtrados, camposParaKpis, vinculadaAPrenez],
+      : computeKpisLegacy(
+          filtrados,
+          camposParaKpis,
+          vinculadaAPrenez,
+          mortandad.filter(m => !campaniaSeleccionada || m.fecha <= campaniaSeleccionada.fechaFin),
+        ),
+    [resumenTotales, filtrados, camposParaKpis, vinculadaAPrenez, mortandad, campaniaSeleccionada],
   );
 
   const diferenciaNacimientos = useMemo(() => {

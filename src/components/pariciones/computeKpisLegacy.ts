@@ -13,7 +13,7 @@
 // Función PURA — testeable con Vitest en A5 sin DOM. Las 11 fórmulas DAX
 // están comentadas inline.
 
-import type { Campo, Paricion } from '@/data/types';
+import type { Campo, Mortandad, Paricion } from '@/data/types';
 
 export interface KpisLegacy {
   // Conteos absolutos
@@ -26,9 +26,12 @@ export interface KpisLegacy {
   retactos: number;           // = 0 (no se usa más en DAX, dejado para compat UI)
   muerteSenalado: number;
   nacidoMuerto: number;
+  vacasParidas: number;
+  ternerosMuertosTotales: number;
+  vacasMuertas: number;
   ternerosEnPie: number;      // = Nacimientos − Muerte Señalado
   stockBase: number;
-  vacasSinParir: number;      // = Stock Base − Eventos + Abortos (literal DAX)
+  vacasSinParir: number;      // Preñez: Stock − nac. − muertes − vientres − abortos
   orejanos: number;
   asistidos: number;
 
@@ -43,11 +46,20 @@ export interface KpisLegacy {
 const KPIS_EMPTY: KpisLegacy = {
   total: 0, eventos: 0, nacimientosVivos: 0, nacimientos: 0, muertes: 0,
   abortos: 0, retactos: 0, muerteSenalado: 0, nacidoMuerto: 0,
+  vacasParidas: 0, ternerosMuertosTotales: 0, vacasMuertas: 0,
   ternerosEnPie: 0, stockBase: 0, vacasSinParir: 0, orejanos: 0, asistidos: 0,
   pctParicion: 0, pctDestete: 0, pctAbortos: 0, pctMuerteSenal: 0, pctNacidoMuerto: 0,
 };
 
 const norm = (s?: string | null) => (s ?? '').trim().toUpperCase();
+const normSinAcentos = (s?: string | null) => norm(s)
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '');
+const CATEGORIAS_VIENTRE = new Set([
+  'VAQ 1° SERVICIO', 'VAQ 1 SERVICIO',
+  'VAQ 2° SERVICIO', 'VAQ 2 SERVICIO',
+  'VC PREN',
+]);
 
 /**
  * Aplica las fórmulas DAX del Power BI a un set filtrado de pariciones y
@@ -63,6 +75,7 @@ export function computeKpisLegacy(
   pariciones: Paricion[],
   camposVisibles: Campo[],
   usarPrenezComoBase = false,
+  mortandad: Mortandad[] = [],
 ): KpisLegacy {
   // El stock debe verse incluso antes de la primera parición de la campaña.
   // Antes el early-return dejaba todos los KPIs en cero y ocultaba la foto
@@ -82,6 +95,7 @@ export function computeKpisLegacy(
   const orejanosIds     = new Set<string>();
   const asistIds        = new Set<string>();
   const partosIds       = new Set<string>();
+  const vacasParidasIds = new Set<string>();
 
   pariciones.forEach(p => {
     const ev = norm(p.evento);
@@ -93,7 +107,8 @@ export function computeKpisLegacy(
     }
     if (ev === 'NACIMIENTO' && sx !== 'OREJANO') nacIds.add(p.id);
     if (ev === 'MUERTE') muertesIds.add(p.id);
-    if (ca === 'MUERTE SEÑALADO') muerteSenIds.add(p.id);
+    if (ev === 'NACIMIENTO') vacasParidasIds.add(p.id);
+    if (ev === 'MUERTE' && ca === 'MUERTE SEÑALADO') muerteSenIds.add(p.id);
     if (ca === 'NACIDO MUERTO') nacidoMuertoIds.add(p.id);
     if (ev === 'ABORTO') abortosIds.add(p.id);
     if (sx === 'OREJANO') orejanosIds.add(p.id);
@@ -120,15 +135,21 @@ export function computeKpisLegacy(
   const abortos        = abortosIds.size;
   const orejanos       = orejanosIds.size;
   const asistidos      = asistIds.size;
+  const vacasParidas   = vacasParidasIds.size;
+  const vacasMuertas   = new Set(
+    mortandad
+      .filter(m => m.fecha >= '2026-05-19' && CATEGORIAS_VIENTRE.has(normSinAcentos(m.categoria)))
+      .map(m => m.id),
+  ).size;
 
   // Ternero en Pie = Nacimientos Total − Muerte Señalado
   const ternerosEnPie = Math.max(0, nacimientos - muerteSenalado);
 
   // Históricos: conserva la fórmula DAX ya validada contra Power BI.
-  // Campaña nueva: Preñez es la foto inicial y se descuentan partos/nacidos
-  // muertos + abortos. Nunca mutamos el tacto; este saldo siempre es derivado.
+  // Campaña nueva: Preñez es la foto inicial y aplicamos la fórmula vigente
+  // de Ganaderas. Nunca mutamos el tacto; este saldo siempre es derivado.
   const vacasSinParir = usarPrenezComoBase
-    ? Math.max(0, stockBase - partosIds.size - abortos)
+    ? Math.max(0, stockBase - vacasParidas - muertes - vacasMuertas - abortos)
     : Math.max(0, stockBase - eventos + abortos);
 
   return {
@@ -141,6 +162,9 @@ export function computeKpisLegacy(
     retactos: 0,   // legacy, no se usa más en DAX
     muerteSenalado,
     nacidoMuerto,
+    vacasParidas,
+    ternerosMuertosTotales: muertes,
+    vacasMuertas,
     ternerosEnPie,
     stockBase,
     vacasSinParir,

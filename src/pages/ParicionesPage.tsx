@@ -64,19 +64,19 @@ export function ParicionesPage({
   mortandad = [],
   campaniasReproductivas = [],
 }: Props) {
-  // La campaña activa abre seleccionada. Así, al comenzar septiembre se ve
-  // inmediatamente el stock de Preñez aunque todavía no haya ningún parto,
-  // y los eventos de campañas anteriores no se descuentan del stock nuevo.
+  // El Dashboard ya entrega las pariciones acotadas a la campaña operativa
+  // seleccionada. Este filtro local solo debe refinar por campo/evento: aplicar
+  // nuevamente las fechas reproductivas dejaba vacíos los eventos cuando ambas
+  // configuraciones de campaña no coincidían exactamente.
   const campaniaInicial = campaniasReproductivas.find(c => c.activa)
     ?? [...campaniasReproductivas].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))[0];
-  const [filtros, setFiltros] = useState<Filtros>(() => campaniaInicial
-    ? {
-        ...FILTROS_DEFAULT,
-        año: undefined,
-        desde: campaniaInicial.fechaInicio,
-        hasta: campaniaInicial.fechaFin,
-      }
-    : FILTROS_DEFAULT);
+  const [filtros, setFiltros] = useState<Filtros>(() => ({
+    ...FILTROS_DEFAULT,
+    rango: 'todo',
+    año: undefined,
+    desde: undefined,
+    hasta: undefined,
+  }));
 
   const filtradosPorControles = useMemo(
     () => aplicarFiltros(pariciones, filtros),

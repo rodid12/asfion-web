@@ -324,6 +324,7 @@ export interface CompraCanonical {
   numeroDte?: string;
   numeroOperacion?: string;
   kmRecorrido?: number;
+  flete?: string;
   observaciones?: string;
 
   createdAt: string;

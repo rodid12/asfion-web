@@ -8,8 +8,9 @@
 //
 // OFFLINE: después de cada fetch exitoso guardamos la `DashboardData`
 // entera en IndexedDB. Si el próximo load no tiene internet, el hook
-// restaura desde ese cache y expone `offline=true` + `cachedAt` para
-// que el UI muestre el badge "Sin conexión — datos del DD/MM HH:MM".
+// restaura desde ese cache. Solo expone `offline=true` cuando el intento de
+// actualizar contra Supabase falla; leer el cache primero no significa que
+// el navegador esté sin conexión.
 
 import { useEffect, useState } from 'react';
 import type { CampaniaOperativa, CampaniaReproductiva, Campo, Circuito, Compra, Corral, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto, Venta } from './types';
@@ -117,8 +118,8 @@ export function useDashboardData(
     (async () => {
       // ESTRATEGIA "stale-while-revalidate":
       //   1. Intentamos leer el cache de IndexedDB INMEDIATAMENTE.
-      //      Si hay, mostramos esa data (con flag offline=true como
-      //      indicación visual de que es vieja).
+      //      Si hay, mostramos esa data mientras validamos en segundo plano,
+      //      pero no la marcamos como offline: todavía no probamos la red.
       //   2. En paralelo intentamos fetchear de Supabase.
       //   3. Si el fetch funciona → reemplazamos con data fresca y
       //      borramos el flag offline. También guardamos el nuevo
@@ -139,7 +140,7 @@ export function useDashboardData(
       const cached = await loadCache(cacheScope);
       if (!cancelled && cached) {
         setData(cached.data);
-        setOffline(true);          // se va a apagar si el fetch online tiene éxito
+        setOffline(false);
         setCachedAt(cached.savedAt);
         setLoading(false);         // ya hay algo para mostrar, no bloqueamos
       }
@@ -174,13 +175,14 @@ export function useDashboardData(
       } catch (err: any) {
         if (cancelled) return;
         // El fetch online falló. Hay 2 sub-casos:
-        //   - Había cache → ya lo mostramos; solo dejamos offline=true.
+        //   - Había cache → ya lo mostramos; recién ahora marcamos offline.
         //   - No había cache → es la primera vez que el user abre y no
         //     tiene internet. Mostramos error.
-        if (!cached) {
+        if (cached) {
+          setOffline(true);
+        } else {
           setError(err?.message ?? 'Error desconocido cargando datos');
         }
-        // Si había cache, el badge "Sin conexión" ya está visible.
       } finally {
         if (!cancelled) setLoading(false);
       }

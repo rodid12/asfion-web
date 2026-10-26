@@ -113,12 +113,18 @@ export function ParicionesPage({
     return campos.filter(c => c.id === filtros.campoId);
   }, [filtros.campoId, campos]);
 
-  // Preñez es la fuente de stock para la campaña seleccionada. Sumamos todas
-  // las categorías que pertenecen al mismo campo (AG → Agisot; dos rodeos de
-  // Carolina/Picaflor, etc.) sin modificar los rows originales de tactos.
+  // La campaña activa usa `campos.stockInicialVacas`, que es el cache del
+  // stock inicial oficial confirmado por el cliente. En Ganaderas ese valor
+  // proviene de la hoja StockInicial y deliberadamente puede ser distinto de
+  // la suma de Preñez. Para campañas cerradas conservamos Preñez como fallback
+  // porque el cache de `campos` representa únicamente la campaña activa.
   const { camposParaKpis, vinculadaAPrenez } = useMemo(() => {
     if (!campaniaSeleccionada) {
       return { camposParaKpis: camposVisibles, vinculadaAPrenez: false };
+    }
+
+    if (campaniaSeleccionada.activa) {
+      return { camposParaKpis: camposVisibles, vinculadaAPrenez: true };
     }
 
     const stockPorCampo = new Map<string, number>();

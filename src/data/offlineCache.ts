@@ -35,9 +35,11 @@ import type { DashboardData } from './useData';
 
 const LEGACY_CACHE_KEY = 'asfion:dashboard-data';
 const CACHE_KEY_PREFIX = 'asfion:dashboard-data:';
-// Bump esto cuando cambies el shape de DashboardData (ej. agregás un
-// nuevo módulo). El cache viejo se descarta y se regenera.
-const CACHE_VERSION = 5; // suma módulo Ventas; sigue aislado por usuario
+// Bump esto cuando cambie el shape o la semántica de DashboardData. v6
+// invalida la foto anterior de campos, que todavía conservaba el stock
+// calculado desde Preñez (ej. Carolina 826) en lugar del StockInicial oficial
+// de la campaña activa (Carolina 417).
+const CACHE_VERSION = 6;
 
 function cacheKey(scope: string): string {
   return `${CACHE_KEY_PREFIX}${scope}`;

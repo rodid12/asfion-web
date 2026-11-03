@@ -2,7 +2,7 @@
 // por módulo + contenido. La página activa se decide por el state local
 // `modulo`. No hay router — el dashboard es single-page por diseño.
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { DownloadIcon, LogOutIcon, RefreshCwIcon, ShieldIcon } from 'lucide-react';
 import { useDashboardData, EMPTY_DATA } from '@/data/useData';
 import { useAuth } from '@/lib/auth';
@@ -158,26 +158,8 @@ export function Dashboard() {
     dataClienteId,
     dashboardEnabled,
   );
-  const ultimoRefreshAutomatico = useRef(0);
-
-  // Celular y PC deben converger al mismo dato sin depender de que el usuario
-  // recuerde tocar refrescar. Al volver a la pestaña consultamos Supabase otra
-  // vez, con un throttle corto para evitar llamadas duplicadas focus/visible.
-  useEffect(() => {
-    const refrescarSiCorresponde = () => {
-      if (document.visibilityState !== 'visible') return;
-      const ahora = Date.now();
-      if (ahora - ultimoRefreshAutomatico.current < 15_000) return;
-      ultimoRefreshAutomatico.current = ahora;
-      void refresh();
-    };
-    document.addEventListener('visibilitychange', refrescarSiCorresponde);
-    window.addEventListener('focus', refrescarSiCorresponde);
-    return () => {
-      document.removeEventListener('visibilitychange', refrescarSiCorresponde);
-      window.removeEventListener('focus', refrescarSiCorresponde);
-    };
-  }, [refresh]);
+  // Recuperar el foco del navegador NO dispara una sincronización. Los datos
+  // se consultan al abrir/cambiar cliente o al usar el botón de actualizar.
   // Inicializamos el state leyendo la URL actual — así si el operario
   // entra directo a /mortandad o refresca la pestaña, arranca en el
   // módulo que estaba. Default: pariciones (también para "/").

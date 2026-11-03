@@ -83,10 +83,11 @@ const checks = [
   {
     ok: /p\.campaniaId === reproductivaSeleccionada\.id/.test(dashboard) &&
       /ModulePane active=\{modulo === 'mortandad'\}/.test(dashboard) &&
-      /visibilitychange/.test(dashboard) && /window\.addEventListener\('focus'/.test(dashboard) &&
+      !/window\.addEventListener\('focus'/.test(dashboard) &&
+      !/document\.addEventListener\('visibilitychange'/.test(dashboard) &&
       /const configuracionModulosLista/.test(dashboard) &&
       /if \(!configuracionModulosLista\) return/.test(dashboard),
-    message: 'El dashboard volvió a perder filtros entre pestañas o dejó de refrescar datos al recuperar foco.',
+    message: 'El dashboard volvió a perder filtros o a sincronizar automáticamente al recuperar foco.',
   },
   {
     ok: /comparable\.includes\('desconoc'\)/.test(mortandad) &&

@@ -83,7 +83,9 @@ const checks = [
   {
     ok: /p\.campaniaId === reproductivaSeleccionada\.id/.test(dashboard) &&
       /ModulePane active=\{modulo === 'mortandad'\}/.test(dashboard) &&
-      /visibilitychange/.test(dashboard) && /window\.addEventListener\('focus'/.test(dashboard),
+      /visibilitychange/.test(dashboard) && /window\.addEventListener\('focus'/.test(dashboard) &&
+      /const configuracionModulosLista/.test(dashboard) &&
+      /if \(!configuracionModulosLista\) return/.test(dashboard),
     message: 'El dashboard volvió a perder filtros entre pestañas o dejó de refrescar datos al recuperar foco.',
   },
   {

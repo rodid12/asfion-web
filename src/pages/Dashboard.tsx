@@ -195,6 +195,14 @@ export function Dashboard() {
     const mapped = dashboardModulesFor(modulosConfigurados);
     return mapped.length > 0 ? mapped : (['pariciones'] as ModuleKey[]);
   }, [modulosConfigurados]);
+  // Al recargar una pestaña (por ejemplo /prenez) el super-admin todavía no
+  // tiene `clientesDisponibles` durante los primeros milisegundos. Antes ese
+  // estado transitorio parecía una configuración de "solo Pariciones" y el
+  // efecto de fallback pisaba la pestaña elegida. Esperamos la configuración
+  // real antes de decidir si el módulo actual está habilitado.
+  const configuracionModulosLista = adminStatus === true
+    ? !clientesLoading && clientesDisponibles.length > 0 && Boolean(clienteSeleccionadoId)
+    : adminStatus === false && modulosUsuario !== null;
   const moduloHabilitado = modulosDashboard.includes(modulo);
   const fallbackCampanias = useMemo(() => campaniasOperativasFallback(), []);
   const [campaniaId, setCampaniaId] = useState(() => elegirCampaniaActual(fallbackCampanias)!.id);
@@ -229,10 +237,11 @@ export function Dashboard() {
   // Un link directo a /lluvias no debe saltear la configuración comercial.
   // Si el módulo no está habilitado, volvemos al primero disponible.
   useEffect(() => {
+    if (!configuracionModulosLista) return;
     if (view === 'modules' && !moduloHabilitado) {
       setModulo(modulosDashboard[0] ?? 'pariciones');
     }
-  }, [moduloHabilitado, modulosDashboard, view]);
+  }, [configuracionModulosLista, moduloHabilitado, modulosDashboard, view]);
 
   const d = data ?? EMPTY_DATA;
   const campaniasBase = useMemo(() => asegurarCampaniaDeHoy(

@@ -150,7 +150,7 @@ export function Dashboard() {
   const dashboardEnabled = adminStatus === false || (showAdmin && Boolean(clienteSeleccionadoId));
   const cacheTenant = showAdmin ? (clienteSeleccionadoId ?? 'seleccionando') : clienteClaim;
   const cacheScope = `${user?.id ?? 'sin-sesion'}:${cacheTenant}`;
-  const { data, loading, error, refresh, offline, cachedAt } = useDashboardData(
+  const { data, loading, error, refresh, offline, cachedAt, lastUpdatedAt } = useDashboardData(
     cacheScope,
     dataClienteId,
     dashboardEnabled,
@@ -383,6 +383,29 @@ export function Dashboard() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        {data && lastUpdatedAt && (
+          <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-asfion-muted">
+            {loading && !offline && (
+              <span className="font-semibold text-asfion-orange">Actualizando datos…</span>
+            )}
+            <span>
+              Última actualización confirmada:{' '}
+              <strong className="font-semibold tabular-nums text-asfion-navyDeep">
+                {formatCachedAt(lastUpdatedAt)}
+              </strong>
+            </span>
+          </div>
+        )}
+
+        {/* Si existe cache lo podemos pintar para acelerar la apertura, pero
+            nunca lo presentamos como si ya fuera la respuesta actual. */}
+        {loading && data && cachedAt && !offline && (
+          <div className="rounded-xl border border-asfion-orange/30 bg-asfion-orangeSoft/25 px-4 py-3 text-sm text-asfion-navyDeep">
+            <strong>Actualizando información</strong> — verificando en línea los datos guardados del{' '}
+            <span className="tabular-nums font-semibold">{formatCachedAt(cachedAt)}</span>.
+          </div>
+        )}
+
         {/* Estado de error global */}
         {error && (
           <div className="rounded-xl border border-asfion-danger/30 bg-asfion-danger/10 px-4 py-3 text-sm text-asfion-danger">
@@ -484,23 +507,18 @@ export function Dashboard() {
   );
 }
 
-// Formato amigable para el badge "Sin conexión — datos del DD/MM HH:MM".
-// Si fue hace menos de 1 hora, "hace X min" para sentir más cerca.
+// Fecha explícita: evita que "recién" se interprete como una confirmación de
+// datos frescos cuando en realidad provienen del cache local.
 function formatCachedAt(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const now = new Date();
-  const diffMin = Math.round((now.getTime() - d.getTime()) / 60_000);
-  if (diffMin < 1) return 'recién';
-  if (diffMin < 60) return `hace ${diffMin} min`;
   const pad = (n: number) => String(n).padStart(2, '0');
   const dd = pad(d.getDate());
   const mm = pad(d.getMonth() + 1);
+  const yyyy = d.getFullYear();
   const hh = pad(d.getHours());
   const mn = pad(d.getMinutes());
-  // Si fue HOY, solo la hora. Si fue otro día, DD/MM HH:MM.
-  const esHoy = d.toDateString() === now.toDateString();
-  return esHoy ? `hoy ${hh}:${mn}` : `${dd}/${mm} ${hh}:${mn}`;
+  return `${dd}/${mm}/${yyyy} ${hh}:${mn}`;
 }
 
 function adminScopeStorageKey(email: string | undefined | null): string {

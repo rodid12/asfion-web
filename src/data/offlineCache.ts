@@ -35,10 +35,11 @@ import type { DashboardData } from './useData';
 
 const LEGACY_CACHE_KEY = 'asfion:dashboard-data';
 const CACHE_KEY_PREFIX = 'asfion:dashboard-data:';
-// Bump esto cuando cambie el shape o la semántica de DashboardData. v7 fuerza
-// una lectura fresca luego de blindar en DB el StockInicial oficial: evita que
-// un cache local todavía conserve Carolina 826 en lugar de Carolina 417.
-const CACHE_VERSION = 7;
+// Bump esto cuando cambie el shape o la semántica de DashboardData. v8 fuerza
+// una lectura limpia para todos los dispositivos después de incorporar el
+// estado explícito de revalidación; ningún usuario debe arrancar esta versión
+// viendo como actual un stock guardado antes de la corrección oficial.
+const CACHE_VERSION = 8;
 
 function cacheKey(scope: string): string {
   return `${CACHE_KEY_PREFIX}${scope}`;

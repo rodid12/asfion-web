@@ -63,6 +63,9 @@ export interface UseDataResult {
   /** Cuándo se guardó el cache que estamos mostrando, en ISO. Null
    *  si la data es fresca de Supabase (no de cache). */
   cachedAt: string | null;
+  /** Última respuesta exitosa conocida para el scope actual. Puede ser la
+   *  fecha del cache durante una revalidación o la del fetch recién terminado. */
+  lastUpdatedAt: string | null;
 }
 
 const EMPTY: DashboardData = {
@@ -93,6 +96,7 @@ export function useDashboardData(
   const [error, setError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
@@ -107,6 +111,7 @@ export function useDashboardData(
       setError(null);
       setOffline(false);
       setCachedAt(null);
+      setLastUpdatedAt(null);
       return () => { cancelled = true; };
     }
 
@@ -135,6 +140,7 @@ export function useDashboardData(
       setError(null);
       setOffline(false);
       setCachedAt(null);
+      setLastUpdatedAt(null);
 
       // 1. Cache primero — pintamos pantalla rápido aunque sea con data vieja.
       const cached = await loadCache(cacheScope);
@@ -142,7 +148,9 @@ export function useDashboardData(
         setData(cached.data);
         setOffline(false);
         setCachedAt(cached.savedAt);
-        setLoading(false);         // ya hay algo para mostrar, no bloqueamos
+        setLastUpdatedAt(cached.savedAt);
+        // Conservamos loading=true: la pantalla puede mostrar el cache, pero
+        // debe dejar claro que todavía está revalidando contra Supabase.
       }
 
       // 2-4. Fetch online en paralelo (o secuencial si no había cache).
@@ -170,6 +178,7 @@ export function useDashboardData(
         setData(fresh);
         setOffline(false);
         setCachedAt(null);
+        setLastUpdatedAt(new Date().toISOString());
         // Guardar para la próxima vez — fire & forget.
         void saveCache(fresh, cacheScope);
       } catch (err: any) {
@@ -197,6 +206,7 @@ export function useDashboardData(
     error,
     offline,
     cachedAt,
+    lastUpdatedAt,
     refresh: () => setNonce(n => n + 1),
   };
 }

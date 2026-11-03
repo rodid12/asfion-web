@@ -9,9 +9,10 @@ const files = {
   vite: new URL('../vite.config.ts', import.meta.url),
   mortandad: new URL('../src/pages/MortandadPage.tsx', import.meta.url),
   kpis: new URL('../src/components/pariciones/computeKpisLegacy.ts', import.meta.url),
+  workbook: new URL('../src/lib/exportWorkbook.ts', import.meta.url),
 };
 
-const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis] = await Promise.all(
+const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis, workbook] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -54,6 +55,13 @@ const checks = [
       /\.filter\(p => p\.evento === ['"]Muerte['"]\)/.test(mortandad) &&
       /actividadFiltro/.test(mortandad) && /categoriaFiltro/.test(mortandad),
     message: 'Mortandad perdió la vista consolidada o sus filtros operativos.',
+  },
+  {
+    ok: /Exportar Excel completo/.test(dashboard) &&
+      /buildDashboardWorkbookBytes/.test(workbook) &&
+      /0x04034b50/.test(workbook) && /0x06054b50/.test(workbook) &&
+      /Preñez - Tactos/.test(workbook) && /Resumen Pariciones/.test(workbook),
+    message: 'Se perdió el Excel consolidado o alguna de sus hojas críticas.',
   },
 ];
 

@@ -3,7 +3,7 @@
 // `modulo`. No hay router — el dashboard es single-page por diseño.
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { LogOutIcon, RefreshCwIcon, ShieldIcon } from 'lucide-react';
+import { DownloadIcon, LogOutIcon, RefreshCwIcon, ShieldIcon } from 'lucide-react';
 import { useDashboardData, EMPTY_DATA } from '@/data/useData';
 import { useAuth } from '@/lib/auth';
 import { useSuperAdminStatus } from '@/lib/billing';
@@ -30,6 +30,7 @@ import { UsersIcon } from 'lucide-react';
 import { adminListClientes, type ClienteAdminRow } from '@/data/admin';
 import { DEFAULT_CLIENT_MODULES, fetchOwnClientModules } from '@/data/clientModules';
 import { CampaniaOperativaBar } from '@/components/CampaniaOperativaBar';
+import { exportDashboardWorkbook } from '@/lib/exportWorkbook';
 import {
   campaniasOperativasFallback,
   asegurarCampaniaDeHoy,
@@ -59,6 +60,8 @@ export function Dashboard() {
   const [clientesNonce, setClientesNonce] = useState(0);
   const [modulosUsuario, setModulosUsuario] = useState<string[] | null>(() =>
     readModulesCache(user?.email));
+  const [exportandoExcel, setExportandoExcel] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Carga el catálogo de tenants únicamente para dueños/super-admins. La
   // prioridad inicial es: URL compartida → selección anterior → claim del JWT
@@ -264,6 +267,30 @@ export function Dashboard() {
       corrales: d.corrales.filter(x => enCampania(x.fechaEncierre, campaniaSeleccionada)),
     };
   }, [campaniaSeleccionada, d, reproductivaSeleccionada.id, reproductivaSeleccionada.servicioAnio]);
+
+  const exportarExcel = async () => {
+    if (exportandoExcel) return;
+    setExportandoExcel(true);
+    setExportError(null);
+    try {
+      const clienteNombre = showAdmin
+        ? (clientesDisponibles.find(c => c.id === clienteSeleccionadoId)?.nombre ?? cacheTenant)
+        : cacheTenant;
+      await exportDashboardWorkbook({
+        clienteId: cacheTenant,
+        clienteNombre,
+        campaniaNombre: campaniaSeleccionada.nombre,
+        fechaInicio: campaniaSeleccionada.fechaInicio,
+        fechaFin: campaniaSeleccionada.fechaFin,
+        campos: d.campos,
+        data: scoped,
+      });
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'No se pudo generar el Excel.');
+    } finally {
+      setExportandoExcel(false);
+    }
+  };
   const initials = (user?.email ?? '?').charAt(0).toUpperCase();
 
   return (
@@ -384,7 +411,7 @@ export function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         {data && lastUpdatedAt && (
-          <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-asfion-muted">
+          <div className="flex flex-wrap items-center justify-end gap-3 text-xs text-asfion-muted">
             {loading && !offline && (
               <span className="font-semibold text-asfion-orange">Actualizando datos…</span>
             )}
@@ -394,6 +421,23 @@ export function Dashboard() {
                 {formatCachedAt(lastUpdatedAt)}
               </strong>
             </span>
+            {view === 'modules' && (
+              <button
+                type="button"
+                onClick={exportarExcel}
+                disabled={exportandoExcel || loading}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-asfion-orange/40 bg-white px-3 py-1.5 font-bold text-asfion-navyDeep hover:bg-asfion-orangeSoft/30 disabled:opacity-50"
+              >
+                <DownloadIcon size={14} />
+                {exportandoExcel ? 'Generando Excel…' : 'Exportar Excel completo'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {exportError && (
+          <div className="rounded-xl border border-asfion-danger/30 bg-asfion-danger/10 px-4 py-3 text-sm text-asfion-danger">
+            <strong>Error al exportar Excel:</strong> {exportError}
           </div>
         )}
 

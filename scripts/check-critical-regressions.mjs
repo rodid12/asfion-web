@@ -28,7 +28,10 @@ const checks = [
   },
   {
     ok: /setAdminClienteRequestScope\(clienteId \?\? null\)/.test(data) &&
-      /setData\(null\)[\s\S]*loadCache\(cacheScope\)/.test(data),
+      /setData\(null\)[\s\S]*loadCache\(cacheScope\)/.test(data) &&
+      /const refresh = useCallback/.test(data) &&
+      /revalidacionSilenciosa = nonce > 0 && mismoScope && data !== null/.test(data) &&
+      /revalidacionSilenciosa \? null : await loadCache/.test(data),
     message: 'El cambio de cliente puede volver a mostrar datos del tenant anterior.',
   },
   {

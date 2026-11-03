@@ -12,7 +12,7 @@
 // actualizar contra Supabase falla; leer el cache primero no significa que
 // el navegador esté sin conexión.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CampaniaOperativa, CampaniaReproductiva, Campo, Circuito, Compra, Corral, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto, Venta } from './types';
 import {
   fetchCampos,
@@ -98,9 +98,15 @@ export function useDashboardData(
   const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
+  const refresh = useCallback(() => setNonce(n => n + 1), []);
+  const ultimoScope = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const scopeActual = `${cacheScope}|${clienteId ?? ''}|${enabled ? '1' : '0'}`;
+    const mismoScope = ultimoScope.current === scopeActual;
+    const revalidacionSilenciosa = nonce > 0 && mismoScope && data !== null;
+    ultimoScope.current = scopeActual;
 
     // Un super-admin todavía sin tenant elegido no debe consultar "todo".
     // Esperamos a tener un cliente explícito antes de tocar cache o Supabase.
@@ -135,15 +141,21 @@ export function useDashboardData(
       // Al cambiar de tenant limpiamos primero la data anterior. Así nunca se
       // muestran durante unos milisegundos métricas del cliente previo bajo el
       // nombre del nuevo cliente.
-      setData(null);
-      setLoading(true);
+      // En la carga inicial o al cambiar de cliente limpiamos la pantalla.
+      // En una revalidación (botón Refrescar, volver a la pestaña del browser)
+      // mantenemos los datos visibles y actualizamos silenciosamente: antes
+      // cada focus volvía a mostrar cache/spinner y parecía un reload completo.
+      if (!revalidacionSilenciosa) {
+        setData(null);
+        setLoading(true);
+        setCachedAt(null);
+        setLastUpdatedAt(null);
+      }
       setError(null);
       setOffline(false);
-      setCachedAt(null);
-      setLastUpdatedAt(null);
 
       // 1. Cache primero — pintamos pantalla rápido aunque sea con data vieja.
-      const cached = await loadCache(cacheScope);
+      const cached = revalidacionSilenciosa ? null : await loadCache(cacheScope);
       if (!cancelled && cached) {
         setData(cached.data);
         setOffline(false);
@@ -189,7 +201,7 @@ export function useDashboardData(
         //     tiene internet. Mostramos error.
         if (cached) {
           setOffline(true);
-        } else {
+        } else if (!revalidacionSilenciosa) {
           setError(err?.message ?? 'Error desconocido cargando datos');
         }
       } finally {
@@ -198,6 +210,10 @@ export function useDashboardData(
     })();
 
     return () => { cancelled = true; };
+  // `data` se usa únicamente para decidir si el refresh puede ser silencioso.
+  // No se incluye como dependencia: la propia carga actualiza `data` y volvería
+  // a disparar el fetch en un bucle.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nonce, cacheScope, clienteId, enabled]);
 
   return {
@@ -207,7 +223,7 @@ export function useDashboardData(
     offline,
     cachedAt,
     lastUpdatedAt,
-    refresh: () => setNonce(n => n + 1),
+    refresh,
   };
 }
 

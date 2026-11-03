@@ -36,13 +36,18 @@ import { EmptyModule } from '@/components/EmptyModule';
 import { formatNumber } from '@/lib/utils';
 import { fechaISOaLocal, dateAISO } from '@/lib/fechas';
 import { rowsToCsv, downloadCsv, csvFilename, type CsvColumn } from '@/lib/csv';
-import type { Campo, Mortandad } from '@/data/types';
+import type { Campo, Mortandad, Paricion } from '@/data/types';
 import { useCampoNombre, campoNombreFn } from '@/lib/campoMap';
 
 interface Props {
   mortandad: Mortandad[];
+  pariciones: Paricion[];
   campos: Campo[];
 }
+
+type MortandadConOrigen = Mortandad & {
+  origen: 'Mortandad' | 'Pariciones';
+};
 
 // Normaliza la causa de muerte para agrupar variantes que los operarios
 // cargan a mano (abreviaciones, typos, mayúsculas/minúsculas). Sin esto
@@ -99,24 +104,82 @@ export function normalizarCausa(causa: string | null | undefined): string {
   return c.charAt(0).toUpperCase() + c.slice(1).toLowerCase();
 }
 
-export function MortandadPage({ mortandad, campos }: Props) {
+export function MortandadPage({ mortandad, pariciones, campos }: Props) {
   const [filtros, setFiltros] = useState<SimpleFiltros>(SIMPLE_FILTROS_DEFAULT);
+  const [actividadFiltro, setActividadFiltro] = useState('todas');
+  const [categoriaFiltro, setCategoriaFiltro] = useState('todas');
+  const [origenFiltro, setOrigenFiltro] = useState<'todos' | MortandadConOrigen['origen']>('todos');
   // Map precomputado para resolver campoId → nombre en O(1). Usado por la
   // tabla, el mapa GPS y el panel detail (audit 27-jun-2026, item 11).
   const campoNombreLookup = useCampoNombre(campos);
 
-  const filtradas = useMemo(() => {
-    return mortandad.filter(m => {
+  // Vista lógica consolidada: no copiamos filas entre tablas. Las muertes de
+  // Pariciones se proyectan con un ID prefijado y origen explícito, por lo que
+  // pueden analizarse junto a Mortandad sin riesgo de duplicar o alterar la
+  // información original.
+  const registros = useMemo<MortandadConOrigen[]>(() => {
+    const propias: MortandadConOrigen[] = mortandad.map(m => ({
+      ...m,
+      origen: 'Mortandad',
+    }));
+    const desdePariciones: MortandadConOrigen[] = pariciones
+      .filter(p => p.evento === 'Muerte')
+      .map(p => ({
+        id: `paricion:${p.id}`,
+        fecha: p.fecha,
+        campoId: p.campoId,
+        loteId: p.loteId,
+        usuarioEmail: p.usuarioEmail,
+        categoria: p.sexo ? `Ternero ${p.sexo}` : 'Ternero',
+        actividad: 'Pariciones',
+        causaTipo: p.causaTipo,
+        causaDetalle: p.causaDetalle,
+        caravanaColor: p.caravanaColor,
+        caravanaNumero: p.caravanaNumero,
+        observaciones: p.observaciones,
+        createdAt: p.createdAt,
+        origen: 'Pariciones',
+      }));
+    return [...propias, ...desdePariciones];
+  }, [mortandad, pariciones]);
+
+  const filtradasPeriodoCampo = useMemo(() => {
+    return registros.filter(m => {
       if (!enPeriodo(m.fecha, filtros)) return false;
       if (filtros.campoId !== 'todos' && m.campoId !== filtros.campoId) return false;
+      if (origenFiltro !== 'todos' && m.origen !== origenFiltro) return false;
       return true;
     });
-  }, [mortandad, filtros]);
+  }, [registros, filtros, origenFiltro]);
+
+  const actividadesDisponibles = useMemo(
+    () => Array.from(new Set(
+      filtradasPeriodoCampo.map(m => m.actividad?.trim() || 'Sin actividad'),
+    )).sort((a, b) => a.localeCompare(b)),
+    [filtradasPeriodoCampo],
+  );
+
+  const categoriasDisponibles = useMemo(
+    () => Array.from(new Set(
+      filtradasPeriodoCampo
+        .filter(m => actividadFiltro === 'todas' || (m.actividad?.trim() || 'Sin actividad') === actividadFiltro)
+        .map(m => m.categoria?.trim() || 'Sin categoría'),
+    )).sort((a, b) => a.localeCompare(b)),
+    [filtradasPeriodoCampo, actividadFiltro],
+  );
+
+  const filtradas = useMemo(() => filtradasPeriodoCampo.filter(m => {
+    const actividad = m.actividad?.trim() || 'Sin actividad';
+    const categoria = m.categoria?.trim() || 'Sin categoría';
+    if (actividadFiltro !== 'todas' && actividad !== actividadFiltro) return false;
+    if (categoriaFiltro !== 'todas' && categoria !== categoriaFiltro) return false;
+    return true;
+  }), [filtradasPeriodoCampo, actividadFiltro, categoriaFiltro]);
 
   // Años con data — para alimentar el dropdown del filtro.
   const añosDisponibles = useMemo(
-    () => añosEnData(mortandad.map(m => m.fecha)),
-    [mortandad],
+    () => añosEnData(registros.map(m => m.fecha)),
+    [registros],
   );
 
   // Evidencia subida desde la app. Solo mostramos URLs remotas: un file://
@@ -161,7 +224,8 @@ export function MortandadPage({ mortandad, campos }: Props) {
       // DAX DISTINCTCOUNT cuenta BLANK como un valor. Por eso todos los rows
       // sin caravana comparten una sola clave, en vez de inventar un animal
       // distinto por id.
-      const key = m.caravanaNumero?.trim() || '__SIN_CARAVANA__';
+      const key = m.caravanaNumero?.trim()
+        || (m.origen === 'Pariciones' ? m.id : '__SIN_CARAVANA__');
       addDistinct(byCampo, m.campoId, key);
       const cat = m.categoria || 'Sin categoría';
       addDistinct(byCat, cat, key);
@@ -260,7 +324,7 @@ export function MortandadPage({ mortandad, campos }: Props) {
     };
   }, [filtradas, campos]);
 
-  if (mortandad.length === 0) {
+  if (registros.length === 0) {
     return <EmptyModule label="muertes" />;
   }
 
@@ -280,7 +344,75 @@ export function MortandadPage({ mortandad, campos }: Props) {
         }
       />
 
-      <SimpleFilterBar filtros={filtros} campos={campos} onChange={setFiltros} añosDisponibles={añosDisponibles} />
+      <SimpleFilterBar
+        filtros={filtros}
+        campos={campos}
+        onChange={next => {
+          setFiltros(next);
+          setActividadFiltro('todas');
+          setCategoriaFiltro('todas');
+          setOrigenFiltro('todos');
+        }}
+        añosDisponibles={añosDisponibles}
+      />
+
+      <div className="bg-white rounded-2xl border border-asfion-borderSoft shadow-card p-4 flex flex-wrap items-center gap-3">
+        <span className="text-xs uppercase font-semibold text-asfion-muted">Detalle de mortandad</span>
+        <label className="flex items-center gap-2">
+          <span className="text-xs uppercase font-semibold text-asfion-muted">Origen</span>
+          <select
+            value={origenFiltro}
+            onChange={event => setOrigenFiltro(event.target.value as 'todos' | MortandadConOrigen['origen'])}
+            className="bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange"
+          >
+            <option value="todos">Todos</option>
+            <option value="Mortandad">Mortandad</option>
+            <option value="Pariciones">Pariciones</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="text-xs uppercase font-semibold text-asfion-muted">Actividad</span>
+          <select
+            value={actividadFiltro}
+            onChange={event => {
+              setActividadFiltro(event.target.value);
+              setCategoriaFiltro('todas');
+            }}
+            className="bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange"
+          >
+            <option value="todas">Todas</option>
+            {actividadesDisponibles.map(actividad => (
+              <option key={actividad} value={actividad}>{actividad}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="text-xs uppercase font-semibold text-asfion-muted">Categoría</span>
+          <select
+            value={categoriaFiltro}
+            onChange={event => setCategoriaFiltro(event.target.value)}
+            className="bg-asfion-bg border border-asfion-borderSoft rounded-lg px-3 py-1.5 text-sm font-semibold text-asfion-navy hover:bg-asfion-orangeSoft/25 focus:outline-none focus:ring-2 focus:ring-asfion-orange/40 focus:border-asfion-orange"
+          >
+            <option value="todas">Todas</option>
+            {categoriasDisponibles.map(categoria => (
+              <option key={categoria} value={categoria}>{categoria}</option>
+            ))}
+          </select>
+        </label>
+        {(origenFiltro !== 'todos' || actividadFiltro !== 'todas' || categoriaFiltro !== 'todas') && (
+          <button
+            type="button"
+            onClick={() => {
+              setActividadFiltro('todas');
+              setCategoriaFiltro('todas');
+              setOrigenFiltro('todos');
+            }}
+            className="text-sm font-semibold text-asfion-orange hover:underline"
+          >
+            Limpiar detalle
+          </button>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi
@@ -485,9 +617,10 @@ export function MortandadPage({ mortandad, campos }: Props) {
 }
 
 // Export CSV de mortandad — una fila por evento.
-function exportMortandad(rows: Mortandad[], campos: Campo[]): void {
+function exportMortandad(rows: MortandadConOrigen[], campos: Campo[]): void {
   const campoNombre = campoNombreFn(campos);
-  const cols: CsvColumn<Mortandad>[] = [
+  const cols: CsvColumn<MortandadConOrigen>[] = [
+    { header: 'Origen',          value: r => r.origen },
     { header: 'Fecha',           value: r => r.fecha },
     { header: 'Campo',           value: r => campoNombre(r.campoId) },
     { header: 'Lote',            value: r => r.loteId ?? '' },

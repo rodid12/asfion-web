@@ -7,9 +7,11 @@ const files = {
   cache: new URL('../src/data/offlineCache.ts', import.meta.url),
   main: new URL('../src/main.tsx', import.meta.url),
   vite: new URL('../vite.config.ts', import.meta.url),
+  mortandad: new URL('../src/pages/MortandadPage.tsx', import.meta.url),
+  kpis: new URL('../src/components/pariciones/computeKpisLegacy.ts', import.meta.url),
 };
 
-const [pariciones, dashboard, data, cache, main, vite] = await Promise.all(
+const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -40,6 +42,18 @@ const checks = [
   {
     ok: /navigateFallbackDenylist:[\s\S]*supabase/.test(vite),
     message: 'El service worker puede volver a interceptar respuestas de Supabase.',
+  },
+  {
+    ok: /if \(ev === ['"]RETACTO['"]\) retactosIds\.add\(p\.id\)/.test(kpis) &&
+      /retactos,/.test(kpis),
+    message: 'Retacto volvió a quedar fijo en cero en las métricas.',
+  },
+  {
+    ok: /origen: ['"]Mortandad['"]/.test(mortandad) &&
+      /origen: ['"]Pariciones['"]/.test(mortandad) &&
+      /\.filter\(p => p\.evento === ['"]Muerte['"]\)/.test(mortandad) &&
+      /actividadFiltro/.test(mortandad) && /categoriaFiltro/.test(mortandad),
+    message: 'Mortandad perdió la vista consolidada o sus filtros operativos.',
   },
 ];
 

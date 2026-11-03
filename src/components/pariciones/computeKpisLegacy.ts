@@ -23,7 +23,7 @@ export interface KpisLegacy {
   nacimientosVivos: number;   // = Nacimientos − Muerte Señalado (aprox)
   muertes: number;
   abortos: number;
-  retactos: number;           // = 0 (no se usa más en DAX, dejado para compat UI)
+  retactos: number;           // eventos Retacto realmente persistidos
   muerteSenalado: number;
   nacidoMuerto: number;
   vacasParidas: number;
@@ -92,6 +92,7 @@ export function computeKpisLegacy(
   const nacidoMuertoIds = new Set<string>();
   const nacIds          = new Set<string>();
   const abortosIds      = new Set<string>();
+  const retactosIds     = new Set<string>();
   const orejanosIds     = new Set<string>();
   const asistIds        = new Set<string>();
   const partosIds       = new Set<string>();
@@ -111,6 +112,7 @@ export function computeKpisLegacy(
     if (ev === 'MUERTE' && ca === 'MUERTE SEÑALADO') muerteSenIds.add(p.id);
     if (ca === 'NACIDO MUERTO') nacidoMuertoIds.add(p.id);
     if (ev === 'ABORTO') abortosIds.add(p.id);
+    if (ev === 'RETACTO') retactosIds.add(p.id);
     if (sx === 'OREJANO') orejanosIds.add(p.id);
     if (norm(p.asistencia) === 'SI') asistIds.add(p.id);
 
@@ -133,6 +135,7 @@ export function computeKpisLegacy(
   const muerteSenalado = muerteSenIds.size;
   const nacidoMuerto   = nacidoMuertoIds.size;
   const abortos        = abortosIds.size;
+  const retactos       = retactosIds.size;
   const orejanos       = orejanosIds.size;
   const asistidos      = asistIds.size;
   const vacasParidas   = vacasParidasIds.size;
@@ -159,7 +162,7 @@ export function computeKpisLegacy(
     nacimientos,
     muertes,
     abortos,
-    retactos: 0,   // legacy, no se usa más en DAX
+    retactos,
     muerteSenalado,
     nacidoMuerto,
     vacasParidas,

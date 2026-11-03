@@ -460,7 +460,12 @@ export function Dashboard() {
           <LluviasPage key={campaniaSeleccionada.id} lluvias={scoped.lluvias} campos={d.campos} />
         )}
         {view === 'modules' && data && moduloHabilitado && modulo === 'mortandad' && (
-          <MortandadPage key={campaniaSeleccionada.id} mortandad={scoped.mortandad} campos={d.campos} />
+          <MortandadPage
+            key={campaniaSeleccionada.id}
+            mortandad={scoped.mortandad}
+            pariciones={scoped.pariciones}
+            campos={d.campos}
+          />
         )}
         {view === 'modules' && data && moduloHabilitado && modulo === 'pastoreo' && (
           // PastoreoModule maneja internamente los 3 sub-tabs:

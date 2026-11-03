@@ -58,6 +58,12 @@ export function MortandadMap({ mortandad, campoNombre, normalizarCausa }: Props)
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    const onResize = () => mapRef.current?.invalidateSize?.({ animate: false });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       try {

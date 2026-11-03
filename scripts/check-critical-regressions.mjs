@@ -23,7 +23,7 @@ const checks = [
     message: 'La campaña activa volvió a recalcular el stock desde tactos.',
   },
   {
-    ok: /const CACHE_VERSION = 8/.test(cache),
+    ok: /const CACHE_VERSION = 9/.test(cache),
     message: 'El dashboard puede volver a aceptar un cache anterior a la corrección de stock.',
   },
   {
@@ -51,6 +51,12 @@ const checks = [
     message: 'Retacto volvió a quedar fijo en cero en las métricas.',
   },
   {
+    ok: /todosEventosIds\.add\(p\.id\)/.test(kpis) &&
+      /const totalEventos\s*=\s*todosEventosIds\.size/.test(kpis) &&
+      /eventos:\s*totalEventos/.test(kpis),
+    message: 'El KPI Eventos volvió a contar solo nacimientos y dejó afuera las muertes/abortos/retactos.',
+  },
+  {
     ok: /origen: ['"]Mortandad['"]/.test(mortandad) &&
       /origen: ['"]Pariciones['"]/.test(mortandad) &&
       /\.filter\(p => p\.evento === ['"]Muerte['"]\)/.test(mortandad) &&
@@ -68,8 +74,19 @@ const checks = [
     ok: /<MermasPariciones data=\{filtrados\}/.test(pariciones) &&
       /title="Mermas"/.test(mermas) && /Retacto/.test(mermas) &&
       /Nacido muerto/.test(mermas) && /Muerte señalado/.test(mermas) &&
-      /Orejano \(registros\)/.test(mermas) && !/orejano\.size\s*\/\s*2/.test(mermas),
+      /Math\.floor\(orejano\.size \/ 2\)/.test(mermas) && /Orejano \(÷2\)/.test(mermas),
     message: 'El dashboard perdió el desglose de mermas reproductivas.',
+  },
+  {
+    ok: /p\.campaniaId === reproductivaSeleccionada\.id/.test(dashboard) &&
+      /ModulePane active=\{modulo === 'mortandad'\}/.test(dashboard) &&
+      /visibilitychange/.test(dashboard) && /window\.addEventListener\('focus'/.test(dashboard),
+    message: 'El dashboard volvió a perder filtros entre pestañas o dejó de refrescar datos al recuperar foco.',
+  },
+  {
+    ok: /comparable\.includes\('desconoc'\)/.test(mortandad) &&
+      /comparable\.includes\('infec'\)/.test(mortandad),
+    message: 'Mortandad dejó de agrupar variantes de causas equivalentes.',
   },
 ];
 

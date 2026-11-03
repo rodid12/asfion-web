@@ -39,7 +39,7 @@ const CACHE_KEY_PREFIX = 'asfion:dashboard-data:';
 // una lectura limpia para todos los dispositivos después de incorporar el
 // estado explícito de revalidación; ningún usuario debe arrancar esta versión
 // viendo como actual un stock guardado antes de la corrección oficial.
-const CACHE_VERSION = 8;
+const CACHE_VERSION = 9;
 
 function cacheKey(scope: string): string {
   return `${CACHE_KEY_PREFIX}${scope}`;

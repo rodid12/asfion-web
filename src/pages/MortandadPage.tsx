@@ -71,15 +71,18 @@ export function normalizarCausa(causa: string | null | undefined): string {
   // todas al bucket "Sin identificar" — no aportan info.
   if (!c || c.length < 3 || !/[a-záéíóúñ]/i.test(c)) return 'Sin identificar';
   const lower = c.toLowerCase();
+  const comparable = lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   // Variantes de "sin info" → mismo bucket. Incluye typos comunes que
   // el operario carga sin tilde o trunca.
   if (
-    ['sin identificar', 'sin especificar', 'desconose', 'desconocida',
-     'desconocido', 'desconocid', 'no se sabe', 'no identificada',
-     'no sabe', 's/d', 'nd'].includes(lower)
-  ) {
-    return 'Sin identificar';
-  }
+    comparable.includes('desconoc') || comparable.includes('desconic') ||
+    comparable.includes('sin identificar') || comparable.includes('sin especificar') ||
+    comparable.includes('no se sabe') || comparable.includes('no sabe') ||
+    comparable === 's/d' || comparable === 'nd'
+  ) return 'Desconocida';
+  if (comparable.includes('infec')) return 'Infección';
+  if (comparable.includes('trancad')) return 'Trancada';
+  if (comparable.includes('castrad')) return 'Castración';
   // Neumonía / Neumo / Neumonía y X (la diarrea es secundaria → cuenta como neumonía)
   if (lower === 'neumo' || lower === 'neumonia' || lower === 'neumonía' || lower.startsWith('neumonía')) {
     return 'Neumonía';

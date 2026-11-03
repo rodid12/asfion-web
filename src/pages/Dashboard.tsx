@@ -2,7 +2,7 @@
 // por módulo + contenido. La página activa se decide por el state local
 // `modulo`. No hay router — el dashboard es single-page por diseño.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DownloadIcon, LogOutIcon, RefreshCwIcon, ShieldIcon } from 'lucide-react';
 import { useDashboardData, EMPTY_DATA } from '@/data/useData';
 import { useAuth } from '@/lib/auth';
@@ -158,6 +158,26 @@ export function Dashboard() {
     dataClienteId,
     dashboardEnabled,
   );
+  const ultimoRefreshAutomatico = useRef(0);
+
+  // Celular y PC deben converger al mismo dato sin depender de que el usuario
+  // recuerde tocar refrescar. Al volver a la pestaña consultamos Supabase otra
+  // vez, con un throttle corto para evitar llamadas duplicadas focus/visible.
+  useEffect(() => {
+    const refrescarSiCorresponde = () => {
+      if (document.visibilityState !== 'visible') return;
+      const ahora = Date.now();
+      if (ahora - ultimoRefreshAutomatico.current < 15_000) return;
+      ultimoRefreshAutomatico.current = ahora;
+      void refresh();
+    };
+    document.addEventListener('visibilitychange', refrescarSiCorresponde);
+    window.addEventListener('focus', refrescarSiCorresponde);
+    return () => {
+      document.removeEventListener('visibilitychange', refrescarSiCorresponde);
+      window.removeEventListener('focus', refrescarSiCorresponde);
+    };
+  }, [refresh]);
   // Inicializamos el state leyendo la URL actual — así si el operario
   // entra directo a /mortandad o refresca la pestaña, arranca en el
   // módulo que estaba. Default: pariciones (también para "/").
@@ -197,6 +217,14 @@ export function Dashboard() {
   useEffect(() => {
     pushPath(view, modulo);
   }, [view, modulo]);
+
+  // Los módulos permanecen montados al cambiar de pestaña para conservar los
+  // filtros seleccionados. Forzamos un resize al mostrar uno nuevamente para
+  // que gráficos y mapas recalculen correctamente su ancho.
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    return () => window.cancelAnimationFrame(id);
+  }, [modulo, view]);
 
   // Un link directo a /lluvias no debe saltear la configuración comercial.
   // Si el módulo no está habilitado, volvemos al primero disponible.
@@ -244,7 +272,8 @@ export function Dashboard() {
   const scoped = useMemo(() => {
     const paricionesHasta = finReproductivo(campaniaSeleccionada);
     const pariciones = d.pariciones.filter(p =>
-      p.fecha >= campaniaSeleccionada.fechaInicio && p.fecha <= paricionesHasta);
+      p.campaniaId === reproductivaSeleccionada.id
+      || (p.fecha >= campaniaSeleccionada.fechaInicio && p.fecha <= paricionesHasta));
     const tactos = d.tactos.filter(t => t.campaniaId === reproductivaSeleccionada.id);
     return {
       pariciones,
@@ -488,64 +517,72 @@ export function Dashboard() {
         {view === 'billing' && showAdmin && <BillingAdminPage />}
         {view === 'admin'   && showAdmin && <ClientesAdminPage />}
 
-        {/* Vista operativa: página activa según tab */}
-        {view === 'modules' && data && moduloHabilitado && modulo === 'pariciones' && (
-          <ParicionesPage
-            key={campaniaSeleccionada.id}
-            pariciones={scoped.pariciones}
-            campos={d.campos}
-            resumenServicio={scoped.resumenServicio}
-            tactos={scoped.tactos}
-            mortandad={d.mortandad}
-            campaniasReproductivas={[reproductivaSeleccionada]}
-          />
-        )}
-        {view === 'modules' && data && moduloHabilitado && modulo === 'lluvias' && (
-          <LluviasPage key={campaniaSeleccionada.id} lluvias={scoped.lluvias} campos={d.campos} />
-        )}
-        {view === 'modules' && data && moduloHabilitado && modulo === 'mortandad' && (
-          <MortandadPage
-            key={campaniaSeleccionada.id}
-            mortandad={scoped.mortandad}
-            pariciones={scoped.pariciones}
-            campos={d.campos}
-          />
-        )}
-        {view === 'modules' && data && moduloHabilitado && modulo === 'pastoreo' && (
-          // PastoreoModule maneja internamente los 3 sub-tabs:
-          //   Pastoreo (vista actual) · Entradas · Cierre Corrales.
-          // Antes Corrales era tab top-level — se movió adentro porque
-          // conceptualmente es parte del ciclo de pastoreo (la última etapa
-          // antes de la venta).
-          <PastoreoModule
-            key={campaniaSeleccionada.id}
-            pastoreo={scoped.pastoreo}
-            pastoreoCiclos={scoped.pastoreoCiclos}
-            mortandad={scoped.mortandad}
-            campos={d.campos}
-            circuitos={d.circuitos}
-            corrales={scoped.corrales}
-          />
-        )}
-        {view === 'modules' && data && moduloHabilitado && modulo === 'compras' && (
-          // Compras = entradas de hacienda al sistema (proveedores).
-          <ComprasPage key={campaniaSeleccionada.id} compras={scoped.compras} campos={d.campos} />
-        )}
-        {view === 'modules' && data && moduloHabilitado && modulo === 'ventas' && (
-          <VentasPage key={campaniaSeleccionada.id} ventas={scoped.ventas} campos={d.campos} />
-        )}
-        {view === 'modules' && data && moduloHabilitado && modulo === 'prenez' && (
-          // Tactos vienen de Supabase (tabla `tactos`, migration 0012).
-          // RLS por cliente_id garantiza que cada tenant vea solo los
-          // suyos. Si la tabla no existe todavía, fetchTactos devuelve
-          // [] y PrenezPage muestra su empty state.
-          <PrenezPage key={campaniaSeleccionada.id} tactos={scoped.tactos} />
-        )}
-        {view === 'modules' && data && moduloHabilitado && modulo === 'ndvi' && (
-          // NDVI/Materia Seca — data real desde Supabase tabla ndvi_pasturas.
-          // Si la migración 0009 todavía no se aplicó, viene array vacío y
-          // la página muestra el empty state.
-          <NdviPage key={campaniaSeleccionada.id} mediciones={scoped.ndvi} campos={d.campos.map(c => c.nombre)} />
+        {/* Vista operativa. Los paneles habilitados quedan montados aunque no
+            estén visibles: al volver a una pestaña conserva sus filtros. */}
+        {view === 'modules' && data && moduloHabilitado && (
+          <>
+            {modulosDashboard.includes('pariciones') && (
+              <ModulePane active={modulo === 'pariciones'}>
+                <ParicionesPage
+                  key={campaniaSeleccionada.id}
+                  pariciones={scoped.pariciones}
+                  campos={d.campos}
+                  resumenServicio={scoped.resumenServicio}
+                  tactos={scoped.tactos}
+                  mortandad={d.mortandad}
+                  campaniasReproductivas={[reproductivaSeleccionada]}
+                />
+              </ModulePane>
+            )}
+            {modulosDashboard.includes('lluvias') && (
+              <ModulePane active={modulo === 'lluvias'}>
+                <LluviasPage key={campaniaSeleccionada.id} lluvias={scoped.lluvias} campos={d.campos} />
+              </ModulePane>
+            )}
+            {modulosDashboard.includes('mortandad') && (
+              <ModulePane active={modulo === 'mortandad'}>
+                <MortandadPage
+                  key={campaniaSeleccionada.id}
+                  mortandad={scoped.mortandad}
+                  pariciones={scoped.pariciones}
+                  campos={d.campos}
+                />
+              </ModulePane>
+            )}
+            {modulosDashboard.includes('pastoreo') && (
+              <ModulePane active={modulo === 'pastoreo'}>
+                <PastoreoModule
+                  key={campaniaSeleccionada.id}
+                  pastoreo={scoped.pastoreo}
+                  pastoreoCiclos={scoped.pastoreoCiclos}
+                  mortandad={scoped.mortandad}
+                  campos={d.campos}
+                  circuitos={d.circuitos}
+                  corrales={scoped.corrales}
+                />
+              </ModulePane>
+            )}
+            {modulosDashboard.includes('compras') && (
+              <ModulePane active={modulo === 'compras'}>
+                <ComprasPage key={campaniaSeleccionada.id} compras={scoped.compras} campos={d.campos} />
+              </ModulePane>
+            )}
+            {modulosDashboard.includes('ventas') && (
+              <ModulePane active={modulo === 'ventas'}>
+                <VentasPage key={campaniaSeleccionada.id} ventas={scoped.ventas} campos={d.campos} />
+              </ModulePane>
+            )}
+            {modulosDashboard.includes('prenez') && (
+              <ModulePane active={modulo === 'prenez'}>
+                <PrenezPage key={campaniaSeleccionada.id} tactos={scoped.tactos} />
+              </ModulePane>
+            )}
+            {modulosDashboard.includes('ndvi') && (
+              <ModulePane active={modulo === 'ndvi'}>
+                <NdviPage key={campaniaSeleccionada.id} mediciones={scoped.ndvi} campos={d.campos.map(c => c.nombre)} />
+              </ModulePane>
+            )}
+          </>
         )}
 
         <footer className="text-center text-xs text-asfion-muted py-6">
@@ -553,6 +590,14 @@ export function Dashboard() {
         </footer>
       </main>
     </div>
+  );
+}
+
+function ModulePane({ active, children }: { active: boolean; children: React.ReactNode }) {
+  return (
+    <section className={active ? 'block' : 'hidden'} aria-hidden={!active}>
+      {children}
+    </section>
   );
 }
 

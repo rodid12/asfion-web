@@ -86,6 +86,7 @@ export function computeKpisLegacy(
   }
 
   // Sets de IDs por filtro — Set elimina duplicados = DISTINCTCOUNT del DAX.
+  const todosEventosIds = new Set<string>();
   const eventosIds      = new Set<string>();
   const muertesIds      = new Set<string>();
   const muerteSenIds    = new Set<string>();
@@ -103,6 +104,7 @@ export function computeKpisLegacy(
     const sx = norm(p.sexo);
     const ca = norm(p.causaTipo);
 
+    todosEventosIds.add(p.id);
     if (ev === 'NACIMIENTO' || ev === 'NACIDO MUERTO' || sx === 'OREJANO') {
       eventosIds.add(p.id);
     }
@@ -129,14 +131,17 @@ export function computeKpisLegacy(
     }
   });
 
-  const eventos        = eventosIds.size;
+  const totalEventos   = todosEventosIds.size;
+  const eventosReproductivos = eventosIds.size;
   const nacimientos    = nacIds.size;
   const muertes        = muertesIds.size;
   const muerteSenalado = muerteSenIds.size;
   const nacidoMuerto   = nacidoMuertoIds.size;
   const abortos        = abortosIds.size;
   const retactos       = retactosIds.size;
-  const orejanos       = orejanosIds.size;
+  // Criterio operativo confirmado por Ganaderas: cada orejano se registra en
+  // dos filas, por lo que el indicador representa animales = registros / 2.
+  const orejanos       = Math.floor(orejanosIds.size / 2);
   const asistidos      = asistIds.size;
   const vacasParidas   = vacasParidasIds.size;
   const vacasMuertas   = new Set(
@@ -153,11 +158,11 @@ export function computeKpisLegacy(
   // de Ganaderas. Nunca mutamos el tacto; este saldo siempre es derivado.
   const vacasSinParir = usarPrenezComoBase
     ? Math.max(0, stockBase - vacasParidas - muertes - vacasMuertas - abortos)
-    : Math.max(0, stockBase - eventos + abortos);
+    : Math.max(0, stockBase - eventosReproductivos + abortos);
 
   return {
-    total: eventos,
-    eventos,
+    total: totalEventos,
+    eventos: totalEventos,
     nacimientosVivos: Math.max(0, nacimientos - muerteSenalado),
     nacimientos,
     muertes,

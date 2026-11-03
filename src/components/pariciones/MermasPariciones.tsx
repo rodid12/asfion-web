@@ -16,8 +16,8 @@ const norm = (value?: string | null) => (value ?? '')
 
 /**
  * Desglose reproductivo solicitado por Ganaderas. Cada indicador usa IDs
- * únicos y conserva el registro real: Orejano no se divide globalmente porque
- * no existe una clave confiable para emparejar dos cargas sin caravana.
+ * únicos. Ganaderas confirmó que cada orejano se registra en dos filas, por
+ * lo que el indicador aplica el criterio operativo registros / 2.
  */
 export function MermasPariciones({ data }: Props) {
   const values = useMemo(() => {
@@ -43,7 +43,7 @@ export function MermasPariciones({ data }: Props) {
       nacidoMuerto: nacidoMuerto.size,
       aborto: aborto.size,
       muerteSenalado: muerteSenalado.size,
-      orejano: orejano.size,
+      orejano: Math.floor(orejano.size / 2),
     };
   }, [data]);
 
@@ -57,10 +57,10 @@ export function MermasPariciones({ data }: Props) {
         <MiniKpi label="Nacido muerto" value={formatNumber(values.nacidoMuerto)} accent="danger" />
         <MiniKpi label="Aborto" value={formatNumber(values.aborto)} accent="terracota" />
         <MiniKpi label="Muerte señalado" value={formatNumber(values.muerteSenalado)} accent="terracota" />
-        <MiniKpi label="Orejano (registros)" value={formatNumber(values.orejano)} accent="navy" />
+        <MiniKpi label="Orejano (÷2)" value={formatNumber(values.orejano)} accent="navy" />
       </div>
       <p className="mt-3 text-xs text-asfion-muted">
-        Los orejanos se muestran como registros reales y no se dividen automáticamente.
+        Orejano se calcula como registros cargados ÷ 2, según el criterio operativo confirmado.
       </p>
     </Card>
   );

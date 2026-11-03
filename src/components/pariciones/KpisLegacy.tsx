@@ -112,7 +112,7 @@ export function KpisLegacy({ kpis, vinculadaAPrenez = false }: Props) {
           accent="danger"
         />
         <MiniKpi
-          label="Orejanos Excluidos"
+          label="Orejanos (÷2)"
           value={formatNumber(kpis.orejanos)}
           accent="navy"
         />

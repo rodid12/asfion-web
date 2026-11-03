@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check:regressions": "node scripts/check-critical-regressions.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "sync-types": "node scripts/sync-types.mjs",

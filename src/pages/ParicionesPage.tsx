@@ -39,6 +39,7 @@ import { ResumenServicioTable } from '@/components/ResumenServicioTable';
 import { campoNombreFn } from '@/lib/campoMap';
 import { KpisDesdeResumen } from '@/components/pariciones/KpisDesdeResumen';
 import { KpisLegacy } from '@/components/pariciones/KpisLegacy';
+import { MermasPariciones } from '@/components/pariciones/MermasPariciones';
 import { computeResumenTotales } from '@/components/pariciones/computeResumenTotales';
 import { computeKpisLegacy } from '@/components/pariciones/computeKpisLegacy';
 
@@ -228,6 +229,8 @@ export function ParicionesPage({
       {resumenTotales
         ? <KpisDesdeResumen totales={resumenTotales} />
         : kpisLegacy && <KpisLegacy kpis={kpisLegacy} vinculadaAPrenez={vinculadaAPrenez} />}
+
+      <MermasPariciones data={filtrados} />
 
       {diferenciaNacimientos && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900">

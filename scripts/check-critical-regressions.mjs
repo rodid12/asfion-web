@@ -10,9 +10,10 @@ const files = {
   mortandad: new URL('../src/pages/MortandadPage.tsx', import.meta.url),
   kpis: new URL('../src/components/pariciones/computeKpisLegacy.ts', import.meta.url),
   workbook: new URL('../src/lib/exportWorkbook.ts', import.meta.url),
+  mermas: new URL('../src/components/pariciones/MermasPariciones.tsx', import.meta.url),
 };
 
-const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis, workbook] = await Promise.all(
+const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis, workbook, mermas] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -62,6 +63,13 @@ const checks = [
       /0x04034b50/.test(workbook) && /0x06054b50/.test(workbook) &&
       /Preñez - Tactos/.test(workbook) && /Resumen Pariciones/.test(workbook),
     message: 'Se perdió el Excel consolidado o alguna de sus hojas críticas.',
+  },
+  {
+    ok: /<MermasPariciones data=\{filtrados\}/.test(pariciones) &&
+      /title="Mermas"/.test(mermas) && /Retacto/.test(mermas) &&
+      /Nacido muerto/.test(mermas) && /Muerte señalado/.test(mermas) &&
+      /Orejano \(registros\)/.test(mermas) && !/orejano\.size\s*\/\s*2/.test(mermas),
+    message: 'El dashboard perdió el desglose de mermas reproductivas.',
   },
 ];
 

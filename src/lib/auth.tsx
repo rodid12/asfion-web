@@ -91,7 +91,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAccessError(null);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin },
+      options: {
+        redirectTo: window.location.origin,
+        // Evita que Google reutilice automáticamente la última cuenta del
+        // navegador. Es importante cuando una persona administra más de un
+        // Gmail: siempre debe poder elegir el email autorizado en ASFION.
+        queryParams: { prompt: 'select_account' },
+      },
     });
     if (error) throw error;
   };

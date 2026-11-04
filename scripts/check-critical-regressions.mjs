@@ -11,9 +11,10 @@ const files = {
   kpis: new URL('../src/components/pariciones/computeKpisLegacy.ts', import.meta.url),
   workbook: new URL('../src/lib/exportWorkbook.ts', import.meta.url),
   mermas: new URL('../src/components/pariciones/MermasPariciones.tsx', import.meta.url),
+  auth: new URL('../src/lib/auth.tsx', import.meta.url),
 };
 
-const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis, workbook, mermas] = await Promise.all(
+const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis, workbook, mermas, auth] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -93,6 +94,10 @@ const checks = [
     ok: /comparable\.includes\('desconoc'\)/.test(mortandad) &&
       /comparable\.includes\('infec'\)/.test(mortandad),
     message: 'Mortandad dejó de agrupar variantes de causas equivalentes.',
+  },
+  {
+    ok: /queryParams:\s*\{\s*prompt:\s*['"]select_account['"]\s*\}/.test(auth),
+    message: 'Google volvió a reutilizar automáticamente una cuenta sin mostrar el selector.',
   },
 ];
 

@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { Card } from '@/components/Card';
 import { MiniKpi } from '@/components/MiniKpi';
-import { formatNumber } from '@/lib/utils';
+import { formatNumber, formatPercent } from '@/lib/utils';
 import type { Paricion } from '@/data/types';
 
 interface Props {
   data: Paricion[];
+  stockBase: number;
 }
 
 const norm = (value?: string | null) => (value ?? '')
@@ -19,7 +20,7 @@ const norm = (value?: string | null) => (value ?? '')
  * únicos. Ganaderas confirmó que cada orejano se registra en dos filas, por
  * lo que el indicador aplica el criterio operativo registros / 2.
  */
-export function MermasPariciones({ data }: Props) {
+export function MermasPariciones({ data, stockBase }: Props) {
   const values = useMemo(() => {
     const retacto = new Set<string>();
     const nacidoMuerto = new Set<string>();
@@ -32,7 +33,9 @@ export function MermasPariciones({ data }: Props) {
       const causa = norm(row.causaTipo);
       const sexo = norm(row.sexo);
       if (evento === 'RETACTO') retacto.add(row.id);
-      if (evento === 'NACIDO MUERTO' || causa === 'NACIDO MUERTO') nacidoMuerto.add(row.id);
+      if (sexo !== 'OREJANO' && (evento === 'NACIDO MUERTO' || causa === 'NACIDO MUERTO')) {
+        nacidoMuerto.add(row.id);
+      }
       if (evento === 'ABORTO') aborto.add(row.id);
       if (evento === 'MUERTE' && causa === 'MUERTE SENALADO') muerteSenalado.add(row.id);
       if (sexo === 'OREJANO') orejano.add(row.id);
@@ -50,14 +53,14 @@ export function MermasPariciones({ data }: Props) {
   return (
     <Card
       title="Mermas"
-      subtitle="Retacto, nacido muerto, aborto, muerte señalada y orejanos de la campaña seleccionada"
+      subtitle={`Porcentajes sobre Stock Base (${formatNumber(stockBase)}); Retacto se mantiene como cantidad`}
     >
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <MiniKpi label="Retacto" value={formatNumber(values.retacto)} accent="navy" />
-        <MiniKpi label="Nacido muerto" value={formatNumber(values.nacidoMuerto)} accent="danger" />
-        <MiniKpi label="Aborto" value={formatNumber(values.aborto)} accent="terracota" />
-        <MiniKpi label="Muerte señalado" value={formatNumber(values.muerteSenalado)} accent="terracota" />
-        <MiniKpi label="Orejano (÷2)" value={formatNumber(values.orejano)} accent="navy" />
+        <MiniKpi label="% Nacido muerto" value={stockBase ? formatPercent(values.nacidoMuerto / stockBase) : '—'} accent="danger" />
+        <MiniKpi label="% Aborto" value={stockBase ? formatPercent(values.aborto / stockBase) : '—'} accent="terracota" />
+        <MiniKpi label="% Muerte señalado" value={stockBase ? formatPercent(values.muerteSenalado / stockBase) : '—'} accent="terracota" />
+        <MiniKpi label="% Orejano (÷2)" value={stockBase ? formatPercent(values.orejano / stockBase) : '—'} accent="navy" />
       </div>
       <p className="mt-3 text-xs text-asfion-muted">
         Orejano se calcula como registros cargados ÷ 2, según el criterio operativo confirmado.

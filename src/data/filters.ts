@@ -8,7 +8,8 @@ export type RangoFecha = '7d' | '30d' | '90d' | '12m' | 'todo';
 
 export interface Filtros {
   rango: RangoFecha;
-  campoId: string | 'todos';
+  /** Vacío = todos. Uno o más IDs permiten comparar varios campos. */
+  campoIds: string[];
   evento: EventoParicion | 'todos';
   /** Año específico (YYYY). Si está seteado, anula `rango` —
    *  filtra de Jan 1 a Dec 31 de ese año. Mismo patrón que SimpleFiltros. */
@@ -22,16 +23,19 @@ export interface Filtros {
 
 export const FILTROS_DEFAULT: Filtros = {
   rango: '90d',
-  campoId: 'todos',
+  campoIds: [],
   evento: 'todos',
 };
 
 export function aplicarFiltros(data: Paricion[], f: Filtros, today = new Date('2026-04-22')): Paricion[] {
+  const incluyeCampo = (campoId: string) =>
+    f.campoIds.length === 0 || f.campoIds.includes(campoId);
+
   // Precedencia: custom range > año > rango preset.
   if (f.desde && f.hasta) {
     return data.filter(p => {
       if (p.fecha < f.desde! || p.fecha > f.hasta!) return false;
-      if (f.campoId !== 'todos' && p.campoId !== f.campoId) return false;
+      if (!incluyeCampo(p.campoId)) return false;
       if (f.evento !== 'todos' && p.evento !== f.evento) return false;
       return true;
     });
@@ -42,7 +46,7 @@ export function aplicarFiltros(data: Paricion[], f: Filtros, today = new Date('2
     const hasta = `${a}-12-31`;
     return data.filter(p => {
       if (p.fecha < desde || p.fecha > hasta) return false;
-      if (f.campoId !== 'todos' && p.campoId !== f.campoId) return false;
+      if (!incluyeCampo(p.campoId)) return false;
       if (f.evento !== 'todos' && p.evento !== f.evento) return false;
       return true;
     });
@@ -60,7 +64,7 @@ export function aplicarFiltros(data: Paricion[], f: Filtros, today = new Date('2
   const desdeISO = dateAISO(desde);
   return data.filter(p => {
     if (p.fecha < desdeISO) return false;
-    if (f.campoId !== 'todos' && p.campoId !== f.campoId) return false;
+    if (!incluyeCampo(p.campoId)) return false;
     if (f.evento !== 'todos' && p.evento !== f.evento) return false;
     return true;
   });

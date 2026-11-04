@@ -49,16 +49,15 @@ export interface ResumenTotales {
  * cae al cálculo legacy desde eventos individuales).
  *
  * @param resumenServicio  Rows del cierre del servicio (puede traer múltiples campos/años)
- * @param campoNombre      Nombre del campo a filtrar, o null/undefined para "todos los campos".
- *                         Si se pasa, solo se agregan las tropas de ese campo
- *                         (caso de uso: filtro de campo en ParicionesPage).
+ * @param camposNombre     Nombres de campos a filtrar, o null/undefined/vacío
+ *                         para todos los campos.
  * @param servicioAnio     Campaña/año de servicio explícito. Cuando se pasa y
  *                         todavía no existe un cierre para ese año, devuelve
  *                         null para que la página calcule desde eventos + Preñez.
  */
 export function computeResumenTotales(
   resumenServicio: ResumenServicio[] | undefined,
-  campoNombre?: string | null,
+  camposNombre?: string[] | null,
   servicioAnio?: number | null,
 ): ResumenTotales | null {
   if (!resumenServicio || resumenServicio.length === 0) return null;
@@ -67,8 +66,8 @@ export function computeResumenTotales(
   // KpisLegacy donde `aplicarFiltros()` también lo aplica. Antes este
   // helper ignoraba el filtro y mostraba siempre totales globales — bug
   // reportado por el cliente: "filtro Carolina no actualiza KPIs".
-  const filtradosPorCampo = campoNombre
-    ? resumenServicio.filter(r => r.campo === campoNombre)
+  const filtradosPorCampo = camposNombre && camposNombre.length > 0
+    ? resumenServicio.filter(r => camposNombre.includes(r.campo))
     : resumenServicio;
   if (filtradosPorCampo.length === 0) return null;
 

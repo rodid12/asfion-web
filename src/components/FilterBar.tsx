@@ -46,6 +46,20 @@ export function FilterBar({
     ? [...añosDisponibles].sort((a, b) => b - a)
     : [añoActual, añoActual - 1, añoActual - 2, añoActual - 3, añoActual - 4];
   const campañas = presetsCampaña(añosDisponibles);
+  const camposSeleccionados = campos.filter(c => filtros.campoIds.includes(c.id));
+  const campoLabel = camposSeleccionados.length === 0
+    ? 'Todos'
+    : camposSeleccionados.length === 1
+      ? camposSeleccionados[0].nombre
+      : `${camposSeleccionados.length} campos`;
+
+  const toggleCampo = (campoId: string) => {
+    const next = filtros.campoIds.includes(campoId)
+      ? filtros.campoIds.filter(id => id !== campoId)
+      : [...filtros.campoIds, campoId];
+    // Seleccionar explícitamente todos equivale al estado compacto "Todos".
+    onChange({ ...filtros, campoIds: next.length === campos.length ? [] : next });
+  };
 
   const hayCustomRange = !!(filtros.desde && filtros.hasta);
   const hayAño = filtros.año != null;
@@ -173,14 +187,38 @@ export function FilterBar({
 
       <div className="flex items-center gap-2">
         <span className="text-xs uppercase font-semibold text-asfion-muted">Campo</span>
-        <select
-          value={filtros.campoId}
-          onChange={e => onChange({ ...filtros, campoId: e.target.value as Filtros['campoId'] })}
-          className={SELECT_CLS}
-        >
-          <option value="todos">Todos</option>
-          {campos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-        </select>
+        <details className="relative">
+          <summary className={`${SELECT_CLS} list-none min-w-32 flex items-center justify-between gap-3`}>
+            <span>{campoLabel}</span>
+            <span aria-hidden="true" className="text-asfion-muted">▾</span>
+          </summary>
+          <div className="absolute left-0 top-full z-30 mt-2 min-w-56 max-h-72 overflow-y-auto rounded-xl border border-asfion-borderSoft bg-white p-2 shadow-lg">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-asfion-navy hover:bg-asfion-orangeSoft/25">
+              <input
+                type="checkbox"
+                checked={filtros.campoIds.length === 0}
+                onChange={() => onChange({ ...filtros, campoIds: [] })}
+                className="accent-asfion-orange"
+              />
+              Todos
+            </label>
+            <div className="my-1 border-t border-asfion-borderSoft" />
+            {campos.map(c => (
+              <label
+                key={c.id}
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-asfion-navy hover:bg-asfion-orangeSoft/25"
+              >
+                <input
+                  type="checkbox"
+                  checked={filtros.campoIds.includes(c.id)}
+                  onChange={() => toggleCampo(c.id)}
+                  className="accent-asfion-orange"
+                />
+                {c.nombre}
+              </label>
+            ))}
+          </div>
+        </details>
       </div>
 
       <div className="flex items-center gap-2">

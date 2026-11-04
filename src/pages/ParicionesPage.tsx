@@ -106,13 +106,13 @@ export function ParicionesPage({
     return [...set].sort((a, b) => b - a);
   }, [pariciones, campaniasReproductivas]);
 
-  // Campos visibles según el filtro de campo (1 o todos). El Stock Base se
+  // Campos visibles según el filtro de campo (uno, varios o todos). El Stock Base se
   // suma sobre los visibles para que cuando el cliente filtre "Picaflor",
   // el denominador sea solo el de Picaflor (lo usa KpisLegacy).
   const camposVisibles = useMemo(() => {
-    if (filtros.campoId === 'todos') return campos;
-    return campos.filter(c => c.id === filtros.campoId);
-  }, [filtros.campoId, campos]);
+    if (filtros.campoIds.length === 0) return campos;
+    return campos.filter(c => filtros.campoIds.includes(c.id));
+  }, [filtros.campoIds, campos]);
 
   // La campaña activa usa `campos.stockInicialVacas`, que es el cache del
   // stock inicial oficial confirmado por el cliente. En Ganaderas ese valor
@@ -150,19 +150,27 @@ export function ParicionesPage({
   // KpisDesdeResumen; sino, KpisLegacy desde eventos individuales.
   // Pasamos el nombre del campo seleccionado (o null si "todos") para
   // que el resumen también respete el filtro de campo de la FilterBar.
-  const campoNombreFiltro = useMemo(
-    () => filtros.campoId === 'todos'
-      ? null
-      : (campos.find(c => c.id === filtros.campoId)?.nombre ?? null),
-    [filtros.campoId, campos],
+  const camposNombreFiltro = useMemo(
+    () => filtros.campoIds.length === 0
+      ? []
+      : campos
+          .filter(c => filtros.campoIds.includes(c.id))
+          .map(c => c.nombre),
+    [filtros.campoIds, campos],
+  );
+  const resumenServicioFiltrado = useMemo(
+    () => camposNombreFiltro.length === 0
+      ? resumenServicio
+      : resumenServicio.filter(row => camposNombreFiltro.includes(row.campo)),
+    [resumenServicio, camposNombreFiltro],
   );
   const resumenTotales = useMemo(
     () => computeResumenTotales(
       resumenServicio,
-      campoNombreFiltro,
+      camposNombreFiltro,
       campaniaSeleccionada?.servicioAnio ?? filtros.año ?? null,
     ),
-    [resumenServicio, campoNombreFiltro, campaniaSeleccionada, filtros.año],
+    [resumenServicio, camposNombreFiltro, campaniaSeleccionada, filtros.año],
   );
 
   // KpisLegacy solo se calcula cuando NO hay resumen — early bail-out
@@ -174,9 +182,17 @@ export function ParicionesPage({
           filtrados,
           camposParaKpis,
           vinculadaAPrenez,
-          mortandad.filter(m => !campaniaSeleccionada || m.fecha <= campaniaSeleccionada.fechaFin),
+          mortandad.filter(m =>
+            (!campaniaSeleccionada || m.fecha <= campaniaSeleccionada.fechaFin)
+            && (filtros.campoIds.length === 0 || filtros.campoIds.includes(m.campoId)),
+          ),
         ),
-    [resumenTotales, filtrados, camposParaKpis, vinculadaAPrenez, mortandad, campaniaSeleccionada],
+    [resumenTotales, filtrados, camposParaKpis, vinculadaAPrenez, mortandad, campaniaSeleccionada, filtros.campoIds],
+  );
+
+  const stockBaseMermas = useMemo(
+    () => camposParaKpis.reduce((total, campo) => total + (campo.stockInicialVacas ?? 0), 0),
+    [camposParaKpis],
   );
 
   const diferenciaNacimientos = useMemo(() => {
@@ -189,7 +205,11 @@ export function ParicionesPage({
 
   // Texto del título: si hay un campo seleccionado, lo nombramos.
   // Reusa `campoNombreFiltro` calculado arriba (DRY).
-  const tituloCampo = campoNombreFiltro;
+  const tituloCampo = camposNombreFiltro.length === 0
+    ? null
+    : camposNombreFiltro.length <= 2
+      ? camposNombreFiltro.join(' + ')
+      : `${camposNombreFiltro.length} campos`;
 
   if (pariciones.length === 0 && resumenServicio.length === 0 && tactos.length === 0) {
     return <EmptyModule label="pariciones" />;
@@ -230,7 +250,7 @@ export function ParicionesPage({
         ? <KpisDesdeResumen totales={resumenTotales} />
         : kpisLegacy && <KpisLegacy kpis={kpisLegacy} vinculadaAPrenez={vinculadaAPrenez} />}
 
-      <MermasPariciones data={filtrados} />
+      <MermasPariciones data={filtrados} stockBase={stockBaseMermas} />
 
       {diferenciaNacimientos && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900">
@@ -290,7 +310,7 @@ export function ParicionesPage({
       {/* Resumen Mermas Servicio — agregado anual por tropa con la columna
           "Terneros Vivos" destacada en verde (pedido explícito del cliente). */}
       {resumenServicio.length > 0 && (
-        <ResumenServicioTable rows={resumenServicio} />
+        <ResumenServicioTable rows={resumenServicioFiltrado} />
       )}
     </div>
   );

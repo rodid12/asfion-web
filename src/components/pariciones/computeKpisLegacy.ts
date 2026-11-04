@@ -41,6 +41,7 @@ export interface KpisLegacy {
   pctAbortos: number;
   pctMuerteSenal: number;
   pctNacidoMuerto: number;
+  pctOrejanos: number;
 }
 
 const KPIS_EMPTY: KpisLegacy = {
@@ -49,6 +50,7 @@ const KPIS_EMPTY: KpisLegacy = {
   vacasParidas: 0, ternerosMuertosTotales: 0, vacasMuertas: 0,
   ternerosEnPie: 0, stockBase: 0, vacasSinParir: 0, orejanos: 0, asistidos: 0,
   pctParicion: 0, pctDestete: 0, pctAbortos: 0, pctMuerteSenal: 0, pctNacidoMuerto: 0,
+  pctOrejanos: 0,
 };
 
 const norm = (s?: string | null) => (s ?? '').trim().toUpperCase();
@@ -112,7 +114,10 @@ export function computeKpisLegacy(
     if (ev === 'MUERTE') muertesIds.add(p.id);
     if (ev === 'NACIMIENTO') vacasParidasIds.add(p.id);
     if (ev === 'MUERTE' && ca === 'MUERTE SEÑALADO') muerteSenIds.add(p.id);
-    if (ca === 'NACIDO MUERTO') nacidoMuertoIds.add(p.id);
+    // Orejano no admite causa de muerte. Además de la limpieza en DB,
+    // ignoramos defensivamente valores históricos inválidos para que nunca
+    // vuelvan a inflar el indicador Nacido muerto.
+    if (sx !== 'OREJANO' && ca === 'NACIDO MUERTO') nacidoMuertoIds.add(p.id);
     if (ev === 'ABORTO') abortosIds.add(p.id);
     if (ev === 'RETACTO') retactosIds.add(p.id);
     if (sx === 'OREJANO') orejanosIds.add(p.id);
@@ -181,7 +186,8 @@ export function computeKpisLegacy(
     pctParicion:     stockBase   ? nacimientos / stockBase    : 0,
     pctDestete:      stockBase   ? ternerosEnPie / stockBase  : 0,
     pctAbortos:      stockBase   ? abortos / stockBase        : 0,
-    pctMuerteSenal:  nacimientos ? muerteSenalado / nacimientos : 0,
-    pctNacidoMuerto: nacimientos ? nacidoMuerto / nacimientos : 0,
+    pctMuerteSenal:  stockBase ? muerteSenalado / stockBase : 0,
+    pctNacidoMuerto: stockBase ? nacidoMuerto / stockBase : 0,
+    pctOrejanos:     stockBase ? orejanos / stockBase : 0,
   };
 }

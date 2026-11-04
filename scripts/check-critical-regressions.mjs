@@ -11,12 +11,14 @@ const files = {
   kpis: new URL('../src/components/pariciones/computeKpisLegacy.ts', import.meta.url),
   workbook: new URL('../src/lib/exportWorkbook.ts', import.meta.url),
   mermas: new URL('../src/components/pariciones/MermasPariciones.tsx', import.meta.url),
+  filtros: new URL('../src/data/filters.ts', import.meta.url),
+  filterBar: new URL('../src/components/FilterBar.tsx', import.meta.url),
   auth: new URL('../src/lib/auth.tsx', import.meta.url),
   packageJson: new URL('../package.json', import.meta.url),
   supabaseData: new URL('../src/data/supabase.ts', import.meta.url),
 };
 
-const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis, workbook, mermas, auth, packageJson, supabaseData] = await Promise.all(
+const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis, workbook, mermas, filtros, filterBar, auth, packageJson, supabaseData] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -79,11 +81,25 @@ const checks = [
     message: 'Se perdió el Excel consolidado o alguna de sus hojas críticas.',
   },
   {
-    ok: /<MermasPariciones data=\{filtrados\}/.test(pariciones) &&
+    ok: /<MermasPariciones data=\{filtrados\} stockBase=\{stockBaseMermas\}/.test(pariciones) &&
       /title="Mermas"/.test(mermas) && /Retacto/.test(mermas) &&
       /Nacido muerto/.test(mermas) && /Muerte señalado/.test(mermas) &&
-      /Math\.floor\(orejano\.size \/ 2\)/.test(mermas) && /Orejano \(÷2\)/.test(mermas),
+      /Math\.floor\(orejano\.size \/ 2\)/.test(mermas) && /% Orejano \(÷2\)/.test(mermas) &&
+      /values\.orejano \/ stockBase/.test(mermas),
     message: 'El dashboard perdió el desglose de mermas reproductivas.',
+  },
+  {
+    ok: /pctMuerteSenal:\s+stockBase \? muerteSenalado \/ stockBase/.test(kpis) &&
+      /pctNacidoMuerto:\s+stockBase \? nacidoMuerto \/ stockBase/.test(kpis) &&
+      /pctOrejanos:\s+stockBase \? orejanos \/ stockBase/.test(kpis) &&
+      /sx !== ['"]OREJANO['"] && ca === ['"]NACIDO MUERTO['"]/.test(kpis),
+    message: 'Las mermas dejaron de usar Stock Base o Nacido muerto volvió a incluir Orejanos.',
+  },
+  {
+    ok: /campoIds:\s*string\[\]/.test(filtros) &&
+      /f\.campoIds\.length === 0 \|\| f\.campoIds\.includes\(campoId\)/.test(filtros) &&
+      /type="checkbox"/.test(filterBar) && /toggleCampo/.test(filterBar),
+    message: 'Pariciones volvió a permitir seleccionar un solo campo.',
   },
   {
     ok: /p\.campaniaId === reproductivaSeleccionada\.id/.test(dashboard) &&

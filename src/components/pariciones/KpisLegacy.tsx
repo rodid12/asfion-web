@@ -103,17 +103,17 @@ export function KpisLegacy({ kpis, vinculadaAPrenez = false }: Props) {
         />
         <MiniKpi
           label="% Muerte Señalado"
-          value={kpis.nacimientos ? formatPercent(kpis.pctMuerteSenal) : '—'}
+          value={kpis.stockBase ? formatPercent(kpis.pctMuerteSenal) : '—'}
           accent="terracota"
         />
         <MiniKpi
           label="% Nacido Muerto"
-          value={kpis.nacimientos ? formatPercent(kpis.pctNacidoMuerto) : '—'}
+          value={kpis.stockBase ? formatPercent(kpis.pctNacidoMuerto) : '—'}
           accent="danger"
         />
         <MiniKpi
-          label="Orejanos (÷2)"
-          value={formatNumber(kpis.orejanos)}
+          label="% Orejanos (÷2)"
+          value={kpis.stockBase ? formatPercent(kpis.pctOrejanos) : '—'}
           accent="navy"
         />
       </div>

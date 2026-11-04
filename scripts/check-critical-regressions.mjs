@@ -13,9 +13,10 @@ const files = {
   mermas: new URL('../src/components/pariciones/MermasPariciones.tsx', import.meta.url),
   auth: new URL('../src/lib/auth.tsx', import.meta.url),
   packageJson: new URL('../package.json', import.meta.url),
+  supabaseData: new URL('../src/data/supabase.ts', import.meta.url),
 };
 
-const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis, workbook, mermas, auth, packageJson] = await Promise.all(
+const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis, workbook, mermas, auth, packageJson, supabaseData] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -101,6 +102,12 @@ const checks = [
   {
     ok: /queryParams:\s*\{\s*prompt:\s*['"]select_account['"]\s*\}/.test(auth),
     message: 'Google volvió a reutilizar automáticamente una cuenta sin mostrar el selector.',
+  },
+  {
+    ok: /const PAGE_SIZE = 500/.test(supabaseData) &&
+      /while \(true\)/.test(supabaseData) &&
+      !/select\([^)]*count:\s*['"]exact['"]/.test(supabaseData),
+    message: 'La paginación volvió a pedir un conteo exacto y puede agotar el timeout de Supabase.',
   },
 ];
 

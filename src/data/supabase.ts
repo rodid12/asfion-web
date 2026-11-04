@@ -65,7 +65,10 @@ import type {
 //
 // Uso: const data = await fetchAllPaginated('pariciones', q => q.order('fecha', { ascending: false }));
 
-const PAGE_SIZE = 1000;
+// Páginas moderadas: en clientes con varios miles de eventos, pedir 1000 filas
+// más un COUNT exacto podía superar el statement_timeout de Supabase. 500
+// mantiene cada consulta liviana sin truncar resultados.
+const PAGE_SIZE = 500;
 
 type QueryBuilder = ReturnType<ReturnType<typeof supabase.from>['select']>;
 
@@ -74,49 +77,45 @@ async function fetchAllPaginated<T = any>(
   applyOrder: (q: QueryBuilder) => QueryBuilder,
   clienteId?: string,
 ): Promise<T[]> {
-  // PRIMERA round-trip: usamos `count: 'exact'` para que Postgres devuelva
-  // el total de filas junto con la primera página. Eso nos permite calcular
-  // cuántas páginas faltan y lanzarlas en PARALELO en lugar de esperar
-  // cada una secuencialmente (antes 2500 rows = 3 round-trips × 150ms =
-  // ~450ms; ahora 2500 rows = 1 round-trip serial + 2 paralelos = ~200ms).
-  //
-  // Si la tabla cabe en una página (count <= PAGE_SIZE) ahorrramos la
-  // segunda round-trip directamente y devolvemos.
-  const baseFirst = withClienteScope(
-    supabase.from(table).select('*', { count: 'exact' }),
-    clienteId,
-  );
-  const orderedFirst = applyOrder(baseFirst) as ReturnType<typeof baseFirst.range>;
-  const { data: firstData, error: firstErr, count } = await orderedFirst.range(0, PAGE_SIZE - 1);
-  if (firstErr) throw firstErr;
-  const first = (firstData ?? []) as T[];
-  if (count == null || count <= PAGE_SIZE) return first;
+  // Evitamos `count: 'exact'`: con RLS, Postgres debía evaluar todas las filas
+  // antes de devolver la primera página y en algunos teléfonos terminaba en
+  // "canceling statement due to statement timeout". Recorremos páginas hasta
+  // recibir una incompleta. Es apenas más secuencial pero mucho más confiable.
+  const all: T[] = [];
+  let pageIdx = 0;
 
-  // Safeguard: contra count corrupto / explosión de paginación. 1M filas
-  // sería un cliente fuera de cualquier perfil real, abortamos.
-  const totalPages = Math.ceil(count / PAGE_SIZE);
-  if (totalPages > 1000) {
-    throw new Error(`fetchAllPaginated(${table}): >1M filas (count=${count}), abortando`);
-  }
+  while (true) {
+    let page: T[] | null = null;
+    let lastError: unknown = null;
 
-  // Lanzar páginas restantes en paralelo. Cada Promise hace su propia
-  // request range(N, N+PAGE_SIZE-1) — el ordering se preserva porque
-  // Postgres devuelve cada slot ordenado por la cláusula del applyOrder
-  // y nosotros las concatenamos en orden de página.
-  const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 1);
-  const restResults = await Promise.all(
-    remainingPages.map(async (pageIdx) => {
+    // Un timeout transitorio reintenta la misma página dos veces. Nunca avanza
+    // el offset hasta haber recibido la página completa.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       const base = withClienteScope(supabase.from(table).select('*'), clienteId);
       const ordered = applyOrder(base);
       const start = pageIdx * PAGE_SIZE;
       const { data, error } = await ordered.range(start, start + PAGE_SIZE - 1);
-      if (error) throw error;
-      return (data ?? []) as T[];
-    }),
-  );
+      if (!error) {
+        page = (data ?? []) as T[];
+        break;
+      }
 
-  // Concatenar manteniendo orden: primera página + páginas siguientes.
-  return [first, ...restResults].flat();
+      lastError = error;
+      const message = String(error.message ?? error).toLowerCase();
+      const isTimeout = error.code === '57014' || message.includes('statement timeout');
+      if (!isTimeout || attempt === 2) break;
+      await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+
+    if (page == null) throw lastError;
+    all.push(...page);
+    if (page.length < PAGE_SIZE) return all;
+
+    pageIdx += 1;
+    if (pageIdx > 2000) {
+      throw new Error(`fetchAllPaginated(${table}): más de 1M filas, abortando`);
+    }
+  }
 }
 
 /**

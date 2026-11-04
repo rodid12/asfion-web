@@ -4,11 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "vite --config vite.config.ts",
+    "build": "tsc -b && vite build --config vite.config.ts",
     "check:regressions": "node scripts/check-critical-regressions.mjs",
     "verify:release": "npm run check:regressions && npm run build",
-    "preview": "vite preview",
+    "preview": "vite preview --config vite.config.ts",
     "typecheck": "tsc --noEmit",
     "sync-types": "node scripts/sync-types.mjs",
     "sync-types:check": "node scripts/sync-types.mjs --check"

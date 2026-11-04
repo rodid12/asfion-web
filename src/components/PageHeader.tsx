@@ -28,7 +28,7 @@ export function PageHeader({ title, subtitle, count, lastDate, actions }: Props)
   const hasMeta = count !== undefined || lastDate !== undefined;
   return (
     <div className="flex flex-wrap items-start sm:items-end justify-between gap-3 sm:gap-4">
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
         <h2 className="text-2xl sm:text-3xl font-extrabold text-asfion-navyDeep leading-tight break-words">
           {title}
         </h2>
@@ -37,7 +37,7 @@ export function PageHeader({ title, subtitle, count, lastDate, actions }: Props)
         )}
       </div>
       {(hasMeta || actions) && (
-        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+        <div className="flex w-full sm:w-auto items-center justify-between sm:justify-start gap-3 sm:gap-4 flex-wrap">
           {hasMeta && (
             <div className="text-xs sm:text-sm text-asfion-muted">
               {count && (

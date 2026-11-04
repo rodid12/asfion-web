@@ -12,9 +12,10 @@ const files = {
   workbook: new URL('../src/lib/exportWorkbook.ts', import.meta.url),
   mermas: new URL('../src/components/pariciones/MermasPariciones.tsx', import.meta.url),
   auth: new URL('../src/lib/auth.tsx', import.meta.url),
+  packageJson: new URL('../package.json', import.meta.url),
 };
 
-const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis, workbook, mermas, auth] = await Promise.all(
+const [pariciones, dashboard, data, cache, main, vite, mortandad, kpis, workbook, mermas, auth, packageJson] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -24,7 +25,7 @@ const checks = [
     message: 'La campaña activa volvió a recalcular el stock desde tactos.',
   },
   {
-    ok: /const CACHE_VERSION = 9/.test(cache),
+    ok: /const CACHE_VERSION = 10/.test(cache),
     message: 'El dashboard puede volver a aceptar un cache anterior a la corrección de stock.',
   },
   {
@@ -42,11 +43,13 @@ const checks = [
     message: 'El cache volvió a presentarse como información fresca sin advertencia.',
   },
   {
-    ok: /controllerchange/.test(main) && /window\.location\.reload\(\)/.test(main),
+    ok: /controllerchange/.test(main) && /window\.location\.reload\(\)/.test(main) &&
+      /actualizar/.test(main) && /clearAllDashboardCaches/.test(main),
     message: 'La PWA puede conservar una versión vieja después de publicar.',
   },
   {
-    ok: /navigateFallbackDenylist:[\s\S]*supabase/.test(vite),
+    ok: /navigateFallbackDenylist:[\s\S]*supabase/.test(vite) &&
+      /vite build --config vite\.config\.ts/.test(packageJson),
     message: 'El service worker puede volver a interceptar respuestas de Supabase.',
   },
   {

@@ -30,7 +30,7 @@
 // @ts-ignore: idb-keyval se instala con `npm install` después de agregarlo
 // a package.json. El @ts-ignore evita warnings cuando se levanta el repo
 // por primera vez sin haber corrido install todavía.
-import { get, set, del } from 'idb-keyval';
+import { get, set, del, delMany, keys } from 'idb-keyval';
 import type { DashboardData } from './useData';
 
 const LEGACY_CACHE_KEY = 'asfion:dashboard-data';
@@ -39,7 +39,7 @@ const CACHE_KEY_PREFIX = 'asfion:dashboard-data:';
 // una lectura limpia para todos los dispositivos después de incorporar el
 // estado explícito de revalidación; ningún usuario debe arrancar esta versión
 // viendo como actual un stock guardado antes de la corrección oficial.
-const CACHE_VERSION = 9;
+const CACHE_VERSION = 10;
 
 function cacheKey(scope: string): string {
   return `${CACHE_KEY_PREFIX}${scope}`;
@@ -97,5 +97,23 @@ export async function clearCache(scope: string): Promise<void> {
     await del(cacheKey(scope));
   } catch (err) {
     console.warn('[offlineCache] no se pudo limpiar:', err);
+  }
+}
+
+/**
+ * Borra únicamente snapshots del dashboard, sin tocar la sesión de Supabase.
+ * Se usa desde el enlace de recuperación `?actualizar=1` cuando un navegador
+ * móvil quedó varios deployments atrás.
+ */
+export async function clearAllDashboardCaches(): Promise<void> {
+  try {
+    const allKeys = await keys();
+    const dashboardKeys = allKeys.filter(key =>
+      typeof key === 'string' &&
+      (key === LEGACY_CACHE_KEY || key.startsWith(CACHE_KEY_PREFIX)),
+    );
+    if (dashboardKeys.length > 0) await delMany(dashboardKeys);
+  } catch (err) {
+    console.warn('[offlineCache] no se pudieron limpiar todos los snapshots:', err);
   }
 }

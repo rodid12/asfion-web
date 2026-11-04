@@ -8,9 +8,9 @@
 //
 // OFFLINE: después de cada fetch exitoso guardamos la `DashboardData`
 // entera en IndexedDB. Si el próximo load no tiene internet, el hook
-// restaura desde ese cache. Solo expone `offline=true` cuando el intento de
-// actualizar contra Supabase falla; leer el cache primero no significa que
-// el navegador esté sin conexión.
+// restaura desde ese cache. Solo expone `offline=true` cuando la API del
+// navegador confirma que no hay red. Un error de permisos o de un módulo se
+// informa como error de actualización, nunca como una falsa falta de señal.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CampaniaOperativa, CampaniaReproductiva, Campo, Circuito, Compra, Corral, Lluvia, Mortandad, NdviPastura, Paricion, Pastoreo, PastoreoCiclo, ResumenServicio, Tacto, Venta } from './types';
@@ -57,8 +57,7 @@ export interface UseDataResult {
   loading: boolean;
   error: string | null;
   refresh: () => void;
-  /** True si la data que estamos mostrando vino del cache offline
-   *  (porque fetchear Supabase falló — capaz por falta de internet). */
+  /** True si mostramos cache y el navegador confirma que no tiene red. */
   offline: boolean;
   /** Cuándo se guardó el cache que estamos mostrando, en ISO. Null
    *  si la data es fresca de Supabase (no de cache). */
@@ -165,42 +164,113 @@ export function useDashboardData(
         // debe dejar claro que todavía está revalidando contra Supabase.
       }
 
-      // 2-4. Fetch online en paralelo (o secuencial si no había cache).
+      // 2-4. Fetch online en paralelo.
+      //
+      // Importante: un módulo auxiliar no puede congelar todo el dashboard.
+      // Antes usábamos Promise.all; si, por ejemplo, fallaba NDVI, se
+      // descartaban también Campos y Pariciones aunque hubieran respondido
+      // bien. El usuario terminaba viendo un stock viejo y el cartel genérico
+      // "Sin conexión" aun con Wi‑Fi. Con allSettled aplicamos cada respuesta
+      // exitosa y solo conservamos el snapshot del módulo que falló.
       try {
-        const [campos, campaniasOperativas, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales, ventas] =
-          await Promise.all([
-            fetchCampos(clienteId),
-            fetchCampaniasOperativas(clienteId),
-            fetchCampaniasReproductivas(clienteId),
-            fetchCircuitos(clienteId),
-            fetchPariciones(clienteId),
-            fetchLluvias(clienteId),
-            fetchMortandad(clienteId),
-            fetchPastoreo(clienteId),
-            fetchPastoreoCiclos(clienteId),
-            fetchResumenServicio(clienteId),
-            fetchCompras(clienteId),
-            fetchNdvi(clienteId),
-            fetchTactos(clienteId),
-            fetchCorrales(clienteId),
-            fetchVentas(clienteId),
-          ]);
+        const moduleNames: Array<keyof DashboardData> = [
+          'campos',
+          'campaniasOperativas',
+          'campaniasReproductivas',
+          'circuitos',
+          'pariciones',
+          'lluvias',
+          'mortandad',
+          'pastoreo',
+          'pastoreoCiclos',
+          'resumenServicio',
+          'compras',
+          'ndvi',
+          'tactos',
+          'corrales',
+          'ventas',
+        ];
+        const results = await Promise.allSettled([
+          fetchCampos(clienteId),
+          fetchCampaniasOperativas(clienteId),
+          fetchCampaniasReproductivas(clienteId),
+          fetchCircuitos(clienteId),
+          fetchPariciones(clienteId),
+          fetchLluvias(clienteId),
+          fetchMortandad(clienteId),
+          fetchPastoreo(clienteId),
+          fetchPastoreoCiclos(clienteId),
+          fetchResumenServicio(clienteId),
+          fetchCompras(clienteId),
+          fetchNdvi(clienteId),
+          fetchTactos(clienteId),
+          fetchCorrales(clienteId),
+          fetchVentas(clienteId),
+        ]);
         if (cancelled) return;
-        const fresh: DashboardData = { campos, campaniasOperativas, campaniasReproductivas, circuitos, pariciones, lluvias, mortandad, pastoreo, pastoreoCiclos, resumenServicio, compras, ndvi, tactos, corrales, ventas };
+
+        const baseline = cached?.data ?? data ?? EMPTY;
+        const fresh: DashboardData = { ...baseline };
+        const failed: string[] = [];
+        results.forEach((result, index) => {
+          const moduleName = moduleNames[index];
+          if (result.status === 'fulfilled') {
+            // Cada loader ocupa la misma posición que su clave. La asignación
+            // es segura aunque TS no pueda conservar esa relación en el loop.
+            (fresh[moduleName] as unknown) = result.value;
+          } else {
+            const reason = result.reason instanceof Error
+              ? result.reason.message
+              : String(result.reason ?? 'error desconocido');
+            failed.push(`${moduleName}: ${reason}`);
+          }
+        });
+
+        const successCount = results.length - failed.length;
+        if (successCount === 0) {
+          throw new Error(failed[0] ?? 'No respondió ningún módulo del servidor');
+        }
+
         setData(fresh);
         setOffline(false);
-        setCachedAt(null);
-        setLastUpdatedAt(new Date().toISOString());
-        // Guardar para la próxima vez — fire & forget.
-        void saveCache(fresh, cacheScope);
+
+        const criticalModules = new Set<keyof DashboardData>([
+          'campos',
+          'campaniasOperativas',
+          'campaniasReproductivas',
+          'pariciones',
+        ]);
+        const criticalFailed = results.some((result, index) =>
+          result.status === 'rejected' && criticalModules.has(moduleNames[index]),
+        );
+
+        if (criticalFailed) {
+          // No afirmamos que el stock/eventos estén confirmados si falló una
+          // fuente central. Dejamos visible el snapshot y el motivo real.
+          setError(`No se pudieron confirmar los datos principales. ${failed.join(' · ')}`);
+        } else {
+          const updatedAt = new Date().toISOString();
+          setCachedAt(null);
+          setLastUpdatedAt(updatedAt);
+          setError(failed.length > 0
+            ? `Se actualizaron los datos principales, pero fallaron algunos módulos: ${failed.join(' · ')}`
+            : null);
+          // Guardar para la próxima vez — fire & forget.
+          void saveCache(fresh, cacheScope);
+        }
       } catch (err: any) {
         if (cancelled) return;
         // El fetch online falló. Hay 2 sub-casos:
-        //   - Había cache → ya lo mostramos; recién ahora marcamos offline.
-        //   - No había cache → es la primera vez que el user abre y no
-        //     tiene internet. Mostramos error.
-        if (cached) {
-          setOffline(true);
+        //   - Había cache y no hay red → lo conservamos y marcamos offline.
+        //   - Hay red pero falló el servidor/permisos → mostramos el motivo
+        //     real; no culpamos a la conexión del usuario.
+        if (cached || revalidacionSilenciosa) {
+          if (navigator.onLine === false) {
+            setOffline(true);
+          } else {
+            setOffline(false);
+            setError(err?.message ?? 'No se pudo actualizar el dashboard');
+          }
         } else if (!revalidacionSilenciosa) {
           setError(err?.message ?? 'Error desconocido cargando datos');
         }

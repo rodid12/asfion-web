@@ -473,7 +473,7 @@ export function Dashboard() {
         {/* Estado de error global */}
         {error && (
           <div className="rounded-xl border border-asfion-danger/30 bg-asfion-danger/10 px-4 py-3 text-sm text-asfion-danger">
-            <strong>Error cargando datos:</strong> {error}
+            <strong>{data ? 'No se pudo completar la actualización:' : 'Error cargando datos:'}</strong> {error}
             <button onClick={refresh} className="ml-3 underline font-semibold">
               Reintentar
             </button>

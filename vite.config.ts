@@ -21,6 +21,7 @@ export default defineConfig({
     //     dinámicos). En su lugar usamos IndexedDB manual desde useData.ts.
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       includeAssets: ['favicon.png', 'asfion-logo.svg', 'asfion-logo-on-dark.svg'],
       manifest: {
         name: 'ASFION Dashboard',
@@ -36,6 +37,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         // No interceptamos llamadas a Supabase desde el SW — la app
         // hace su propio cache de data en IndexedDB.

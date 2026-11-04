@@ -19,7 +19,7 @@
 // Pieza testeable (A5): las funciones puras de cálculo se pueden cubrir
 // con tests unitarios sin necesidad de DOM ni props complejas.
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/Card';
 import { FilterBar } from '@/components/FilterBar';
 import { ParicionesTable } from '@/components/ParicionesTable';
@@ -57,6 +57,8 @@ interface Props {
   campaniasReproductivas?: CampaniaReproductiva[];
 }
 
+const PARICIONES_FILTERS_STORAGE_KEY = 'asfion:pariciones:filtros:v2';
+
 export function ParicionesPage({
   pariciones,
   campos,
@@ -71,13 +73,47 @@ export function ParicionesPage({
   // configuraciones de campaña no coincidían exactamente.
   const campaniaInicial = campaniasReproductivas.find(c => c.activa)
     ?? [...campaniasReproductivas].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))[0];
-  const [filtros, setFiltros] = useState<Filtros>(() => ({
-    ...FILTROS_DEFAULT,
-    rango: 'todo',
-    año: undefined,
-    desde: undefined,
-    hasta: undefined,
-  }));
+  const [filtros, setFiltros] = useState<Filtros>(() => {
+    const base: Filtros = {
+      ...FILTROS_DEFAULT,
+      rango: 'todo',
+      año: undefined,
+      desde: undefined,
+      hasta: undefined,
+    };
+    if (typeof window === 'undefined') return base;
+    try {
+      const raw = window.sessionStorage.getItem(PARICIONES_FILTERS_STORAGE_KEY);
+      if (!raw) return base;
+      const saved = JSON.parse(raw) as Partial<Filtros>;
+      const idsDisponibles = new Set(campos.map(c => c.id));
+      return {
+        ...base,
+        ...saved,
+        campoIds: Array.isArray(saved.campoIds)
+          ? saved.campoIds.filter(id => typeof id === 'string' && idsDisponibles.has(id))
+          : [],
+      };
+    } catch {
+      return base;
+    }
+  });
+
+  // ParicionesPage se desmonta al cambiar de módulo. Guardamos la selección
+  // durante la sesión para que al volver desde Preñez, Lluvias, etc. conserve
+  // campos, evento y período, sin mezclar IDs inexistentes de otro cliente.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem(PARICIONES_FILTERS_STORAGE_KEY, JSON.stringify(filtros));
+  }, [filtros]);
+
+  useEffect(() => {
+    const idsDisponibles = new Set(campos.map(c => c.id));
+    setFiltros(actual => {
+      const campoIds = actual.campoIds.filter(id => idsDisponibles.has(id));
+      return campoIds.length === actual.campoIds.length ? actual : { ...actual, campoIds };
+    });
+  }, [campos]);
 
   const filtradosPorControles = useMemo(
     () => aplicarFiltros(pariciones, filtros),
@@ -190,11 +226,6 @@ export function ParicionesPage({
     [resumenTotales, filtrados, camposParaKpis, vinculadaAPrenez, mortandad, campaniaSeleccionada, filtros.campoIds],
   );
 
-  const stockBaseMermas = useMemo(
-    () => camposParaKpis.reduce((total, campo) => total + (campo.stockInicialVacas ?? 0), 0),
-    [camposParaKpis],
-  );
-
   const diferenciaNacimientos = useMemo(() => {
     if (!resumenTotales) return null;
     const detalle = filtrados.filter(p => p.evento === 'Nacimiento').length;
@@ -250,7 +281,7 @@ export function ParicionesPage({
         ? <KpisDesdeResumen totales={resumenTotales} />
         : kpisLegacy && <KpisLegacy kpis={kpisLegacy} vinculadaAPrenez={vinculadaAPrenez} />}
 
-      <MermasPariciones data={filtrados} stockBase={stockBaseMermas} />
+      <MermasPariciones data={filtrados} />
 
       {diferenciaNacimientos && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900">

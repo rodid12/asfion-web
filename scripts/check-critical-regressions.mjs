@@ -81,11 +81,11 @@ const checks = [
     message: 'Se perdió el Excel consolidado o alguna de sus hojas críticas.',
   },
   {
-    ok: /<MermasPariciones data=\{filtrados\} stockBase=\{stockBaseMermas\}/.test(pariciones) &&
+    ok: /<MermasPariciones data=\{filtrados\}/.test(pariciones) &&
       /title="Mermas"/.test(mermas) && /Retacto/.test(mermas) &&
       /Nacido muerto/.test(mermas) && /Muerte señalado/.test(mermas) &&
-      /Math\.floor\(orejano\.size \/ 2\)/.test(mermas) && /% Orejano \(÷2\)/.test(mermas) &&
-      /values\.orejano \/ stockBase/.test(mermas),
+      /Math\.floor\(orejano\.size \/ 2\)/.test(mermas) && /Orejano \(÷2\)/.test(mermas) &&
+      /Cantidades absolutas/.test(mermas) && !/formatPercent/.test(mermas),
     message: 'El dashboard perdió el desglose de mermas reproductivas.',
   },
   {
@@ -100,6 +100,12 @@ const checks = [
       /f\.campoIds\.length === 0 \|\| f\.campoIds\.includes\(campoId\)/.test(filtros) &&
       /type="checkbox"/.test(filterBar) && /toggleCampo/.test(filterBar),
     message: 'Pariciones volvió a permitir seleccionar un solo campo.',
+  },
+  {
+    ok: /PARICIONES_FILTERS_STORAGE_KEY/.test(pariciones) &&
+      /sessionStorage\.getItem\(PARICIONES_FILTERS_STORAGE_KEY\)/.test(pariciones) &&
+      /sessionStorage\.setItem\(PARICIONES_FILTERS_STORAGE_KEY, JSON\.stringify\(filtros\)\)/.test(pariciones),
+    message: 'Los filtros de Pariciones vuelven a borrarse al cambiar de pestaña.',
   },
   {
     ok: /p\.campaniaId === reproductivaSeleccionada\.id/.test(dashboard) &&

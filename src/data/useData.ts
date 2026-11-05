@@ -141,9 +141,9 @@ export function useDashboardData(
       // muestran durante unos milisegundos métricas del cliente previo bajo el
       // nombre del nuevo cliente.
       // En la carga inicial o al cambiar de cliente limpiamos la pantalla.
-      // En una revalidación (botón Refrescar, volver a la pestaña del browser)
-      // mantenemos los datos visibles y actualizamos silenciosamente: antes
-      // cada focus volvía a mostrar cache/spinner y parecía un reload completo.
+      // En una revalidación solicitada con el botón Refrescar mantenemos los
+      // datos visibles y actualizamos silenciosamente. Recuperar el foco del
+      // navegador no dispara ningún fetch ni modifica filtros.
       if (!revalidacionSilenciosa) {
         setData(null);
         setLoading(true);

@@ -4,25 +4,10 @@ import App from './App';
 import './index.css';
 import { clearAllDashboardCaches } from './data/offlineCache';
 
-// Cuando Vercel publica una versión nueva, el service worker de la PWA puede
-// quedar controlando una pestaña abierta con el JavaScript anterior. Al tomar
-// control el worker nuevo recargamos una sola vez para evitar que el dashboard
-// siga mostrando cálculos viejos (por ejemplo, stock derivado de tactos).
-let reloadingForServiceWorkerUpdate = false;
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloadingForServiceWorkerUpdate) return;
-    reloadingForServiceWorkerUpdate = true;
-    window.location.reload();
-  });
-
-  // Verificamos una versión nueva al abrir ASFION, nunca al recuperar foco.
-  // Así una pestaña que quedó abierta recibe el siguiente deployment sin
-  // volver a sincronizar cada vez que el usuario cambia de aplicación.
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker.getRegistration().then(registration => registration?.update());
-  }, { once: true });
-}
+// No recargamos ni revalidamos el dashboard al perder/recuperar foco. Las
+// versiones nuevas de la PWA quedan esperando y se activan al cerrar la
+// pestaña; durante el trabajo diario los datos solo se actualizan mediante el
+// botón Refrescar o al abrir una nueva sesión de la página.
 
 async function recoverStaleMobileVersion(): Promise<boolean> {
   const url = new URL(window.location.href);

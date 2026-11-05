@@ -12,15 +12,16 @@ export default defineConfig({
     // PWA: convierte el dashboard en una aplicación instalable + offline.
     //
     // Strategy:
-    //   - registerType 'autoUpdate' → service worker se actualiza solo
-    //     al detectar versión nueva (no requiere intervención del user).
+    //   - registerType 'prompt' → una versión nueva queda esperando y toma
+    //     control al cerrar la pestaña. Nunca recarga una sesión activa al
+    //     recuperar foco.
     //   - workbox precachea TODO el bundle JS/CSS/HTML al primer load
     //     online, así la próxima vez sin internet la app abre igual.
     //   - Para los datos de Supabase NO usamos cache HTTP del SW (porque
     //     las queries son POST a una endpoint con auth y los queries son
     //     dinámicos). En su lugar usamos IndexedDB manual desde useData.ts.
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       injectRegister: 'auto',
       includeAssets: ['favicon.png', 'asfion-logo.svg', 'asfion-logo-on-dark.svg'],
       manifest: {
@@ -38,8 +39,8 @@ export default defineConfig({
       },
       workbox: {
         cleanupOutdatedCaches: true,
-        clientsClaim: true,
-        skipWaiting: true,
+        clientsClaim: false,
+        skipWaiting: false,
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         // No interceptamos llamadas a Supabase desde el SW — la app
         // hace su propio cache de data en IndexedDB.

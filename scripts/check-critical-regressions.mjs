@@ -46,9 +46,12 @@ const checks = [
     message: 'El cache volvió a presentarse como información fresca sin advertencia.',
   },
   {
-    ok: /controllerchange/.test(main) && /window\.location\.reload\(\)/.test(main) &&
-      /actualizar/.test(main) && /clearAllDashboardCaches/.test(main),
-    message: 'La PWA puede conservar una versión vieja después de publicar.',
+    ok: !/controllerchange/.test(main) && !/window\.location\.reload\(\)/.test(main) &&
+      !/addEventListener\(['"]focus['"]/.test(main) &&
+      /actualizar/.test(main) && /clearAllDashboardCaches/.test(main) &&
+      /registerType:\s*['"]prompt['"]/.test(vite) &&
+      /clientsClaim:\s*false/.test(vite) && /skipWaiting:\s*false/.test(vite),
+    message: 'El dashboard puede volver a recargarse automáticamente al recuperar foco.',
   },
   {
     ok: /navigateFallbackDenylist:[\s\S]*supabase/.test(vite) &&
